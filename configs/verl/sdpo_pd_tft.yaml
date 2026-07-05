@@ -1,0 +1,103 @@
+# =============================================================================
+# SDPO: Prisoner's Dilemma vs Tit-for-Tat, Game + Deontological reward
+# Extends grpo_pd_tft.yaml with self-distillation from cooperative trajectories.
+#
+# Key SDPO additions:
+#   - loss_mode: sdpo           — enables self-distillation loss
+#   - success_reward_threshold  — normalized reward > 0.8 ≈ mutual cooperation
+#   - alpha: 0.5                — Jensen-Shannon divergence (symmetric KL)
+#   - include_environment_feedback — moral critique string from reward_fn.py
+#   - teacher_regularization: ema — stable teacher via exponential moving average
+# =============================================================================
+defaults:
+  - ppo_trainer         # verl base — found in SDPO/verl/trainer/config/
+  - moralgym_user       # Clariden paths — found in MoralGymVerl/configs/verl/
+  - _self_
+
+max_model_len: 2560
+
+actor_rollout_ref:
+  # verl key location: actor_rollout_ref.model.* (hf_model.yaml), not actor.peft.*
+  model:
+    lora_rank: 32
+    lora_alpha: 64
+    target_modules: all-linear   # HFModelConfig requires str; all-linear = the 7 projection layers
+  actor:
+    optim:
+      lr: 5.0e-6
+      lr_warmup_steps: 10
+    ppo_mini_batch_size: 16
+    policy_loss:
+      loss_mode: sdpo
+    self_distillation:
+      # Distillation settings
+      full_logit_distillation: true
+      alpha: 0.5                         # JSD (symmetric KL); use 0.1–0.3 for weaker models
+      distillation_topk: 100             # top-k logits; faster + stable
+      distillation_add_tail: true
+      is_clip: 2.0
+
+      # Teacher regularization
+      teacher_regularization: ema
+      teacher_update_rate: 0.01          # slow EMA → stable teacher
+
+      # What counts as a successful (cooperative) trajectory for the teacher
+      # Normalized reward: R_game_norm + lambda * R_deon, scaled.
+      # 0.8 corresponds roughly to mutual cooperation (R=3) with deon bonus.
+      success_reward_threshold: 0.8
+
+      # Include the moral critique as rich feedback for teacher reprompting
+      include_environment_feedback: true
+      # Only use feedback when no successful solution is available in the group
+      environment_feedback_only_without_solution: true
+
+      # Whether to use one sample's own successful response as its demonstration
+      # (true = don't; avoids trivial self-copying)
+      dont_reprompt_on_self_success: true
+
+      # Token budget for teacher reprompt (prompt + solution + feedback)
+      max_reprompt_len: 4096
+      reprompt_truncation: right
+
+      # Teacher prompt templates
+      # {prompt}   = original game prompt
+      # {solution} = filled by solution_template if a cooperative trajectory exists
+      # {feedback} = filled by feedback_template using the moral critique string
+      reprompt_template: |
+        {prompt}
+        {solution}
+        {feedback}
+        Recall the goal: sustain mutual cooperation when possible. Now make your decision.
+      solution_template: |
+
+        A cooperative trajectory from this situation:
+        {successful_previous_attempt}
+
+      feedback_template: |
+
+        Feedback on your previous attempt:
+        {feedback_raw}
+
+  rollout:
+    n: 8
+    temperature: 0.7
+    top_p: 1.0
+    # rollout.response_length interpolates from data.max_response_length below
+
+data:
+  train_batch_size: 16
+  max_response_length: 16
+
+algorithm:
+  adv_estimator: grpo
+  norm_adv_by_std_in_grpo: true
+  use_kl_in_reward: false
+  rollout_correction:
+    rollout_is: token
+    rollout_is_threshold: 2.0
+
+trainer:
+  total_epochs: 30
+  val_before_train: false
+  test_freq: 5
+  save_freq: 10

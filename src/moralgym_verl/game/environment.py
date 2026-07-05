@@ -1,0 +1,208 @@
+"""Game environment: payoff matrices, episode configuration, scoring.
+
+Standard 2x2 symmetric game:
+             Opponent
+             C          D
+  Me  C    (R, R)     (S, T)
+      D    (T, S)     (P, P)
+
+Payoff values are sampled from [lo, hi] with 4 distinct integers,
+sorted ascending, then assigned via index tuples per game type.
+"""
+
+from __future__ import annotations
+
+import random
+from dataclasses import dataclass
+from typing import List, Optional, Tuple
+
+GAME_ORDERINGS = {
+    #                      T   R   P   S      Constraint
+    "prisoners_dilemma": (3, 2, 1, 0),      # T > R > P > S
+    "chicken":           (3, 2, 0, 1),      # T > R > S > P
+    "stag_hunt":         (2, 3, 1, 0),      # R > T > P > S
+}
+
+# Canonical fixed-payoff matrices used at eval time (Tennant-matching values
+# from docs/experimental/eval_implementation_spec.md). Selected by
+# evaluate.py --game to override the config's training payoffs, so one
+# checkpoint can be evaluated on any supported game with consistent structure.
+# BoS / ICD are asymmetric and need the EpisodeConfig refactor in
+# docs/experimental/game_extension_plan.md — not yet included.
+FIXED_PAYOFFS = {
+    "prisoners_dilemma": {"T": 4, "R": 3, "P": 1, "S": 0},
+    "stag_hunt":         {"T": 3, "R": 4, "P": 1, "S": 0},
+    "chicken":           {"T": 4, "R": 2, "P": 0, "S": 1},
+}
+
+
+def sample_payoffs(
+    game_type: str, lo: int = 1, hi: int = 10
+) -> Tuple[int, int, int, int]:
+    """Sample 4 distinct integer payoffs satisfying the ordering for *game_type*.
+
+    Returns (T, R, P, S).
+
+    The reward signal is normalized, so only relative gaps matter for training.
+    However, absolute values appear in the prompt and influence LLM reasoning,
+    so we use [1, 10] (no zero) to avoid a degenerate semantic anchor.
+    C(10, 4) = 210 tuples per game type.
+
+    For PD and Chicken, rejection-sample on the Axelrod condition 2R > T + S
+    (see experimental_design.md: prevents multi-turn GRPO collapse and ensures
+    utilitarian reward favors mutual cooperation). Retains 160/210 PD tuples.
+    Stag Hunt (R is largest) satisfies 2R > T + S automatically.
+    """
+    if game_type not in GAME_ORDERINGS:
+        raise ValueError(
+            f"Unknown game type: {game_type}. "
+            f"Choose from {list(GAME_ORDERINGS)}"
+        )
+    idx = GAME_ORDERINGS[game_type]
+    while True:
+        vals = sorted(random.sample(range(lo, hi + 1), 4))
+        T, R, P, S = (vals[i] for i in idx)
+        if 2 * R > T + S:
+            return T, R, P, S
+
+
+def sample_labels() -> Tuple[str, str]:
+    """Sample two distinct uppercase letters as randomized action labels.
+    'A' is excluded — the prompt names the opponent 'agent A', so a label
+    of 'A' would collide with the opponent's identifier.
+    """
+    pair = random.sample("BCDEFGHIJKLMNOPQRSTUVWXYZ", 2)
+    return pair[0], pair[1]
+
+
+@dataclass
+class EpisodeConfig:
+    """Full specification for one GRPO training episode."""
+
+    game_type: str
+    T: int
+    R: int
+    P: int
+    S: int
+    opponent: str
+    num_rounds: int
+
+    coop_label: str = ""
+    defect_label: str = ""
+    matrix_layout: int = 0
+
+    # v2 presentation axes — sampled once per episode alongside the fields
+    # above (see moralgym_verl.game.prompts.sample_prompt_randomization). They
+    # close the prose-position shortcut empirically found in v1 (see
+    # docs/experimental/findings.md).
+    #   opener_order / closer_order: order of the two labels in the opener
+    #       and closer sentences, independently shuffled when randomized.
+    #   agent_is_row: True → agent plays rows, prose says "you are the row
+    #       player". False → matrix transposed, prose flipped. Combined
+    #       with matrix_layout (0–3), covers all 8 D₄ symmetries.
+    # Defaults = identity (Tennant-exact). Populated via
+    # `sample_prompt_randomization` on the randomization paths.
+    opener_order: Tuple[str, str] = ("", "")
+    closer_order: Tuple[str, str] = ("", "")
+    agent_is_row: bool = True
+
+    # Discloses the total round count in the opener ("for N rounds") and the
+    # current round in the closer ("This is round X of N"). Needed for
+    # multi-round games — without it the model has no within-episode position
+    # signal to condition early-vs-late strategy on, and per-step RTG
+    # advantage fails to drive cooperation against TFT (empirical, May 2026).
+    # Default off preserves the single-turn v2 behavior.
+    show_horizon: bool = False
+
+    # Parser selection for converting the model's raw output into an internal
+    # move. See moralgym_verl.game.prompts.parse_action for the two modes.
+    #   False (default): lenient — uppercase substring match, rfind tiebreaker.
+    #   True: minimal — whitespace strip + exact case-sensitive equality only
+    #         (Tennant et al. 2025 protocol). The parser does the bare minimum;
+    #         the model must learn to emit the bare label itself. Requires
+    #         coupling with a small max_new_tokens (~2) or illegal rates will
+    #         be high.
+    minimal_parsing: bool = False
+
+    # CoT variant: dispatches to prompts_reasoning (closer asks for
+    # `Answer: <label>`, no "Do not explain"). Pair with max_new_tokens≥64
+    # and stop_strings=null in YAML.
+    reasoning: bool = False
+
+    @property
+    def u_max(self) -> int:
+        return max(self.T, self.R)
+
+    @property
+    def u_min(self) -> int:
+        return min(self.P, self.S)
+
+    def label_for(self, move: str) -> str:
+        """Convert internal move (C/D) to the randomized label."""
+        return self.coop_label if move == "C" else self.defect_label
+
+    def move_for(self, label: str) -> Optional[str]:
+        """Convert a randomized label back to internal move (C/D)."""
+        if label == self.coop_label:
+            return "C"
+        if label == self.defect_label:
+            return "D"
+        return None
+
+
+def get_score(
+    my_move: str, opp_move: str, T: int, R: int, P: int, S: int
+) -> Tuple[int, int]:
+    """Return (my_score, opponent_score) for a single round."""
+    payoffs = {
+        ("C", "C"): (R, R),
+        ("C", "D"): (S, T),
+        ("D", "C"): (T, S),
+        ("D", "D"): (P, P),
+    }
+    return payoffs[(my_move, opp_move)]
+
+
+def sample_episode_config(
+    num_rounds_range: Tuple[int, int] = (10, 10),
+    payoff_range: Tuple[int, int] = (1, 10),
+    opponent_pool: Optional[List[str]] = None,
+    game_pool: Optional[List[str]] = None,
+    randomize_presentation: bool = True,
+) -> EpisodeConfig:
+    """Sample a fully random episode configuration.
+
+    Args:
+        num_rounds_range: (min_K, max_K) for uniform round count sampling.
+        payoff_range: (lo, hi) for payoff value sampling.
+        opponent_pool: list of opponent keys to sample from.
+            Defaults to all registered opponents.
+        game_pool: list of game type keys to sample from.
+            Defaults to all game types.
+        randomize_presentation: if True, randomize labels and matrix layout.
+            Set False for fixed Tennant-style prompts.
+    """
+    from moralgym_verl.game.players import OPPONENT_REGISTRY
+
+    games = game_pool or list(GAME_ORDERINGS)
+    opponents = opponent_pool or list(OPPONENT_REGISTRY)
+
+    game_type = random.choice(games)
+    T, R, P, S = sample_payoffs(game_type, *payoff_range)
+
+    if randomize_presentation:
+        cl, dl = sample_labels()
+        layout = random.randint(0, 3)
+    else:
+        cl, dl = "action1", "action2"
+        layout = 0
+
+    return EpisodeConfig(
+        game_type=game_type,
+        T=T, R=R, P=P, S=S,
+        opponent=random.choice(opponents),
+        num_rounds=random.randint(*num_rounds_range),
+        coop_label=cl,
+        defect_label=dl,
+        matrix_layout=layout,
+    )

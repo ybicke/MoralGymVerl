@@ -1,0 +1,10 @@
+# Generated datasets (regenerate via moralgym_verl.training.dataset)
+/datasets/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Local logs from setup/download runs
+*.log

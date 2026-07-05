@@ -1,0 +1,26 @@
+# Dataset generation config for moralgym_verl.training.dataset
+# (consumed by dataset.py, NOT by verl/Hydra).
+# Same dataset as grpo_pd_tft (SDPO changes the loss, not the data).
+game:
+  type: prisoners_dilemma
+  payoffs: {T: 4, R: 3, P: 1, S: 0}
+  num_rounds: 1          # single-step mode (hist design)
+  sample_payoffs: false
+
+opponent:
+  types: [tit_for_tat]
+  distribution: [1.0]
+
+reward:
+  game_reward: normalized
+  intrinsic: deontological
+  lambda: 3.0
+  illegal_penalty: -6
+
+prompt:
+  game_design: hist
+  hist_coop_bias: 0.75
+  randomize_tokens: true
+  randomize_layout: true
+  randomize_prose: true
+  randomize_role: true

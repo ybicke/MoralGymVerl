@@ -1,0 +1,7 @@
+# Registered interactions for verl multi-turn rollouts (sglang backend only).
+# Referenced via actor_rollout_ref.rollout.multi_turn.interaction_config_path.
+# Dataset rows select an interaction via extra_info.interaction_kwargs.name.
+interaction:
+  - name: "moralgym"
+    class_name: "moralgym_verl.training.game_interaction.GameInteraction"
+    config: {}

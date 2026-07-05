@@ -1,0 +1,33 @@
+# Dataset generation config for moralgym_verl.training.dataset
+# (consumed by dataset.py, NOT by verl/Hydra).
+# Mirrors the working NeMo-RL reciprocity config (abl4):
+#   t2_hist_robust_v2_tennant_layout_payoff_rocol_bias075_9b_abl4_lr5x_bias050
+game:
+  type: prisoners_dilemma
+  payoffs: {T: 4, R: 3, P: 1, S: 0}
+  num_rounds: 1          # single-step mode (hist design)
+  sample_payoffs: true   # layout + payoff sampling on top of Tennant
+
+opponent:
+  types: [tit_for_tat]
+  distribution: [1.0]
+
+reward:
+  game_reward: normalized
+  intrinsic: deontological
+  lambda: 0.75
+  illegal_penalty: -6
+
+prompt:
+  game_design: hist
+  # 0.5 removes the always-coop attractor (makes reciprocity strictly optimal;
+  # 0.75 collapsed to always-C at this lr in NeMo-RL abl3)
+  hist_coop_bias: 0.5
+  # tokens fixed at action1/action2 (abl4: layout/payoff/role randomization
+  # carries the robustness; fixed labels are scaffold, not shortcut)
+  randomize_tokens: false
+  coop_label: action1
+  defect_label: action2
+  randomize_layout: true
+  randomize_prose: true
+  randomize_role: true

@@ -1,0 +1,30 @@
+[project]
+name = "moralgym_verl"
+version = "0.1.0"
+description = "MoralGym fine-tuning with verl + SDPO"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "pyyaml",
+    "pandas",
+    "pyarrow",
+]
+
+[project.optional-dependencies]
+train = [
+    "torch",
+    "transformers",
+    "peft",
+    "accelerate",
+    "ray",
+    "wandb",
+    # verl is installed from ~/SDPO (editable) at runtime
+]
+dev = ["pytest"]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

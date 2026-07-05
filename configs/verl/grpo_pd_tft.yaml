@@ -1,0 +1,60 @@
+# =============================================================================
+# GRPO: Prisoner's Dilemma vs Tit-for-Tat, Game + Deontological reward
+# Mirrors the working NeMo-RL reciprocity config:
+#   t2_hist_robust_v2_tennant_layout_payoff_rocol_bias075_9b_abl4_lr5x_bias050
+# (despite "bias075" in the name, abl4 moved hist_coop_bias to 0.5 — see the
+# dataset config — plus lr 2.5e-5, 16 generations/prompt, ref-KL 0.04, 70 steps)
+# =============================================================================
+defaults:
+  - ppo_trainer         # verl base — found in SDPO/verl/trainer/config/
+  - moralgym_user       # Clariden paths — found in MoralGymVerl/configs/verl/
+  - _self_
+
+max_model_len: 2560
+
+# Game/reward settings live in configs/datasets/grpo_pd_tft.yaml
+# (read by dataset.py at dataset-generation time, not by verl).
+
+actor_rollout_ref:
+  # LoRA (rank 16 is faster; rank 32 for publication runs)
+  # verl key location: actor_rollout_ref.model.* (hf_model.yaml), not actor.peft.*
+  model:
+    lora_rank: 32
+    lora_alpha: 64
+    target_modules: all-linear   # HFModelConfig requires str; all-linear = the 7 projection layers
+  actor:
+    optim:
+      lr: 2.5e-5           # abl4's "5×" lr (parent was 5e-6)
+      lr_warmup_steps: 10
+    ppo_mini_batch_size: 16
+    # NeMo-RL reference_policy_kl_penalty: 0.04 ≙ verl KL-in-loss
+    use_kl_loss: true
+    kl_loss_coef: 0.04
+    policy_loss:
+      loss_mode: vanilla   # plain GRPO; switch to "sdpo" in sdpo_pd_tft.yaml
+  rollout:
+    n: 16                  # num_generations_per_prompt; group size for GRPO
+    temperature: 0.7
+    top_p: 1.0
+    # rollout.response_length interpolates from data.max_response_length below
+
+data:
+  train_batch_size: 16     # num_prompts_per_step
+  # Response budget: one action token (+ short reasoning if enabled)
+  # 16 tokens is generous for pure action; increase to 256 for reasoning=true
+  max_response_length: 16
+
+algorithm:
+  adv_estimator: grpo       # critic-less; normalizes within the rollout group
+  norm_adv_by_std_in_grpo: true
+  use_kl_in_reward: false
+  rollout_correction:
+    rollout_is: token        # importance sampling correction
+    rollout_is_threshold: 2.0
+
+trainer:
+  total_epochs: 30
+  total_training_steps: 70   # NeMo-RL max_num_steps; phase transition well before
+  val_before_train: false
+  test_freq: 5
+  save_freq: 10

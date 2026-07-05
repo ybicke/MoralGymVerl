@@ -1,0 +1,44 @@
+# MoralGymVerl container for NVIDIA GH200 (aarch64, CUDA 13.1)
+# Base: NGC vLLM 25.12.post1 — same base as SDPO's Dockerfile.gh200
+# Adds: moralgym_verl package on top of the SDPO/verl stack.
+#
+# Build:
+#   podman build /users/$USER/MoralGymVerl -f Dockerfile.gh200 \
+#     --build-arg SDPO_DIR=/users/$USER/SDPO -t moralgym-verl-gh200
+#
+# Export for EDF:
+#   enroot import -x mount -o ${SCRATCH}/containers/moralgym-verl-gh200.sqsh \
+#     podman://localhost/moralgym-verl-gh200:latest
+
+FROM nvcr.io/nvidia/vllm:25.12.post1-py3
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Unset ROCR_VISIBLE_DEVICES — cluster sets both, verl needs only CUDA_VISIBLE_DEVICES
+ENV ROCR_VISIBLE_DEVICES=""
+ENV NCCL_NET=Socket
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git wget curl build-essential libsndfile1 libgl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install SDPO/verl base dependencies (same as SDPO's Dockerfile.gh200)
+COPY requirements-gh200.txt /app/requirements-gh200.txt
+RUN pip install --no-cache-dir -r requirements-gh200.txt
+
+# Install SDPO (provides the verl package with SDPO extensions)
+# The SDPO directory is expected to be present at /app/SDPO at build time.
+# At job launch time, it is also reinstalled from the bind-mounted source
+# to pick up any local changes without rebuilding the image.
+COPY SDPO /app/SDPO
+RUN pip install --no-deps -e /app/SDPO
+
+# Install moralgym_verl package
+COPY . /app/MoralGymVerl
+RUN pip install --no-deps -e /app/MoralGymVerl
+
+ENV PYTHONPATH="/app/SDPO:/app/MoralGymVerl/src:${PYTHONPATH}"
+
+CMD ["/bin/bash"]
