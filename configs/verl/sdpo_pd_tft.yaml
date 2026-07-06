@@ -25,15 +25,17 @@ actor_rollout_ref:
   actor:
     optim:
       lr: 5.0e-6
-      lr_warmup_steps: 10
-    ppo_mini_batch_size: 16
+      lr_warmup_steps: 50    # aligned with NeMo-RL LinearLR (same fix as grpo_pd_tft)
+    ppo_mini_batch_size: 8   # 2 updates/step à 128 samples (same fix as grpo_pd_tft)
     policy_loss:
       loss_mode: sdpo
     self_distillation:
-      # Distillation settings
+      # Distillation settings — pinned to the NeMo-RL Phase 1 intersection
+      # for the cross-stack comparison: full-logit only (no top-k), no
+      # environment feedback. Restore topk/feedback after the comparison.
       full_logit_distillation: true
       alpha: 0.5                         # JSD (symmetric KL); use 0.1–0.3 for weaker models
-      distillation_topk: 100             # top-k logits; faster + stable
+      distillation_topk: null            # cross-stack parity: NeMo-RL Phase 1 is full-logit only
       distillation_add_tail: true
       is_clip: 2.0
 
@@ -46,9 +48,8 @@ actor_rollout_ref:
       # 0.8 corresponds roughly to mutual cooperation (R=3) with deon bonus.
       success_reward_threshold: 0.8
 
-      # Include the moral critique as rich feedback for teacher reprompting
-      include_environment_feedback: true
-      # Only use feedback when no successful solution is available in the group
+      # Cross-stack parity: NeMo-RL Phase 1 has no feedback synthesis.
+      include_environment_feedback: false
       environment_feedback_only_without_solution: true
 
       # Whether to use one sample's own successful response as its demonstration
@@ -79,22 +80,20 @@ actor_rollout_ref:
         {feedback_raw}
 
   rollout:
-    n: 8
+    n: 16                    # group size — matches grpo_pd_tft and NeMo-RL G=16
     temperature: 0.7
     top_p: 1.0
     # rollout.response_length interpolates from data.max_response_length below
 
 data:
   train_batch_size: 16
-  max_response_length: 16
+  max_response_length: 32    # aligned with NeMo-RL max_new_tokens (same fix as grpo_pd_tft)
 
 algorithm:
   adv_estimator: grpo
   norm_adv_by_std_in_grpo: true
   use_kl_in_reward: false
-  rollout_correction:
-    rollout_is: token
-    rollout_is_threshold: 2.0
+  # rollout_correction dropped for NeMo-RL parity (same fix as grpo_pd_tft)
 
 trainer:
   total_epochs: 30
