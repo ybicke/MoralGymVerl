@@ -25,8 +25,13 @@ actor_rollout_ref:
   actor:
     optim:
       lr: 2.5e-5           # abl4's "5×" lr (parent was 5e-6)
-      lr_warmup_steps: 10
-    ppo_mini_batch_size: 16
+      # NeMo-RL warmed up over 50 of 70 steps (LinearLR 0.1→1.0); full lr by
+      # step 10 collapsed entropy by step 9 (run i9klhxy4). ABSOLUTE number
+      # tuned for 70-step runs — rescale if total_training_steps changes.
+      lr_warmup_steps: 50
+    # 2 optimizer updates per rollout step à 128 samples (NeMo-RL:
+    # 256 samples / train_global_batch_size 128)
+    ppo_mini_batch_size: 8
     # NeMo-RL reference_policy_kl_penalty: 0.04 ≙ verl KL-in-loss
     use_kl_loss: true
     kl_loss_coef: 0.04
@@ -40,17 +45,17 @@ actor_rollout_ref:
 
 data:
   train_batch_size: 16     # num_prompts_per_step
-  # Response budget: one action token (+ short reasoning if enabled)
-  # 16 tokens is generous for pure action; increase to 256 for reasoning=true
-  max_response_length: 16
+  # Response budget: one action token (+ short reasoning if enabled).
+  # 32 matches NeMo-RL max_new_tokens; increase to 256+ for reasoning=true
+  max_response_length: 32
 
 algorithm:
   adv_estimator: grpo       # critic-less; normalizes within the rollout group
   norm_adv_by_std_in_grpo: true
   use_kl_in_reward: false
-  rollout_correction:
-    rollout_is: token        # importance sampling correction
-    rollout_is_threshold: 2.0
+  # rollout importance-sampling correction deliberately NOT enabled: NeMo-RL
+  # ran without it and measured probs_ratio ~1.000 (mismatch negligible at
+  # ~7-token generations). Revisit for long reasoning outputs.
 
 trainer:
   total_epochs: 30

@@ -66,7 +66,11 @@ def compute_score(
             "Your response could not be parsed as a valid action. "
             f"You must output exactly '{config.coop_label}' or '{config.defect_label}'."
         )
-        return {"score": float(state["illegal_penalty"]), "feedback": feedback}
+        return {
+            "score": float(state["illegal_penalty"]),
+            "feedback": feedback,
+            **_game_metrics(None, state),
+        }
 
     opp_action = get_opponent_action(
         config.opponent,
@@ -97,7 +101,25 @@ def compute_score(
 
     score = r_game + lambda_val * r_intr
     feedback = _build_feedback(action, opp_action, score, r_game, r_intr, state, config)
-    return {"score": score, "feedback": feedback}
+    return {"score": score, "feedback": feedback, **_game_metrics(action, state)}
+
+
+def _game_metrics(action: str | None, state: dict) -> dict[str, float]:
+    """Per-sample 0/1 indicators; verl's reward manager batch-means them into
+    W&B (reward_extra_info/*), reproducing NeMo-RL's moralgym_* rates exactly
+    in single-round hist mode (each episode falls in exactly one of the four
+    Tennant categories; see nemo_env._episode_metrics).
+    """
+    opp_prev = state["opp_history"][-1] if state.get("opp_history") else None
+    return {
+        "cooperation_rate": float(action == "C"),
+        "defection_rate": float(action == "D"),
+        "parse_fail_rate": float(action is None),
+        "reciprocity_rate": float(action == "C" and opp_prev == "C"),
+        "exploitation_cond_rate": float(action == "D" and opp_prev == "C"),
+        "forgiveness_rate": float(action == "C" and opp_prev == "D"),
+        "retaliation_rate": float(action == "D" and opp_prev == "D"),
+    }
 
 
 def _config_from_state(state: dict) -> EpisodeConfig:

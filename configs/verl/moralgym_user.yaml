@@ -49,7 +49,6 @@ actor_rollout_ref:
   actor:
     ppo_micro_batch_size_per_gpu: 4
     ppo_max_token_len_per_gpu: ${max_model_len}
-    clip_ratio_high: 0.28
     use_kl_loss: false
     fsdp_config:
       # 9B model colocated with vLLM (0.5 GPU util) OOMs without offload.
