@@ -25,9 +25,23 @@ PARTITION="${PARTITION:-normal}"   # e.g. PARTITION=debug for smoke runs
 TIME="${TIME:-12:00:00}"
 EDF_NAME="moralgym_verl"
 
-# Each config's dataset must already exist (generate_dataset.sh).
-# We export the dataset name via env var so user.yaml can resolve the path.
-DATASET_NAME="${CONFIG_NAME}"
+# ── Per-run dataset (deterministic cache, not an artifact) ───────────────────
+# Generated fresh at submit time from configs/datasets/<config>.yaml so the
+# parquet can never go stale relative to the config (bit us 2026-07-06: SDPO
+# ran on a 4-day-old parquet with a superseded lambda/bias). Lives on SCRATCH:
+# per-run provenance, no HOME quota, and the 30-day purge is the cleanup —
+# same config + seed regenerates it bit-identically.
+DATASET_SEED="${DATASET_SEED:-42}"
+# DATASET_CONFIG overrides which configs/datasets/<name>.yaml generates the
+# data (default: same name as the trainer config). Lets e.g. an SDPO trainer
+# run on the exact GRPO dataset for cross-stack/algorithm comparisons.
+DATASET_CONFIG="${DATASET_CONFIG:-${CONFIG_NAME}}"
+DATASET_DIR="${SCRATCH}/moralgym_verl_datasets/${RUN_NAME}"
+echo "Generating dataset from configs/datasets/${DATASET_CONFIG}.yaml (seed ${DATASET_SEED})"
+PYTHONPATH="${REPO_ROOT}/src" /usr/bin/python3.11 -m moralgym_verl.training.dataset \
+    --config "${REPO_ROOT}/configs/datasets/${DATASET_CONFIG}.yaml" \
+    --output-dir "${DATASET_DIR}" \
+    --n-train 8000 --n-val 256 --seed "${DATASET_SEED}"
 
 OUTPUT_DIR="${HOME}/output/MoralGymVerl"
 mkdir -p "${OUTPUT_DIR}"
@@ -60,7 +74,7 @@ WRAPPED_CMD="srun --environment=${EDF_NAME} bash -c '${SETUP_CMDS}; ${TRAIN_CMD}
 
 echo "Submitting: ${RUN_NAME}"
 echo "  config:  configs/verl/${CONFIG_NAME}.yaml"
-echo "  dataset: ${DATASET_NAME}"
+echo "  dataset: ${DATASET_DIR}"
 echo ""
 
 sbatch \
@@ -76,5 +90,5 @@ sbatch \
     --cpus-per-task=288 \
     --output="${OUTPUT_DIR}/%j_${RUN_NAME}.log" \
     --error="${OUTPUT_DIR}/%j_${RUN_NAME}.err" \
-    --export="ALL,MORALGYM_RUN_NAME=${RUN_NAME},MORALGYM_GROUP=${CONFIG_NAME},MORALGYM_DATASET=${DATASET_NAME},WANDB_API_KEY" \
+    --export="ALL,MORALGYM_RUN_NAME=${RUN_NAME},MORALGYM_GROUP=${CONFIG_NAME},MORALGYM_DATASET_DIR=${DATASET_DIR},WANDB_API_KEY" \
     --wrap="${WRAPPED_CMD}"
