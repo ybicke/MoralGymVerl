@@ -9,8 +9,9 @@ vars:
   moralgym_dir: /users/${oc.env:USER}/MoralGymVerl
   sdpo_dir: /users/${oc.env:USER}/SDPO
   log_dir: /users/${oc.env:USER}/output/MoralGymVerl
-  # Dataset dir is set per-experiment; override via CLI or experiment config.
-  dataset_dir: ${vars.moralgym_dir}/datasets/${oc.env:MORALGYM_DATASET,grpo_pd_tft}
+  # Set by train_verl.sh: per-run dataset generated at submit time on SCRATCH.
+  # For manual runs: export MORALGYM_DATASET_DIR=<dir with train/val.parquet>.
+  dataset_dir: ${oc.env:MORALGYM_DATASET_DIR}
   ckpt_dir: /capstor/scratch/cscs/${oc.env:USER}/moralgym_verl_runs
 
 data:
