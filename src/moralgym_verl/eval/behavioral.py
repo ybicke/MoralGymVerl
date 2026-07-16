@@ -1,7 +1,7 @@
 """Evaluation harness for trained models.
 
 Usage:
-    python -m moralgym_verl.eval.evaluate \
+    python -m moralgym_verl.eval.behavioral \
         --config configs/nemo_rl/a1_hist_norm.yaml \
         --checkpoint $STORAGE_ROOT/results/a1_hist_norm_<jobid>/step_50/policy/weights/model
 
@@ -18,6 +18,7 @@ import logging
 import random
 import re
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional, Tuple
 
@@ -28,6 +29,10 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from moralgym_verl.eval.baselines import compute_regret
 from moralgym_verl.eval.scoring import iter_scored_decisions
+from moralgym_verl.eval.teacher_context import (
+    load_reprompt_template, wrap_first_user, wrap_latest_user, wrap_prompt,
+)
+from moralgym_verl.game.moral_values import MORAL_VALUE_REGISTRY, get_moral_value
 from moralgym_verl.game.environment import (
     FIXED_PAYOFFS, EpisodeConfig, sample_labels, sample_payoffs,
 )
@@ -147,6 +152,7 @@ def make_policy_fn(
     max_new_tokens: int = 10,
     temperature: Optional[float] = 1.0,
     raw_log: Optional[list] = None,
+    prompt_wrapper=None,
 ):
     """Policy function for run_episode.
 
@@ -161,12 +167,18 @@ def make_policy_fn(
     If `raw_log` is a list, each call appends a dict
     {"prompt": <user_text>, "raw": <model_output>} for offline inspection
     (e.g. debugging unexpected parse failures on hyper-peaked policies).
+
+    `prompt_wrapper` (teacher-signal eval) is applied to the game prompt
+    before chat templating — raw_log therefore records the wrapped
+    prompt, i.e. exactly what the model saw.
     """
 
     use_sampling = temperature is not None and temperature > 0
 
     @torch.no_grad()
     def policy_fn(prompt: str) -> str:
+        if prompt_wrapper is not None:
+            prompt = prompt_wrapper(prompt)
         messages = [{"role": "user", "content": prompt}]
         text = tokenizer.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True,
@@ -187,6 +199,73 @@ def make_policy_fn(
             raw_log.append({"prompt": prompt, "raw": raw})
         return raw
 
+    return policy_fn
+
+
+def make_chat_policy_fn(
+    model,
+    tokenizer,
+    max_new_tokens: int = 10,
+    temperature: Optional[float] = 1.0,
+    raw_log: Optional[list] = None,
+    prompt_wrapper=None,
+    wrap_position: str = "first",
+):
+    """Transcript-mode policy for multi-turn eval (Stage 1b).
+
+    Mirrors verl's multi-turn agent loop (SDPO tool_agent_loop.py): the
+    episode conversation accumulates — every prior round's user message
+    AND the model's own responses stay in context, so history-dependent
+    behavior (grudges, forgiveness) is expressible exactly as in training.
+
+    Teacher semantics: the stored transcript is always plain; when
+    `prompt_wrapper` is set, `wrap_position` decides where the moral
+    value appears at generation time:
+      'first'  (default) — wrap only the episode's FIRST user turn.
+                Training-exact: multi-turn SDPO wraps raw_prompt (the
+                initial message); all later rounds are shared response-
+                region tokens (see teacher_context.wrap_first_user).
+      'latest' — wrap the current round's user turn (persistent-context
+                ablation; measures the "value always adjacent" variant).
+
+    The caller MUST call `policy_fn.reset()` between episodes (evaluate()
+    does) — otherwise conversations leak across episodes.
+    """
+    if wrap_position not in ("first", "latest"):
+        raise ValueError(f"wrap_position must be 'first' or 'latest', "
+                         f"got {wrap_position!r}")
+
+    use_sampling = temperature is not None and temperature > 0
+    state: Dict[str, list] = {"messages": []}
+    wrap_fn = wrap_first_user if wrap_position == "first" else wrap_latest_user
+
+    @torch.no_grad()
+    def policy_fn(prompt: str) -> str:
+        state["messages"].append({"role": "user", "content": prompt})
+        gen_messages = (
+            wrap_fn(state["messages"], prompt_wrapper)
+            if prompt_wrapper is not None else state["messages"]
+        )
+        text = tokenizer.apply_chat_template(
+            gen_messages, tokenize=False, add_generation_prompt=True,
+        )
+        inputs = tokenizer(text, return_tensors="pt").to(model.device)
+        gen_kwargs = {"max_new_tokens": max_new_tokens, "do_sample": use_sampling}
+        if use_sampling:
+            gen_kwargs["temperature"] = temperature
+            gen_kwargs["top_k"] = 0
+            gen_kwargs["top_p"] = 1.0
+        outputs = model.generate(**inputs, **gen_kwargs)
+        generated = outputs[0][inputs["input_ids"].shape[1]:]
+        raw = tokenizer.decode(generated, skip_special_tokens=True)
+        state["messages"].append({"role": "assistant", "content": raw})
+        if raw_log is not None:
+            # Log the fully rendered context, not just the last message —
+            # the transcript the model actually saw is then inspectable.
+            raw_log.append({"prompt": text, "raw": raw})
+        return raw
+
+    policy_fn.reset = lambda: state["messages"].clear()
     return policy_fn
 
 
@@ -485,13 +564,47 @@ def evaluate(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = Non
     temperature = eval_cfg.get("temperature", 1.0)
     max_new_tokens = eval_cfg.get("max_new_tokens", 10)
 
+    # Teacher-signal eval (Session 1): wrap every game prompt in the SDPO
+    # reprompt template with a static moral value in the {feedback} slot.
+    # moral_value 'none' -> no wrapping, plain student eval (baseline).
+    teacher_cfg = cfg.get("teacher") or {}
+    moral_value_name = teacher_cfg.get("moral_value", "none")
+    moral_value_text = get_moral_value(moral_value_name)
+    prompt_wrapper = None
+    if moral_value_text:
+        template = load_reprompt_template(teacher_cfg["template_source"])
+        prompt_wrapper = partial(
+            wrap_prompt,
+            reprompt_template=template,
+            moral_value_text=moral_value_text,
+            feedback_template=teacher_cfg.get("feedback_template"),
+        )
+        logger.info("Teacher context: moral_value=%s, template from %s",
+                    moral_value_name, teacher_cfg["template_source"])
+
     base_model = cfg["policy"]["model_name"]
     logger.info("Loading model from %s (base: %s)", checkpoint or "base", base_model)
     model, tokenizer = load_model_for_eval(checkpoint, base_model)
-    policy_fn = make_policy_fn(
-        model, tokenizer, max_new_tokens=max_new_tokens, temperature=temperature,
-        raw_log=raw_log,
-    )
+    # transcript=true (Stage 1b): conversation accumulates across rounds,
+    # mirroring verl multi-turn training. Default false = stateless
+    # Markov-1 prompts (Stage 1a / legacy protocol).
+    transcript_mode = eval_cfg.get("transcript", False)
+    if transcript_mode:
+        policy_fn = make_chat_policy_fn(
+            model, tokenizer, max_new_tokens=max_new_tokens,
+            temperature=temperature, raw_log=raw_log,
+            prompt_wrapper=prompt_wrapper,
+            wrap_position=teacher_cfg.get("wrap_position", "first"),
+        )
+        logger.info("Transcript mode ON (wrap_position=%s): episode "
+                    "conversations accumulate (verl multi-turn parity)",
+                    teacher_cfg.get("wrap_position", "first"))
+    else:
+        policy_fn = make_policy_fn(
+            model, tokenizer, max_new_tokens=max_new_tokens,
+            temperature=temperature, raw_log=raw_log,
+            prompt_wrapper=prompt_wrapper,
+        )
     logger.info("Decoding: %s, max_new_tokens=%d",
                 "greedy" if not (temperature and temperature > 0)
                 else f"sampling T={temperature} (top_k=0, top_p=1.0)",
@@ -509,8 +622,12 @@ def evaluate(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = Non
         prompt_cfg = cfg.get("prompt", {})
         game_design = prompt_cfg.get("game_design", "hist")
 
+        episode_configs: List[EpisodeConfig] = []
         for _ in range(num_episodes):
+            if hasattr(policy_fn, "reset"):
+                policy_fn.reset()   # fresh conversation per episode
             config = build_eval_config(cfg, opp)
+            episode_configs.append(config)
             traj = run_episode(
                 config, policy_fn,
                 lambda_val=lambda_val,
@@ -525,6 +642,23 @@ def evaluate(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = Non
         breakdown = per_round_breakdown(trajectories)
         result["per_round"] = breakdown["per_round"]
         result["top_sequences"] = breakdown["top_sequences"]
+        # Full per-episode move sequences ('illegal' markers preserved) plus
+        # the presentation each episode was rendered with — raw material for
+        # offline dynamics metrics (recovery rate, Stage 1b) and for
+        # per-axis robustness slices in randomized-presentation runs
+        # (constant in fixed runs; harmless, keeps the format uniform).
+        result["episode_moves"] = [
+            {"agent": t.agent_moves, "opp": t.opponent_moves,
+             "presentation": {
+                 "coop_label": c.coop_label, "defect_label": c.defect_label,
+                 "matrix_layout": c.matrix_layout,
+                 "opener_order": list(c.opener_order),
+                 "closer_order": list(c.closer_order),
+                 "agent_is_row": c.agent_is_row,
+                 "payoffs": {"T": c.T, "R": c.R, "P": c.P, "S": c.S},
+             }}
+            for t, c in zip(trajectories, episode_configs)
+        ]
         all_results.append(result)
 
         print(f"\nvs {opp}:")
@@ -628,6 +762,20 @@ def main():
                         help="Override evaluation.payoffs. 'fixed' → use "
                              "game.payoffs.{T,R,P,S} (Tennant-exact, default); "
                              "'sample' → sample payoffs per episode.")
+    parser.add_argument("--moral-value", type=str, default=None,
+                        help="Override teacher.moral_value. Wraps every eval "
+                             "prompt in the SDPO reprompt_template with this "
+                             "moral value in the {feedback} slot (teacher-"
+                             "signal eval). 'none' = plain student prompt. "
+                             f"Names: {sorted(MORAL_VALUE_REGISTRY)}; combine "
+                             "2-3 with '+', e.g. deon_no_exploit+consequentialist.")
+    parser.add_argument("--transcript", type=str, default=None,
+                        choices=["true", "false"],
+                        help="Override evaluation.transcript. 'true' = the "
+                             "episode conversation accumulates across rounds "
+                             "(verl multi-turn training parity, Stage 1b); "
+                             "'false' = stateless Markov-1 prompt per round "
+                             "(default, Stage 1a).")
     parser.add_argument("--save-raw-responses", action="store_true",
                         help="Save every (prompt, raw model output) pair to a "
                              "sibling JSONL file (<output>.responses.jsonl). "
@@ -678,6 +826,10 @@ def main():
         cfg.setdefault("evaluation", {})["role"] = args.eval_role
     if args.eval_payoffs is not None:
         cfg.setdefault("evaluation", {})["payoffs"] = args.eval_payoffs
+    if args.moral_value is not None:
+        cfg.setdefault("teacher", {})["moral_value"] = args.moral_value
+    if args.transcript is not None:
+        cfg.setdefault("evaluation", {})["transcript"] = args.transcript == "true"
 
     checkpoint = None if args.checkpoint == "base" else args.checkpoint
     raw_log = [] if args.save_raw_responses else None
@@ -701,8 +853,20 @@ def main():
         tag = m.split("/", 1)[-1].replace("/", "_").replace("-", "_")
         return f"base_{tag}"
 
+    # Moral value suffix keeps teacher-signal runs distinguishable from the
+    # plain baseline in any tooling that groups by experiment_name.
+    moral_value = cfg.get("teacher", {}).get("moral_value", "none")
+    experiment_name = (
+        _base_label(cfg["policy"]["model_name"]) if checkpoint is None
+        else cfg.get("experiment_name", "unknown")
+    )
+    if moral_value != "none":
+        experiment_name = f"{experiment_name}__mv_{moral_value}"
+
     metadata = {
-        "experiment_name": _base_label(cfg["policy"]["model_name"]) if checkpoint is None else cfg.get("experiment_name", "unknown"),
+        "experiment_name": experiment_name,
+        "moral_value": moral_value,
+        "teacher_template_source": cfg.get("teacher", {}).get("template_source"),
         "model_type": "base" if checkpoint is None else "finetuned",
         "checkpoint": args.checkpoint,
         "base_model": cfg["policy"]["model_name"],
@@ -716,6 +880,16 @@ def main():
         "eval_temperature": cfg["evaluation"].get("temperature", 1.0),
         "eval_max_new_tokens": cfg["evaluation"].get("max_new_tokens", 10),
         "minimal_parsing": cfg.get("prompt", {}).get("minimal_parsing", False),
+        "transcript": cfg.get("evaluation", {}).get("transcript", False),
+        # Presentation axes (fixed = Tennant-exact; randomize/sample = the
+        # representation-robustness protocol). Distinguishes robustness
+        # runs from standard cells in downstream analysis.
+        "eval_presentation": {
+            axis: cfg.get("evaluation", {}).get(axis, default)
+            for axis, default in [("tokens", "fixed"), ("layout", "fixed"),
+                                  ("prose", "fixed"), ("role", "fixed"),
+                                  ("payoffs", "fixed")]
+        },
         "run_name": _os.environ.get("MORALGYM_RUN_NAME"),
         "slurm_job_id": _os.environ.get("SLURM_JOB_ID"),
         "seed": _parse_training_seed(

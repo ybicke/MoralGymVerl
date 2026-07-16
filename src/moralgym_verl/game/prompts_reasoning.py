@@ -1,8 +1,8 @@
 """CoT-variant prompt. Sibling to prompts.py.
 
 Differences: drops "Do not explain your reasoning"; closer asks for
-`Action: <label>`. Parser tries the structured pattern first, falls
-back to the lenient substring parser.
+`Action: <label>`. Parser is STRICT: only a well-formed `Action:
+<label>` counts; anything else is illegal (no lenient fallback).
 
 Gated by `prompt.reasoning: true`. Pair with `max_new_tokens >= 64`
 and `stop_strings: null` in YAML.
@@ -14,7 +14,7 @@ import re
 from typing import List, Optional
 
 from moralgym_verl.game.environment import EpisodeConfig, get_score
-from moralgym_verl.game.prompts import _build_matrix, parse_action_lenient
+from moralgym_verl.game.prompts import _build_matrix
 
 
 def build_prompt(
@@ -65,8 +65,12 @@ def build_prompt(
     return prompt
 
 
-# Tolerates markdown around the colon/label (e.g. `**Action:** B`).
-_ACTION_RE = re.compile(r"[Aa]ction\s*[:\-]?\s*\**\s*([A-Za-z0-9_]+)")
+# Requires the separator (`Action:` / `Action -`) so bare prose mentions
+# ("...chooses action3") can never match; tolerates markdown around the
+# colon/label (`**Action:** B`, `Action**: B`). With an optional
+# separator, a trailing prose mention hijacked the last-match slot and
+# voided clean Action lines (found in Stage 1a traces, 2026-07-14).
+_ACTION_RE = re.compile(r"[Aa]ction\s*\**\s*[:\-]\s*\**\s*([A-Za-z0-9_]+)")
 _END_THINK_RE = re.compile(r"</think>", re.IGNORECASE)
 
 
@@ -76,9 +80,14 @@ def parse_action_structured(
     """Search the post-`</think>` region first (Olmo / R1-style reasoning
     models commit answers AFTER closing the think block, so anything
     inside is scratchpad). Within that region, find the LAST `Action:
-    <token>` and match against labels. If no `</think>` is present, or
-    no usable Action match is found, fall back to lenient substring
-    scan on the full response."""
+    <token>` and match against labels.
+
+    STRICT: no lenient fallback. A trace without a well-formed
+    `Action: <label>` is a parse failure (illegal) — better no signal
+    than a wrong one; inferring actions from prose mentions was
+    measurably wrong on Stage 1a traces. Shared with training:
+    non-compliant rollouts get the illegal penalty and the parse-fail
+    reprompt, which also trains format compliance."""
     end_think = list(_END_THINK_RE.finditer(response))
     region = response[end_think[-1].end():] if end_think else response
 
@@ -98,5 +107,5 @@ def parse_action_structured(
             return "C"
         if fd and not fc:
             return "D"
-    # No usable structured answer — scan the whole response.
-    return parse_action_lenient(response, config)
+    # No well-formed Action line -> illegal. No lenient fallback.
+    return None

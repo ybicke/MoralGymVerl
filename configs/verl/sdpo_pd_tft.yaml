@@ -14,7 +14,13 @@ defaults:
   - moralgym_user       # Clariden paths — found in MoralGymVerl/configs/verl/
   - _self_
 
-max_model_len: 2560
+# Must cover the initial prompt (real size ~400-500 tok; max_prompt_length
+# 2048 is the hard cap) + max_response_length (4096); feeds
+# ppo_max_token_len_per_gpu and vLLM max_num_batched_tokens. 5120 fits
+# Gemma-2's 8192 window with margin. VERIFY memory at first training run:
+# ppo_max_token_len_per_gpu grows with this. (Was 2560 for the 32-token
+# single-turn parity runs.)
+max_model_len: 6144
 
 actor_rollout_ref:
   # verl key location: actor_rollout_ref.model.* (hf_model.yaml), not actor.peft.*
@@ -64,11 +70,22 @@ actor_rollout_ref:
       # {prompt}   = original game prompt
       # {solution} = filled by solution_template if a cooperative trajectory exists
       # {feedback} = filled by feedback_template using the moral critique string
+      # Closer kept content-free: the moral steer must live ONLY in the
+      # {feedback} slot (moral_values.py), so teacher-signal effects are
+      # attributable to the wording under test — not to a fixed nudge
+      # shared by every condition. (Was: "Recall the goal: sustain mutual
+      # cooperation when possible."; changed 2026-07-13 for Session 1.)
+      # {feedback} after {prompt}: the model reads game -> question ->
+      # principle -> "Now make your decision." — the principle directly
+      # precedes the decision moment (recency-favored). Mid-prompt
+      # insertion (between description and question) is NOT expressible:
+      # the SDPO trainer formats the student prompt as an opaque block.
+      # Top-vs-end position is an ablatable axis (both config-only).
       reprompt_template: |
         {prompt}
         {solution}
         {feedback}
-        Recall the goal: sustain mutual cooperation when possible. Now make your decision.
+        Now make your decision.
       solution_template: |
 
         A cooperative trajectory from this situation:
@@ -87,7 +104,15 @@ actor_rollout_ref:
 
 data:
   train_batch_size: 16
-  max_response_length: 32    # aligned with NeMo-RL max_new_tokens (same fix as grpo_pd_tft)
+  # Session-2 sizing (reasoning + multi-turn): ONE pool shared across ALL
+  # rounds, and it counts BOTH assistant traces AND injected env messages
+  # (tool_agent_loop.py appends user-turn tokens to response_mask as 0s;
+  # termination check :248 uses len(response_mask)). Each env message is a
+  # FULL game prompt ≈ 350 tok, not "~64 overhead": worst case 5 traces x
+  # 512 + 4 env msgs x 350 ≈ 3960 -> 4096. The old value 32 was NeMo-RL
+  # single-turn parity (cross-stack comparison, PASSED 2026-07-10) —
+  # restore 32 if that comparison is ever rerun.
+  max_response_length: 5120
 
 algorithm:
   adv_estimator: grpo

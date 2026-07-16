@@ -103,9 +103,16 @@ def run_episode(
 
     per_round: List[Dict] = []
     parse_failures = 0
+    pending_feedback: str | None = None
 
     for rnd in range(config.num_rounds):
         prompt = build_prompt(config, agent_history, opp_history)
+        if pending_feedback:
+            # Training parity: after an illegal move, verl's interaction
+            # prepends this exact string to the next user message
+            # (training/game_interaction.py:generate_response).
+            prompt = pending_feedback + "\n\n" + prompt
+            pending_feedback = None
 
         raw = policy_fn(prompt)
         agent_move = parse_action(raw, config)
@@ -115,6 +122,10 @@ def run_episode(
             # so next round's prompt shows the same history. No opponent move,
             # no payoff. Round counter advances. Matches training (nemo_env.py).
             parse_failures += 1
+            pending_feedback = (
+                f"Could not parse your action. Output exactly "
+                f"'{config.coop_label}' or '{config.defect_label}'."
+            )
             per_round.append(
                 {
                     "round": rnd + 1,
