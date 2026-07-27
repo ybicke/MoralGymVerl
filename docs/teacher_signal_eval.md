@@ -19,8 +19,8 @@ models — both are base gemma-2-9b-it. The names refer to prompt versions:
 
 "Building/making a prompt" is pure Python string construction — the
 model is not involved. Wordings live in `game/moral_values.py`
-(`deontological`, `utilitarian`, `strategic` rider, `+`-composites;
-`none` = unwrapped baseline).
+(`deontological`, `utilitarian`, prudential riders `exploit_resistance`
+and `forgiveness`, `+`-composites; `none` = unwrapped baseline).
 
 **The 5 states.** No rollout anywhere — each state is one line of
 fabricated history written into the prompt:
@@ -44,7 +44,7 @@ nothing follows it).
 
 ---
 
-## 1a — Behavioral eval (`eval/behavioral.py`)
+## Behavioral eval (`eval/behavioral.py`)
 
 - **What it tells us:** what the teacher policy actually *plays* per
   state — a preview of the distillation endpoint ("the model as if the
@@ -60,7 +60,7 @@ nothing follows it).
   (a choice is a coin flip weighted by the underlying probability), so
   it needs many repetitions: n=50/state ⇒ ±14pp.
 
-## 1b — Probe A: answer-token logits (`eval/logprob_probe.py`)
+## Probe A: answer-token logits (`eval/logprob_probe.py`)
 
 - **What it tells us:** does the moral text shift the *bare* action
   preference, with no reasoning in between? Diagnostic/telemetry.
@@ -84,7 +84,7 @@ nothing follows it).
   0.90 → 0.999, and the probe sees it. SDPO's loss consumes exactly
   these probabilities, not choices.
 
-## 1c — Probe B: reasoning-trace scoring (`eval/logprob_probe.py`)
+## Probe B: reasoning-trace scoring (`eval/logprob_probe.py`)
 
 - **What it tells us:** the SDPO training signal itself, pre-training —
   the teacher−student probability gap on student-sampled tokens, which
@@ -136,6 +136,43 @@ wording if this becomes interesting.)
 
 ---
 
+## Mechanics & file map (how each number is produced)
+
+| step | where | what happens |
+|---|---|---|
+| prompt build | `game/prompts.py` + `prompts_reasoning.py` | render payoffs / history / closer; presentation axes (tokens, layout, prose order, role, payoffs) parameterized per episode and recorded in `episode_moves[].presentation` |
+| teacher wrap | `eval/teacher_context.py` | SDPO `reprompt_template` + value in `{feedback}`; pure string op |
+| state fabrication | `game/trajectory.py:95` | agent_prev, opp_prev each `random.choice(["C","D"])` per episode, written into the prompt as one history sentence |
+| episode | `game/trajectory.py:run_episode` | one decision (single-round) or 5 real rounds vs scripted bots (`game/players.py`); transcript mode accumulates the full conversation exactly like verl's agent loop |
+| parsing | `game/prompts_reasoning.py:77` | strict: final `Action: <label>` with required separator, else `illegal`; same parser as training |
+| aggregation | `eval/behavioral.py:373` | all rates over legal moves, illegal reported separately; per state `p_C+p_D+p_illegal = 1`, so P(D\|state) = 1−P(C\|state) given a legal parse |
+| probes | `eval/logprob_probe.py`, `logprob_probe_multiturn.py` | formulas above; the multi-turn probe computes the probe-B pair per round with the value wrapped only into message 1 (training-exact `wrap_first`) |
+| offline analysis | `scripts/analysis/*.py` | commands in the index below; `robustness_slices.py` hard-fails unless its per-episode recomputation exactly matches the runtime `state_conditioning` (proves prompt↔episode alignment) |
+
+## Statistical properties (verified against code and data, 2026-07-16)
+
+- **Pairing.** One global seed (42, `behavioral.py:556`) is set before the
+  episode loop, so every condition within a stage draws the *identical*
+  state sequence (checked episode-by-episode across the stage-1 runs) —
+  between-condition comparisons are paired; state-count fluctuation
+  cancels. Caveat: presentation sampling shares this RNG stream, so
+  randomized-presentation runs are unbiased but NOT paired with fixed
+  runs. Planned fix: separate presentation stream + balanced state
+  cycling (exactly 50/state).
+- **Precision.** n≈50/state ⇒ 95% CI ≈ ±14pp per state cell, ±10pp for
+  pooled opp-C/opp-D columns. Sized for the 40-90pp screening effects;
+  treat differences under ~20pp as unresolved without a dedicated
+  200/state run (e.g. retaliation softening 28%→50%, z=2.27, p=0.023).
+- **Complements.** Two legal actions ⇒ defection rates carry no extra
+  information: P(D\|state) is exactly 1−P(C\|state) among legal parses
+  (illegal ≤1% in every completed run).
+- **Choices vs probabilities.** Behavioral cells are sampled choices
+  (noisy, CI above); probe A is deterministic and exact; probe B is
+  exact given the trace, with trace sampling as its only noise (n=8,
+  paired across wordings).
+
+---
+
 ## Reading the results (decision matrix for Session 2)
 
 | behavioral (Δ per state) | probe B (`answer_delta`) | conclusion |
@@ -154,72 +191,77 @@ rerun everything on the checkpoint — behavioral Δ should persist
 ## Running & analyzing
 
 ```bash
-# one cell (Stage 1a flags): game, moral value, episodes
+# one single-round cell: game, moral value, episodes (+ forwarded flags)
+EVAL_GROUP=stage1_single_round \
 sbatch scripts/slurm/eval_teacher_signal.sh prisoners_dilemma deontological 200 \
     --num-rounds 1 --game-design hist --opponent random
-# current sweep: none deontological utilitarian strategic \
-#                deontological+strategic utilitarian+strategic
-
-# analysis (login node)
-/usr/bin/python3.11 scripts/analysis/teacher_signal_table.py   # 3 tables/game
-/usr/bin/python3.11 scripts/analysis/check_parsing.py          # parse audit
+# Session-1 sweep as run: none / deontological / utilitarian
+# (single-round, 3 games); stage 1b added deontological+forgiveness.
+# Robustness cells: RUN_PROBES=off + --eval-{layout,prose,role} randomize
+# --eval-payoffs sample (R1/R3) or --eval-tokens randomize (R2);
+# pass --temperature 1.0 explicitly (config default is now 0.7).
 ```
 
 Outputs: one directory per cell,
-`eval_results/teacher_signal/<game>__<value>_<jobid>/` containing
-`behavioral.json`, `behavioral.responses.jsonl`, `logprob_a.json`,
-`logprob_b.json`, `logprob_b.traces.jsonl`; mirrored to
+`eval_results/teacher_signal/<stage>/<game>__<value>_<jobid>/` (stage =
+`EVAL_GROUP`: stage1_single_round, robustness, stage1b_multiturn, smoke)
+containing `behavioral.json`, `behavioral.responses.jsonl`,
+`logprob_a.json`, `logprob_b.json` + `.traces.jsonl`, and for multi-turn
+probe runs `logprob_multiturn.json` + `.traces.jsonl`; mirrored to
 `$STORE/eval_results/teacher_signal/`. Slurm logs:
-`~/logs/slurm/teacher_signal_*`.
+`~/logs/slurm/teacher_signal_*`. Analysis commands: see the experiment
+index below.
 
-## Deliberately out of scope for this experiment
+## Out of scope for Session 1
 
-Training dynamics (EMA drift, convergence); multi-turn dynamics;
-cross-game; N-player / free-riding (see the note in `moral_values.py`).
-Background on forward pass vs generation and the SDPO mechanics:
+Training dynamics (EMA drift, convergence); N-player / free-riding (see
+the note in `moral_values.py`). Multi-turn dynamics and cross-game were
+originally out of scope for the single-round experiment but were covered
+by stages 1b/1c — see the experiment index. Background on forward pass
+vs generation and the SDPO mechanics:
 `docs/notes_llm_and_sdpo_mechanics.md`.
 
 ---
 
-# Roadmap: further pre-training eval experiments (to be worked out)
+# Roadmap — executed (Session 1) and next
 
-**Stage 1a (running):** PD, single fabricated-history round —
-`none` / `deontological` / `utilitarian`. Output: per-state Δ + probes →
-pick 1-2 wordings via the decision matrix above.
+All planned stages ran; full results and analysis commands in the
+experiment index below.
 
-**Stage 1c — cross-game teacher signal (next, cheap):** same single-round
-protocol, `--game chicken|stag_hunt`, candidate wordings + `none`.
-Purpose: a wording qualifies for a multi-game *training mix* only if its
-per-state signature is game-appropriate in every included game (Chicken:
-mutual defection is the catastrophe, P < S — retaliation-tolerant values
-may be wrong there; Stag Hunt: miscoordination is the risk). The game
-mix for Session 2 is chosen per moral value from these tables.
+- **Stage 1a** — single-round PD, none/deontological/utilitarian →
+  deontological passes the decision matrix.
+- **Stage 1c** — cross-game (chicken, stag_hunt), same protocol → game
+  mix per wording: deontological → PD + Chicken; utilitarian → Stag Hunt
+  (chicken target behavior = open values call).
+- **Stage 1b** — multi-turn (5 rounds, TFT/noisy_tft/AD/AC;
+  none/deontological/deontological+forgiveness) using the transcript
+  mode built for it (accumulates the full conversation, mirroring verl's
+  agent loop, which appends every response and next user message —
+  forgiveness/grudges are expressible in training as-is). Deviations
+  from the original plan: `grim_trigger` and `random` opponents were
+  dropped (4-opponent config default); riders evaluated only as the
+  `deontological+forgiveness` composite.
+- **Beyond plan** — robustness R1/R2/R3 (presentation/token
+  randomization, `none` + `deontological`) and the multi-turn
+  signal-decay probe.
 
-**Stage 1b — multi-turn teacher signal (after 1c):** 5 rounds, opponents
-as strategic probes: TFT (cooperation stability / spiral recovery),
-always_defect (is forgiveness farmable), always_cooperate (temptation
-drift), random (state coverage), + grim_trigger (one defection is
-permanently punished — sharpest test of preventing the FIRST defection).
-Wordings: 1a/1c winners + the strategic rider split into
-`exploit_resistance` and `forgiveness`. Existing metrics: per-round
-rates, per-round state conditioning (round-invariance), top sequences.
+**Next:**
 
-**Prerequisite for 1b — eval transcript mode.** verl multi-turn training
-accumulates the FULL episode transcript at token level (each response and
-each next user message are appended: SDPO tool_agent_loop.py:239,366,398;
-next message from game_interaction.py:240). The model therefore sees all
-prior rounds *and its own past reasoning* — forgiveness/grudges are
-expressible in training as-is; the per-message Markov-1 wording is
-redundancy, not information loss. The behavioral eval however builds a
-fresh single-message prompt each round → Stage 1b needs a transcript
-mode in `behavioral.py` (accumulate messages across rounds, mirroring
-the agent loop). Cross-check option: verl `trainer.val_only: true`
-(exact training protocol, heavyweight — one-off validation only).
-
-**Then Session 2:** curriculum (wording(s) × game mix × multi-turn
-protocol) chosen from 1a/1b/1c evidence; post-training, rerun the whole
-suite on the checkpoint (Δ persists without moral prompt; probe deltas
-shrink toward 0 = internalization).
+1. *Statistics hygiene:* balanced state allocation (cycle CC/CD/DC/DD,
+   exactly 50 each) + a separate RNG stream for presentation sampling
+   (restores pairing of randomized vs fixed runs).
+2. *Prose representation:* `representation: matrix | prose` as a new
+   presentation axis (the 4 outcome cells as sentences; sentence-order
+   shuffle as the layout analogue). Validation cells before any training
+   use: `none` + `deontological`, prose-only, 200 eps, T=1.0 — same
+   paired-comparison design as R1/R3.
+3. *Session 2 training:* deontological, PD, single-turn SDPO (the decay
+   probe shows wrap-first multi-turn only reaches rounds 1-2; per-round
+   splitting is the multi-turn escape), randomized presentation incl.
+   `randomize_tokens: true`. Post-training: rerun the full suite on the
+   checkpoint — behavioral Δ should persist *without* the moral prompt,
+   probe deltas shrink toward 0 (internalization), and robustness slices
+   should be flat across presentations.
 
 ---
 
