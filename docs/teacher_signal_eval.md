@@ -151,14 +151,18 @@ wording if this becomes interesting.)
 
 ## Statistical properties (verified against code and data, 2026-07-16)
 
-- **Pairing.** One global seed (42, `behavioral.py:556`) is set before the
-  episode loop, so every condition within a stage draws the *identical*
-  state sequence (checked episode-by-episode across the stage-1 runs) —
-  between-condition comparisons are paired; state-count fluctuation
-  cancels. Caveat: presentation sampling shares this RNG stream, so
-  randomized-presentation runs are unbiased but NOT paired with fixed
-  runs. Planned fix: separate presentation stream + balanced state
-  cycling (exactly 50/state).
+- **Pairing.** Fabricated states follow a deterministic balanced cycle
+  (`FAB_STATES`, episode i → i mod 4 ⇒ exactly n/4 decisions per state,
+  identical allocation in every run — `evaluation.state_design:
+  balanced`, the default since 2026-07-16), and presentation sampling
+  runs on a dedicated RNG stream (`behavioral.py`, `presentation_rng`),
+  so toggling randomization axes perturbs nothing else. Consequence:
+  ALL runs are paired on states by construction, and robustness cells
+  with the same flags are additionally paired on presentations across
+  moral values. Legacy runs (jobs ≤ 2775944) used `state_design:
+  random` — uniform per-episode draws, n=44-58 per state, still paired
+  within a stage via the shared seed but not with randomized runs;
+  metadata records which design a run used.
 - **Precision.** n≈50/state ⇒ 95% CI ≈ ±14pp per state cell, ±10pp for
   pooled opp-C/opp-D columns. Sized for the 40-90pp screening effects;
   treat differences under ~20pp as unresolved without a dedicated
@@ -247,9 +251,9 @@ experiment index below.
 
 **Next:**
 
-1. *Statistics hygiene:* balanced state allocation (cycle CC/CD/DC/DD,
-   exactly 50 each) + a separate RNG stream for presentation sampling
-   (restores pairing of randomized vs fixed runs).
+1. ~~*Statistics hygiene*~~ — DONE 2026-07-16: balanced state allocation
+   (`state_design: balanced` default) + dedicated presentation RNG
+   stream; see Statistical properties above.
 2. *Prose representation:* `representation: matrix | prose` as a new
    presentation axis (the 4 outcome cells as sentences; sentence-order
    shuffle as the layout analogue). Validation cells before any training

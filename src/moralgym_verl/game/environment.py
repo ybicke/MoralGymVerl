@@ -37,7 +37,8 @@ FIXED_PAYOFFS = {
 
 
 def sample_payoffs(
-    game_type: str, lo: int = 1, hi: int = 10
+    game_type: str, lo: int = 1, hi: int = 10,
+    rng: Optional[random.Random] = None,
 ) -> Tuple[int, int, int, int]:
     """Sample 4 distinct integer payoffs satisfying the ordering for *game_type*.
 
@@ -59,19 +60,21 @@ def sample_payoffs(
             f"Choose from {list(GAME_ORDERINGS)}"
         )
     idx = GAME_ORDERINGS[game_type]
+    r = rng if rng is not None else random
     while True:
-        vals = sorted(random.sample(range(lo, hi + 1), 4))
+        vals = sorted(r.sample(range(lo, hi + 1), 4))
         T, R, P, S = (vals[i] for i in idx)
         if 2 * R > T + S:
             return T, R, P, S
 
 
-def sample_labels() -> Tuple[str, str]:
+def sample_labels(rng: Optional[random.Random] = None) -> Tuple[str, str]:
     """Sample two distinct uppercase letters as randomized action labels.
     'A' is excluded — the prompt names the opponent 'agent A', so a label
     of 'A' would collide with the opponent's identifier.
     """
-    pair = random.sample("BCDEFGHIJKLMNOPQRSTUVWXYZ", 2)
+    r = rng if rng is not None else random
+    pair = r.sample("BCDEFGHIJKLMNOPQRSTUVWXYZ", 2)
     return pair[0], pair[1]
 
 

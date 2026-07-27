@@ -37,7 +37,7 @@ from moralgym_verl.game.environment import (
     FIXED_PAYOFFS, EpisodeConfig, sample_labels, sample_payoffs,
 )
 from moralgym_verl.game.prompts import build_prompt, parse_action, sample_prompt_randomization
-from moralgym_verl.game.trajectory import TrajectoryResult, run_episode
+from moralgym_verl.game.trajectory import FAB_STATES, TrajectoryResult, run_episode
 
 MORALITIES = ("game", "deon", "util", "gamedeon")
 
@@ -269,11 +269,17 @@ def make_chat_policy_fn(
     return policy_fn
 
 
-def build_eval_config(cfg: Dict, opponent: str) -> EpisodeConfig:
+def build_eval_config(
+    cfg: Dict, opponent: str, rng: Optional[random.Random] = None,
+) -> EpisodeConfig:
     """Build an EpisodeConfig for evaluation.
 
-    Uses module-global `random` (seeded once at the top of `evaluate()`).
-    Same convention across all presentation axes — no per-episode rng.
+    All presentation draws go through `rng` when given. `evaluate()`
+    passes a dedicated stream (seeded independently of everything else)
+    so that turning presentation randomization on/off does not perturb
+    any other random draws — fixed and randomized runs stay paired.
+    Falls back to module `random` (probe callers, fixed presentation —
+    which consumes no draws anyway).
     """
     game = cfg["game"]
     prompt_cfg = cfg["prompt"]
@@ -293,24 +299,26 @@ def build_eval_config(cfg: Dict, opponent: str) -> EpisodeConfig:
     randomize_prose = eval_cfg.get("prose", "fixed") == "randomize"
     randomize_role = eval_cfg.get("role", "fixed") == "randomize"
 
+    r = rng if rng is not None else random
+
     if eval_cfg.get("tokens", "fixed") == "randomize":
-        cl, dl = sample_labels()
+        cl, dl = sample_labels(rng=rng)
     else:
         cl, dl = "action3", "action4"
 
-    layout = random.randint(0, 3) if randomize_layout else 0
+    layout = r.randint(0, 3) if randomize_layout else 0
 
     if eval_cfg.get("payoffs", "fixed") == "sample":
-        T, R, P, S = sample_payoffs(game["type"])
+        T, R, P, S = sample_payoffs(game["type"], rng=rng)
     else:
         p = game["payoffs"]
         T, R, P, S = p["T"], p["R"], p["P"], p["S"]
 
-    # Uses module random (seeded in evaluate()).
     opener_order, closer_order, agent_is_row = sample_prompt_randomization(
         cl, dl,
         randomize_prose=randomize_prose,
         randomize_role=randomize_role,
+        rng=rng,
     )
 
     return EpisodeConfig(
@@ -546,17 +554,22 @@ def evaluate(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = Non
     # grpo.seed, which varies per training run). Keeping eval deterministic
     # means seed-level CIs reflect training variance only. Matches Tennant.
     #
-    # Convention: one global seed seeds module `random` (for presentation
-    # sampling in build_eval_config + fab_history coin flips in run_episode),
-    # numpy (for aggregate metrics), and torch (for policy sampling). All
-    # downstream random.*/np.*/torch.* calls inherit this stream. If eval
-    # ever parallelizes across workers or reorders episodes, swap to
-    # per-episode `random.Random(seed + ep_idx)` — see
-    # `sample_prompt_randomization` for the plug-in point.
+    # Convention: one global seed seeds module `random` (opponent bots +
+    # legacy fab_history coin flips), numpy (aggregate metrics), and torch
+    # (policy sampling). Presentation sampling gets its OWN stream
+    # (`presentation_rng` below): toggling randomization axes must not
+    # perturb the shared stream, so fixed and randomized runs stay paired
+    # on everything else. Fabricated states don't consume RNG at all in
+    # the default balanced design (deterministic FAB_STATES cycle).
     seed = cfg.get("seed", 42)
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+    # Dedicated presentation stream; offset so it never mirrors the
+    # module stream. Reset per evaluate() call -> presentations are
+    # reproducible and identical across runs with the same flags (e.g.
+    # robustness cells for different moral values are pairwise paired).
+    presentation_rng = random.Random(seed + 1_000_003)
 
     eval_cfg = cfg["evaluation"]
     opponents = eval_cfg.get("opponents", ["tit_for_tat", "always_defect"])
@@ -622,17 +635,27 @@ def evaluate(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = Non
         prompt_cfg = cfg.get("prompt", {})
         game_design = prompt_cfg.get("game_design", "hist")
 
+        # State design (fabricated-history runs): 'balanced' (default)
+        # cycles FAB_STATES deterministically -> exactly num_episodes/4
+        # decisions per state, identical allocation in every run;
+        # 'random' reproduces the legacy uniform draw inside run_episode.
+        state_design = eval_cfg.get("state_design", "balanced")
+        fabricate = game_design == "hist"
+
         episode_configs: List[EpisodeConfig] = []
-        for _ in range(num_episodes):
+        for ep_idx in range(num_episodes):
             if hasattr(policy_fn, "reset"):
                 policy_fn.reset()   # fresh conversation per episode
-            config = build_eval_config(cfg, opp)
+            config = build_eval_config(cfg, opp, rng=presentation_rng)
             episode_configs.append(config)
+            fab_state = (FAB_STATES[ep_idx % len(FAB_STATES)]
+                         if fabricate and state_design == "balanced" else None)
             traj = run_episode(
                 config, policy_fn,
                 lambda_val=lambda_val,
                 intrinsic_type=intrinsic_type,
-                fabricate_history=(game_design == "hist"),
+                fabricate_history=fabricate,
+                fab_state=fab_state,
                 game_reward_type=game_reward_type,
                 shaping=shaping,
             )
@@ -890,6 +913,11 @@ def main():
                                   ("prose", "fixed"), ("role", "fixed"),
                                   ("payoffs", "fixed")]
         },
+        # 'balanced' = deterministic FAB_STATES cycle (exactly n/4 per
+        # state, paired across every run); 'random' = legacy uniform draw
+        # (pre-2026-07 runs, multinomial n per state).
+        "state_design": cfg.get("evaluation", {}).get("state_design",
+                                                      "balanced"),
         "run_name": _os.environ.get("MORALGYM_RUN_NAME"),
         "slurm_job_id": _os.environ.get("SLURM_JOB_ID"),
         "seed": _parse_training_seed(

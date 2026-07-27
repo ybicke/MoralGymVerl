@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Tuple
 
 from moralgym_verl.game.environment import EpisodeConfig, get_score
 from moralgym_verl.game.players import get_opponent_action
@@ -60,6 +60,14 @@ class TrajectoryResult:
         return ex / len(legal_pairs)
 
 
+# Canonical order of the four fabricated (agent_prev, opp_prev) states.
+# Balanced eval designs cycle through this list (episode i -> i % 4) so
+# every state gets exactly num_episodes/4 decisions, deterministically.
+FAB_STATES: List[Tuple[str, str]] = [
+    ("C", "C"), ("C", "D"), ("D", "C"), ("D", "D"),
+]
+
+
 def run_episode(
     config: EpisodeConfig,
     policy_fn: Callable[[str], str],
@@ -67,6 +75,7 @@ def run_episode(
     intrinsic_type: str = "deontological",
     verbose: bool = False,
     fabricate_history: bool = False,
+    fab_state: Tuple[str, str] | None = None,
     game_reward_type: str = "raw",
     shaping: dict | None = None,
 ) -> TrajectoryResult:
@@ -82,8 +91,11 @@ def run_episode(
         intrinsic_type: Which intrinsic reward variant to use.
         verbose: Print round-by-round results.
         fabricate_history: If True, seed round 1 with a fabricated prior
-            state sampled uniformly from {C,D}x{C,D} (mid-game entry).
-            Matches training Game Design 2.
+            state (mid-game entry). Matches training Game Design 2.
+        fab_state: Explicit (agent_prev, opp_prev) for the fabricated
+            state. None (default) samples uniformly from {C,D}x{C,D} via
+            module `random` — training-parity behavior. The eval passes
+            an explicit state to run a balanced design (see FAB_STATES).
         game_reward_type: Which game reward function to use for reward
             computation ('raw', 'normalized', 'none', 'utilitarian').
         shaping: Per-game shaping dict for intrinsic_type='deontological_tailored'.
@@ -93,8 +105,11 @@ def run_episode(
     fab_opp: str | None = None
 
     if fabricate_history:
-        fab_agent = random.choice(["C", "D"])
-        fab_opp = random.choice(["C", "D"])
+        if fab_state is not None:
+            fab_agent, fab_opp = fab_state
+        else:
+            fab_agent = random.choice(["C", "D"])
+            fab_opp = random.choice(["C", "D"])
         agent_history: List[str] = [fab_agent]
         opp_history: List[str] = [fab_opp]
     else:
