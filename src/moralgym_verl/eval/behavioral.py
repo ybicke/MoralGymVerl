@@ -146,6 +146,22 @@ def load_model_for_eval(
     return model, tokenizer
 
 
+def render_chat_inputs(tokenizer, messages, device):
+    """Chat-template `messages` into generation inputs, training-exact.
+
+    add_special_tokens=False because the rendered template already starts
+    with <bos> — the HF default would prepend a second one, deviating from
+    verl's training tokenization. Returns (rendered_text, model inputs).
+    """
+    text = tokenizer.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True,
+    )
+    inputs = tokenizer(
+        text, return_tensors="pt", add_special_tokens=False,
+    ).to(device)
+    return text, inputs
+
+
 def make_policy_fn(
     model,
     tokenizer,
@@ -180,10 +196,7 @@ def make_policy_fn(
         if prompt_wrapper is not None:
             prompt = prompt_wrapper(prompt)
         messages = [{"role": "user", "content": prompt}]
-        text = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True,
-        )
-        inputs = tokenizer(text, return_tensors="pt").to(model.device)
+        _, inputs = render_chat_inputs(tokenizer, messages, model.device)
         gen_kwargs = {"max_new_tokens": max_new_tokens, "do_sample": use_sampling}
         if use_sampling:
             # top_k=0 / top_p=1.0 explicitly override HF's defaults (top_k=50)
@@ -246,10 +259,7 @@ def make_chat_policy_fn(
             wrap_fn(state["messages"], prompt_wrapper)
             if prompt_wrapper is not None else state["messages"]
         )
-        text = tokenizer.apply_chat_template(
-            gen_messages, tokenize=False, add_generation_prompt=True,
-        )
-        inputs = tokenizer(text, return_tensors="pt").to(model.device)
+        text, inputs = render_chat_inputs(tokenizer, gen_messages, model.device)
         gen_kwargs = {"max_new_tokens": max_new_tokens, "do_sample": use_sampling}
         if use_sampling:
             gen_kwargs["temperature"] = temperature
@@ -508,28 +518,28 @@ def _score_rewards(results: List[TrajectoryResult]) -> Dict:
 
 
 def per_round_breakdown(results: List[TrajectoryResult]) -> Dict:
-    """Compute per-round cooperation rates and most common move sequences."""
+    """Compute per-round move distributions and most common move sequences.
+
+    Per-round entries use the same three-category convention ({C, D,
+    illegal} via _three_category) as the rest of the metrics — illegal
+    moves are NOT folded into D.
+    """
     if not results:
         return {}
 
     num_rounds = len(results[0].agent_moves)
-    round_coop = {r: [] for r in range(num_rounds)}
+    round_moves: Dict[int, List[str]] = {r: [] for r in range(num_rounds)}
     sequences = []
 
     for traj in results:
-        seq = "".join(traj.agent_moves)
-        sequences.append(seq)
+        sequences.append("".join(traj.agent_moves))
         for r, move in enumerate(traj.agent_moves):
-            round_coop[r].append(1.0 if move == "C" else 0.0)
+            round_moves[r].append(move)
 
-    # Per-round cooperation rates
-    per_round = {}
-    for r in range(num_rounds):
-        vals = round_coop[r]
-        per_round[f"round_{r + 1}"] = {
-            "cooperation_rate": float(np.mean(vals)),
-            "std": float(np.std(vals)),
-        }
+    per_round = {
+        f"round_{r + 1}": _three_category(round_moves[r])
+        for r in range(num_rounds)
+    }
 
     # Most common sequences
     from collections import Counter
@@ -699,7 +709,9 @@ def evaluate(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = Non
             print(f"  P(C | opp prev D):       {result['p_c_given_opp_d']:.1%}  # forgiveness")
         for rnd_key in sorted(result["per_round"]):
             rnd = result["per_round"][rnd_key]
-            print(f"  {rnd_key}: C rate = {rnd['cooperation_rate']:.1%}")
+            print(f"  {rnd_key}: C rate = {rnd['p_C']:.1%}"
+                  + (f" (illegal {rnd['p_illegal']:.1%})"
+                     if rnd["p_illegal"] else ""))
         if result["top_sequences"]:
             print(f"  Top sequence: {result['top_sequences'][0]['sequence']}"
                   f" ({result['top_sequences'][0]['fraction']:.0%})")
@@ -894,7 +906,8 @@ def main():
         "checkpoint": args.checkpoint,
         "base_model": cfg["policy"]["model_name"],
         "game_type": cfg["game"]["type"],
-        "game_design": cfg.get("prompt", {}).get("game_design", "nohist"),
+        # Fallback must match evaluate()'s behavior (which defaults to "hist").
+        "game_design": cfg.get("prompt", {}).get("game_design", "hist"),
         "num_episodes": cfg["evaluation"]["num_episodes"],
         "num_rounds": cfg["game"]["num_rounds"],
         "intrinsic": cfg["reward"]["intrinsic"],
@@ -920,7 +933,11 @@ def main():
                                                       "balanced"),
         "run_name": _os.environ.get("MORALGYM_RUN_NAME"),
         "slurm_job_id": _os.environ.get("SLURM_JOB_ID"),
-        "seed": _parse_training_seed(
+        # Two distinct seeds: eval_seed drives this evaluation's RNG streams;
+        # training_seed identifies which training run produced the checkpoint
+        # (None for base-model eval). Was ambiguously a single "seed" key.
+        "eval_seed": cfg.get("seed", 42),
+        "training_seed": _parse_training_seed(
             args.checkpoint, _os.environ.get("MORALGYM_RUN_NAME")
         ),
         "timestamp": datetime.now().isoformat(),

@@ -235,3 +235,16 @@ def parse_action(response: str, config: EpisodeConfig) -> Optional[str]:
     if config.minimal_parsing:
         return parse_action_minimal(response, config)
     return parse_action_lenient(response, config)
+
+
+def parse_failure_feedback(config: EpisodeConfig) -> str:
+    """Feedback prepended to the next-round prompt after an unparseable action.
+
+    Single source for training (game_interaction.generate_response) and eval
+    (trajectory.run_episode): the reprompt wording is part of the protocol,
+    so the two must never drift apart.
+    """
+    return (
+        f"Could not parse your action. Output exactly "
+        f"'{config.coop_label}' or '{config.defect_label}'."
+    )

@@ -13,7 +13,9 @@ from typing import Callable, Dict, List, Tuple
 
 from moralgym_verl.game.environment import EpisodeConfig, get_score
 from moralgym_verl.game.players import get_opponent_action
-from moralgym_verl.game.prompts import build_prompt, parse_action
+from moralgym_verl.game.prompts import (
+    build_prompt, parse_action, parse_failure_feedback,
+)
 from moralgym_verl.rewards import compute_episode_rewards, compute_round_reward
 
 
@@ -137,10 +139,7 @@ def run_episode(
             # so next round's prompt shows the same history. No opponent move,
             # no payoff. Round counter advances. Matches training (nemo_env.py).
             parse_failures += 1
-            pending_feedback = (
-                f"Could not parse your action. Output exactly "
-                f"'{config.coop_label}' or '{config.defect_label}'."
-            )
+            pending_feedback = parse_failure_feedback(config)
             per_round.append(
                 {
                     "round": rnd + 1,

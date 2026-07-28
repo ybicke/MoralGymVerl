@@ -57,7 +57,11 @@ from typing import Any, Optional
 
 from moralgym_verl.game.environment import EpisodeConfig
 from moralgym_verl.game.players import get_opponent_action
-from moralgym_verl.game.prompts import build_prompt, parse_action
+from moralgym_verl.game.prompts import (
+    build_prompt,
+    parse_action,
+    parse_failure_feedback,
+)
 from moralgym_verl.rewards import (
     get_game_reward_fn,
     get_intrinsic_fn,
@@ -172,10 +176,7 @@ class GameInteraction(BaseInteraction):
             inst["round"] += 1
             inst["rewards"].append(reward)
             done = inst["round"] >= config.num_rounds
-            feedback = (
-                f"Could not parse your action. Output exactly "
-                f"'{config.coop_label}' or '{config.defect_label}'."
-            )
+            feedback = parse_failure_feedback(config)
             if _DEBUG:
                 logger.debug(f"[{instance_id[:8]}] round={inst['round']} PARSE_FAIL reward={reward:.2f} done={done}")
             if done:

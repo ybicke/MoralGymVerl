@@ -49,7 +49,6 @@ import json
 import logging
 import math
 import random
-import re
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -57,11 +56,14 @@ from typing import Dict, List, Optional, Tuple
 import torch
 import yaml
 
-from moralgym_verl.eval.behavioral import build_eval_config, load_config, load_model_for_eval
+from moralgym_verl.eval.behavioral import (
+    build_eval_config, load_config, load_model_for_eval, render_chat_inputs,
+)
 from moralgym_verl.eval.teacher_context import load_reprompt_template, wrap_prompt
 from moralgym_verl.game.environment import FIXED_PAYOFFS
 from moralgym_verl.game.moral_values import get_moral_value
-from moralgym_verl.game.prompts import build_prompt
+from moralgym_verl.game.prompts import build_prompt, parse_action
+from moralgym_verl.game.prompts_reasoning import find_action_marker
 
 logger = logging.getLogger(__name__)
 
@@ -77,11 +79,10 @@ PROBE_STATES: List[Tuple[str, List[str], List[str]]] = [
 
 def _chat_prefix(tokenizer, user_text: str, device) -> torch.Tensor:
     """Chat-templated prompt ids — mirrors make_policy_fn exactly."""
-    text = tokenizer.apply_chat_template(
-        [{"role": "user", "content": user_text}],
-        tokenize=False, add_generation_prompt=True,
+    _, inputs = render_chat_inputs(
+        tokenizer, [{"role": "user", "content": user_text}], device,
     )
-    return tokenizer(text, return_tensors="pt").input_ids.to(device)
+    return inputs.input_ids
 
 
 @torch.no_grad()
@@ -181,21 +182,27 @@ def trace_probe(
     for state, hist_a, hist_o in PROBE_STATES:
         game_prompt = build_prompt(cfg, hist_a, hist_o)
         student_ids = _chat_prefix(tokenizer, game_prompt, model.device)
-        teacher_prompt = wrapper(game_prompt)
+        teacher_ids = _chat_prefix(tokenizer, wrapper(game_prompt), model.device)
 
         token_deltas, answer_deltas = [], []
+        n_empty = n_no_marker = n_parse_fail = 0
         for _ in range(num_traces):
             trace = _sample_trace(model, tokenizer, student_ids,
                                   max_new_tokens, temperature)
             if not trace.strip():
+                n_empty += 1
                 continue
-            record = {"state": state, "trace": trace,
+            # Parse exactly as training / behavioral eval would (shared
+            # parse_action): None = would be an illegal move in training.
+            parsed = parse_action(trace, cfg)
+            if parsed is None:
+                n_parse_fail += 1
+            record = {"state": state, "trace": trace, "parsed_action": parsed,
                       "token_delta": None, "answer_delta": None}
             if trace_log is not None:
                 trace_log.append(record)
             # Distillation pressure on the full trace: mean per-token
             # logprob difference, teacher-forced under both prompts.
-            teacher_ids = _chat_prefix(tokenizer, teacher_prompt, model.device)
             lp_s, n_s = _continuation_logprob(model, tokenizer, student_ids, trace)
             lp_t, n_t = _continuation_logprob(model, tokenizer, teacher_ids, trace)
             if n_s:
@@ -203,12 +210,13 @@ def trace_probe(
                 token_deltas.append(record["token_delta"])
 
             # Answer shift with the reasoning held fixed: truncate the
-            # trace after its final "Action:" marker (the format the
-            # reasoning closer requests; tolerate markdown/no-colon like
-            # prompts_reasoning._ACTION_RE) and compare label logodds.
-            marks = list(re.finditer(r"[Aa]ction\s*[:\-]", trace))
-            if marks:
-                reasoning_prefix = trace[: marks[-1].end()]
+            # trace at its final answer marker (find_action_marker — the
+            # parser's own definition) and compare label logodds there.
+            m = find_action_marker(trace)
+            if m is None:
+                n_no_marker += 1
+            else:
+                reasoning_prefix = trace[: m.start(1)].rstrip()
                 s_pref = torch.cat([student_ids, tokenizer(
                     reasoning_prefix, add_special_tokens=False,
                     return_tensors="pt").input_ids.to(model.device)], dim=1)
@@ -232,6 +240,9 @@ def trace_probe(
         results[state] = {
             "token_delta": stats(token_deltas),
             "answer_delta": stats(answer_deltas),
+            "n_empty_traces": n_empty,
+            "n_no_answer_marker": n_no_marker,
+            "n_parse_fail": n_parse_fail,
         }
     return results
 
@@ -283,8 +294,17 @@ def main() -> None:
     checkpoint = None if args.checkpoint == "base" else args.checkpoint
     model, tokenizer = load_model_for_eval(checkpoint, cfg["policy"]["model_name"])
 
-    # Fixed Tennant-exact presentation (same defaults as the behavioral eval);
-    # opponent is irrelevant here — the probe conditions on fabricated states.
+    # Probes are fixed-presentation diagnostics: force any randomized axes
+    # off so probe cells stay comparable across values/runs (and never draw
+    # from an unpaired RNG stream). Opponent is irrelevant here — the probe
+    # conditions on fabricated states.
+    randomized = [ax for ax in ("tokens", "layout", "prose", "role", "payoffs")
+                  if cfg.get("evaluation", {}).get(ax, "fixed") != "fixed"]
+    if randomized:
+        logger.warning("Ignoring randomized presentation axes %s — probes "
+                       "always run fixed presentation.", randomized)
+        for ax in randomized:
+            cfg["evaluation"][ax] = "fixed"
     config = build_eval_config(cfg, opponent="tit_for_tat")
 
     logger.info("Probe A (answer-token) over %d states ...", len(PROBE_STATES))
@@ -320,7 +340,7 @@ def main() -> None:
         "game_type": cfg["game"]["type"],
         "teacher_template_source": teacher_cfg.get("template_source"),
         "num_traces": num_traces,
-        "seed": seed,
+        "eval_seed": seed,
         "timestamp": datetime.now().isoformat(),
     }
     out_dir = Path(args.output_dir) if args.output_dir else Path("results")

@@ -175,6 +175,30 @@ wording if this becomes interesting.)
   exact given the trace, with trace sampling as its only noise (n=8,
   paired across wordings).
 
+## Protocol changes (2026-07-28)
+
+Applied before the MVP rerun; all runs BEFORE this date differ as follows —
+expect small absolute shifts vs the July reference tables, rankings and
+deltas were internally consistent either way.
+
+- **Double-BOS fix.** Eval re-tokenized the rendered chat template with
+  HF's default `add_special_tokens=True`, prepending a second `<bos>`
+  (ids `[2, 2, 106, ...]`); verl training paths produce a single BOS.
+  Now one shared path (`behavioral.render_chat_inputs`,
+  `add_special_tokens=False`), token-identical to training and guarded by
+  `tests/test_tokenization_parity.py`. Pre-fix runs measured every cell
+  under the extra token.
+- **Probe-B truncation unified with the parser.** Trace truncation for
+  `answer_delta` now uses `prompts_reasoning.find_action_marker` (the
+  strict parser's own marker definition) instead of a private simpler
+  regex — `answer_delta` shifts slightly on markdown-formatted traces.
+- **Probe parse accounting.** Each probe-B trace records `parsed_action`
+  (shared `parse_action`, i.e. training's illegal-move criterion); per
+  state, `n_empty_traces` / `n_no_answer_marker` / `n_parse_fail` are
+  reported. Metadata: behavioral `seed` split into `eval_seed` +
+  `training_seed`; probe `seed` renamed `eval_seed`. `per_round` entries
+  switched to the three-category `{p_C, p_D, p_illegal, n}` format.
+
 ---
 
 ## Reading the results (decision matrix for Session 2)

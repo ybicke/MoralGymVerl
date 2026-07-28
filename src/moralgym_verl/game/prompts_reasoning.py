@@ -74,26 +74,28 @@ _ACTION_RE = re.compile(r"[Aa]ction\s*\**\s*[:\-]\s*\**\s*([A-Za-z0-9_]+)")
 _END_THINK_RE = re.compile(r"</think>", re.IGNORECASE)
 
 
+def find_action_marker(response: str) -> Optional[re.Match]:
+    """Last `Action: <token>` match after the final `</think>` (if any);
+    None if absent. Positions absolute in `response`, group(1) = token.
+    Single owner of the marker definition (parser + probe truncation)."""
+    end_think = list(_END_THINK_RE.finditer(response))
+    start = end_think[-1].end() if end_think else 0
+    matches = list(_ACTION_RE.finditer(response, start))
+    return matches[-1] if matches else None
+
+
 def parse_action_structured(
     response: str, config: EpisodeConfig
 ) -> Optional[str]:
-    """Search the post-`</think>` region first (Olmo / R1-style reasoning
-    models commit answers AFTER closing the think block, so anything
-    inside is scratchpad). Within that region, find the LAST `Action:
-    <token>` and match against labels.
+    """Match the last action marker (find_action_marker) against the labels.
 
-    STRICT: no lenient fallback. A trace without a well-formed
-    `Action: <label>` is a parse failure (illegal) — better no signal
-    than a wrong one; inferring actions from prose mentions was
-    measurably wrong on Stage 1a traces. Shared with training:
-    non-compliant rollouts get the illegal penalty and the parse-fail
-    reprompt, which also trains format compliance."""
-    end_think = list(_END_THINK_RE.finditer(response))
-    region = response[end_think[-1].end():] if end_think else response
-
-    matches = list(_ACTION_RE.finditer(region))
-    if matches:
-        captured = matches[-1].group(1).strip().rstrip(".,!?;:").upper()
+    STRICT, no lenient fallback: no well-formed `Action: <label>` = parse
+    failure (illegal) — better no signal than a wrong one (prose-mention
+    inference was measurably wrong on Stage 1a traces). Shared with
+    training: non-compliant rollouts get illegal penalty + reprompt."""
+    m = find_action_marker(response)
+    if m:
+        captured = m.group(1).strip().rstrip(".,!?;:").upper()
         coop = config.coop_label.upper()
         defect = config.defect_label.upper()
         # Exact equality first (cleanest case)

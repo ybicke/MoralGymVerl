@@ -36,16 +36,17 @@ import json
 import logging
 import math
 import random
-import re
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
 import torch
 
-from moralgym_verl.eval.behavioral import build_eval_config, load_config, load_model_for_eval
+from moralgym_verl.eval.behavioral import (
+    build_eval_config, load_config, load_model_for_eval, render_chat_inputs,
+)
 from moralgym_verl.eval.logprob_probe import (
-    _answer_logodds, _chat_prefix, _continuation_logprob, _sample_trace,
+    _answer_logodds, _continuation_logprob, _sample_trace,
 )
 from moralgym_verl.eval.teacher_context import (
     load_reprompt_template, wrap_first_user, wrap_prompt,
@@ -54,17 +55,15 @@ from moralgym_verl.game.environment import FIXED_PAYOFFS
 from moralgym_verl.game.moral_values import get_moral_value
 from moralgym_verl.game.players import get_opponent_action
 from moralgym_verl.game.prompts import build_prompt, parse_action
+from moralgym_verl.game.prompts_reasoning import find_action_marker
 
 logger = logging.getLogger(__name__)
 
-_ACTION_MARK = re.compile(r"[Aa]ction\s*[:\-]")
-
 
 def _chat_prefix_messages(tokenizer, messages: List[dict], device):
-    text = tokenizer.apply_chat_template(
-        messages, tokenize=False, add_generation_prompt=True,
-    )
-    return tokenizer(text, return_tensors="pt").input_ids.to(device)
+    """Chat-templated transcript ids — shared single-BOS path."""
+    _, inputs = render_chat_inputs(tokenizer, messages, device)
+    return inputs.input_ids
 
 
 def run_probe_episode(
@@ -99,9 +98,9 @@ def run_probe_episode(
         if n_s:
             record["token_delta"] = lp_t / n_t - lp_s / n_s
 
-        marks = list(_ACTION_MARK.finditer(trace))
-        if marks:
-            reasoning_prefix = trace[: marks[-1].end()]
+        m = find_action_marker(trace)
+        if m is not None:
+            reasoning_prefix = trace[: m.start(1)].rstrip()
             cut_ids = tokenizer(reasoning_prefix, add_special_tokens=False,
                                 return_tensors="pt").input_ids.to(model.device)
             lo_s, _, _ = _answer_logodds(
@@ -214,7 +213,7 @@ def main() -> None:
                 "num_rounds": config.num_rounds,
                 "wrap_position": "first",
                 "temperature": temperature,
-                "seed": seed,
+                "eval_seed": seed,
                 "timestamp": datetime.now().isoformat(),
             },
             "per_round": per_round,
