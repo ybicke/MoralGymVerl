@@ -2,7 +2,8 @@
 """Session 1 deliverable: teacher-signal tables per game and moral value.
 
 Reads eval_results/teacher_signal/*.json (behavioral runs from
-eval_teacher_signal.sh and *_probe.json from eval/logprob_probe.py), keeps the
+eval_teacher_signal.sh, probe JSONs from eval/probe_answer_token.py and
+eval/probe_reasoning_trace.py), keeps the
 newest run per (game, moral_value), and prints three markdown tables per
 game:
 

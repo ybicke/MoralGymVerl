@@ -88,34 +88,45 @@ srun --environment=moralgym_verl \
 
 echo "Behavioral eval complete: $(date)"
 
-# Logprob probes A+B (teacher-vs-student forward passes; see
-# eval/logprob_probe.py). Skipped for the plain baseline — they compare
-# against the plain prompt internally. Same job, same GPU, minutes.
-# RUN_PROBES=off skips them (e.g. robustness / multi-turn cells, where the
-# single-round fixed-presentation probes add no information).
+# Logprob probes (teacher-vs-student forward passes): probe A =
+# eval/probe_answer_token.py, probe B = eval/probe_reasoning_trace.py.
+# Skipped for the plain baseline — they compare against the plain prompt
+# internally. Same job, same GPU, minutes. RUN_PROBES=off skips them
+# (e.g. robustness / multi-turn cells, where the single-round
+# fixed-presentation probes add no information).
 if [ "${MORAL_VALUE}" != "none" ] && [ "${RUN_PROBES:-on}" != "off" ]; then
     srun --environment=moralgym_verl \
         --gpus-per-task=1 \
-        python3 -m moralgym_verl.eval.logprob_probe \
+        python3 -m moralgym_verl.eval.probe_answer_token \
             --config "${PROJECT_ROOT}/${CONFIG}" \
             --checkpoint base \
             --game "${GAME}" \
             --moral-value "${MORAL_VALUE}" \
             --output-dir "${RUN_DIR}"
-    echo "Probes complete: $(date)"
-fi
-
-# Multi-turn signal-decay probe (RUN_MT_PROBE=on; see
-# eval/logprob_probe_multiturn.py): per-round teacher-vs-student deltas
-# with the moral value at episode start (training-exact). ~15 min.
-if [ "${MORAL_VALUE}" != "none" ] && [ "${RUN_MT_PROBE:-off}" = "on" ]; then
     srun --environment=moralgym_verl \
         --gpus-per-task=1 \
-        python3 -m moralgym_verl.eval.logprob_probe_multiturn \
+        python3 -m moralgym_verl.eval.probe_reasoning_trace \
             --config "${PROJECT_ROOT}/${CONFIG}" \
             --checkpoint base \
             --game "${GAME}" \
             --moral-value "${MORAL_VALUE}" \
+            --states fabricated \
+            --output-dir "${RUN_DIR}"
+    echo "Probes complete: $(date)"
+fi
+
+# Multi-turn signal-decay probe (RUN_MT_PROBE=on): probe B over live
+# episodes — per-round teacher-vs-student deltas with the moral value at
+# episode start (training-exact). ~15 min.
+if [ "${MORAL_VALUE}" != "none" ] && [ "${RUN_MT_PROBE:-off}" = "on" ]; then
+    srun --environment=moralgym_verl \
+        --gpus-per-task=1 \
+        python3 -m moralgym_verl.eval.probe_reasoning_trace \
+            --config "${PROJECT_ROOT}/${CONFIG}" \
+            --checkpoint base \
+            --game "${GAME}" \
+            --moral-value "${MORAL_VALUE}" \
+            --states episode \
             --output-dir "${RUN_DIR}"
     echo "Multi-turn probe complete: $(date)"
 fi

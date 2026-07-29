@@ -60,7 +60,7 @@ nothing follows it).
   (a choice is a coin flip weighted by the underlying probability), so
   it needs many repetitions: n=50/state ⇒ ±14pp.
 
-## Probe A: answer-token logits (`eval/logprob_probe.py`)
+## Probe A: answer-token logits (`eval/probe_answer_token.py`)
 
 - **What it tells us:** does the moral text shift the *bare* action
   preference, with no reasoning in between? Diagnostic/telemetry.
@@ -84,7 +84,7 @@ nothing follows it).
   0.90 → 0.999, and the probe sees it. SDPO's loss consumes exactly
   these probabilities, not choices.
 
-## Probe B: reasoning-trace scoring (`eval/logprob_probe.py`)
+## Probe B: reasoning-trace scoring (`eval/probe_reasoning_trace.py`)
 
 - **What it tells us:** the SDPO training signal itself, pre-training —
   the teacher−student probability gap on student-sampled tokens, which
@@ -146,7 +146,7 @@ wording if this becomes interesting.)
 | episode | `game/trajectory.py:run_episode` | one decision (single-round) or 5 real rounds vs scripted bots (`game/players.py`); transcript mode accumulates the full conversation exactly like verl's agent loop |
 | parsing | `game/prompts_reasoning.py:77` | strict: final `Action: <label>` with required separator, else `illegal`; same parser as training |
 | aggregation | `eval/behavioral.py:373` | all rates over legal moves, illegal reported separately; per state `p_C+p_D+p_illegal = 1`, so P(D\|state) = 1−P(C\|state) given a legal parse |
-| probes | `eval/logprob_probe.py`, `logprob_probe_multiturn.py` | formulas above; the multi-turn probe computes the probe-B pair per round with the value wrapped only into message 1 (training-exact `wrap_first`) |
+| probes | `eval/probe_answer_token.py` (A), `eval/probe_reasoning_trace.py` (B; `--states fabricated\|episode`), primitives in `eval/teacher_forcing.py` | formulas above; episode mode computes the probe-B pair per round with the value wrapped only into message 1 (training-exact `wrap_first`) |
 | offline analysis | `scripts/analysis/*.py` | commands in the index below; `robustness_slices.py` hard-fails unless its per-episode recomputation exactly matches the runtime `state_conditioning` (proves prompt↔episode alignment) |
 
 ## Statistical properties (verified against code and data, 2026-07-16)
@@ -198,6 +198,14 @@ deltas were internally consistent either way.
   reported. Metadata: behavioral `seed` split into `eval_seed` +
   `training_seed`; probe `seed` renamed `eval_seed`. `per_round` entries
   switched to the three-category `{p_C, p_D, p_illegal, n}` format.
+- **Eval file restructure** (separate commit, no numerical change): rule
+  is now *file = experiment, protocol = parameter*.
+  `logprob_probe.py` → `probe_answer_token.py` (A) +
+  `probe_reasoning_trace.py` (B); `logprob_probe_multiturn.py` absorbed
+  as `probe_reasoning_trace.py --states episode`; shared primitives in
+  `teacher_forcing.py`. Output JSON filenames unchanged. `behavioral.py`
+  gained `--protocol stage1a|stage1b|stage1b_transcript` presets (the
+  stage flag bundles, recorded in metadata as `protocol`).
 
 ---
 

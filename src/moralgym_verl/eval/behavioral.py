@@ -41,6 +41,22 @@ from moralgym_verl.game.trajectory import FAB_STATES, TrajectoryResult, run_epis
 
 MORALITIES = ("game", "deon", "util", "gamedeon")
 
+# Named experiment protocols (--protocol): the flag bundle that defines a
+# stage lives in ONE executable place instead of being re-typed on every
+# sbatch line. Applied before individual CLI overrides, so explicit flags
+# still win; the chosen name is recorded in metadata.
+PROTOCOL_PRESETS: Dict[str, Dict] = {
+    # Single fabricated-history round vs random: per-state policy table.
+    "stage1a": {"num_rounds": 1, "game_design": "hist",
+                "opponents": ["random"], "transcript": False},
+    # Multi-turn dynamics, stateless Markov-1 prompts (legacy protocol).
+    "stage1b": {"num_rounds": 5, "game_design": "nohist",
+                "transcript": False},
+    # Multi-turn with accumulating conversation (verl agent-loop parity).
+    "stage1b_transcript": {"num_rounds": 5, "game_design": "nohist",
+                           "transcript": True},
+}
+
 logger = logging.getLogger(__name__)
 
 
@@ -734,6 +750,12 @@ def main():
                         help="Output JSON path (overrides config output_dir)")
     parser.add_argument("--num-episodes", type=int, default=None,
                         help="Number of episodes per opponent (overrides config)")
+    parser.add_argument("--protocol", type=str, default=None,
+                        choices=sorted(PROTOCOL_PRESETS),
+                        help="Named protocol preset (see PROTOCOL_PRESETS): "
+                             "expands to the stage's full flag bundle before "
+                             "individual overrides, which still win. Recorded "
+                             "in metadata.")
     parser.add_argument("--game", type=str, default=None,
                         choices=sorted(FIXED_PAYOFFS),
                         help="Override game.type for cross-game eval. "
@@ -825,6 +847,16 @@ def main():
     )
 
     cfg = load_config(args.config)
+
+    # Protocol preset first — individual CLI overrides below still win.
+    if args.protocol is not None:
+        preset = PROTOCOL_PRESETS[args.protocol]
+        cfg["game"]["num_rounds"] = preset["num_rounds"]
+        cfg.setdefault("prompt", {})["game_design"] = preset["game_design"]
+        cfg.setdefault("evaluation", {})["transcript"] = preset["transcript"]
+        if "opponents" in preset:
+            cfg["evaluation"]["opponents"] = preset["opponents"]
+
     if args.num_episodes is not None:
         cfg["evaluation"]["num_episodes"] = args.num_episodes
 
@@ -900,6 +932,7 @@ def main():
 
     metadata = {
         "experiment_name": experiment_name,
+        "protocol": args.protocol or "custom",
         "moral_value": moral_value,
         "teacher_template_source": cfg.get("teacher", {}).get("template_source"),
         "model_type": "base" if checkpoint is None else "finetuned",
