@@ -2,19 +2,28 @@
 
 Machinery, not an experiment: chat-prefix construction, teacher-forced
 continuation logprobs, answer-token log-odds, two-way JSD, trace sampling
-and delta statistics. The experiments that use these live in
-probe_answer_token.py (probe A) and probe_reasoning_trace.py (probe B).
+and delta statistics — plus `probe_setup`, the shared CLI/config/model
+setup that keeps the probe entry points in lockstep. The experiments that
+use these live in probe_answer_token.py (probe A) and
+probe_reasoning_trace.py (probe B).
 """
 
 from __future__ import annotations
 
 import logging
 import math
+import random
+from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 import torch
 
-from moralgym_verl.eval.behavioral import render_chat_inputs
+from moralgym_verl.eval.behavioral import (
+    build_eval_config, load_config, load_model_for_eval, render_chat_inputs,
+)
+from moralgym_verl.eval.teacher_context import load_reprompt_template, wrap_prompt
+from moralgym_verl.game.environment import FIXED_PAYOFFS
+from moralgym_verl.game.moral_values import get_moral_value
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +74,14 @@ def chat_prefix_messages(tokenizer, messages: List[dict], device) -> torch.Tenso
 def continuation_logprob(
     model, tokenizer, prefix_ids: torch.Tensor, continuation: str
 ) -> Tuple[float, int]:
-    """Sum of token logprobs of `continuation` teacher-forced after prefix."""
+    """Sum of token logprobs of `continuation` teacher-forced after prefix.
+
+    Note: the continuation is tokenized independently and concatenated to
+    prefix_ids, which can differ from how the joined text would tokenize at
+    the seam (SentencePiece boundary merges). Teacher and student passes use
+    the identical construction, so reported deltas are internally consistent;
+    absolute logprobs are not exactly "the model's natural tokenization".
+    """
     cont_ids = tokenizer(
         continuation, add_special_tokens=False, return_tensors="pt"
     ).input_ids.to(prefix_ids.device)
@@ -125,3 +141,52 @@ def delta_stats(xs: List[Optional[float]]) -> Dict:
     mean = sum(xs) / len(xs)
     var = sum((x - mean) ** 2 for x in xs) / len(xs)
     return {"mean": mean, "std": math.sqrt(var), "n": len(xs)}
+
+
+def probe_setup(args, opponent: str = "tit_for_tat"):
+    """Shared CLI setup for the probe entry points.
+
+    Handles: config load + --game override, moral-value guard and teacher
+    wrapper (template from the training yaml), seeding, model load, fixed
+    presentation, EpisodeConfig. Keeps the two probe main()s in lockstep.
+
+    Returns (cfg, config, model, tokenizer, wrapper, metadata) — metadata
+    carries the provenance fields shared by all probe outputs.
+    """
+    cfg = load_config(args.config)
+    if args.game is not None:
+        cfg["game"]["type"] = args.game
+        cfg["game"]["payoffs"] = dict(FIXED_PAYOFFS[args.game])
+
+    moral_text = get_moral_value(args.moral_value)
+    if not moral_text:
+        raise SystemExit("--moral-value 'none' is meaningless here: the probe "
+                         "always compares against the plain prompt.")
+
+    teacher_cfg = cfg.get("teacher") or {}
+    template = load_reprompt_template(teacher_cfg["template_source"])
+    feedback_template = teacher_cfg.get("feedback_template")
+
+    def wrapper(prompt: str) -> str:
+        return wrap_prompt(prompt, template, moral_text, feedback_template)
+
+    seed = cfg.get("seed", 42)
+    random.seed(seed)
+    torch.manual_seed(seed)
+
+    checkpoint = None if args.checkpoint == "base" else args.checkpoint
+    model, tokenizer = load_model_for_eval(checkpoint, cfg["policy"]["model_name"])
+
+    force_fixed_presentation(cfg)
+    config = build_eval_config(cfg, opponent=opponent)
+
+    metadata = {
+        "moral_value": args.moral_value,
+        "base_model": cfg["policy"]["model_name"],
+        "checkpoint": args.checkpoint,
+        "game_type": cfg["game"]["type"],
+        "teacher_template_source": teacher_cfg.get("template_source"),
+        "eval_seed": seed,
+        "timestamp": datetime.now().isoformat(),
+    }
+    return cfg, config, model, tokenizer, wrapper, metadata

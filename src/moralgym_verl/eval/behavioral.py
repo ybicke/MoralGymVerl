@@ -15,8 +15,10 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import random
 import re
+from collections import Counter
 from datetime import datetime
 from functools import partial
 from pathlib import Path
@@ -36,7 +38,7 @@ from moralgym_verl.game.moral_values import MORAL_VALUE_REGISTRY, get_moral_valu
 from moralgym_verl.game.environment import (
     FIXED_PAYOFFS, EpisodeConfig, sample_labels, sample_payoffs,
 )
-from moralgym_verl.game.prompts import build_prompt, parse_action, sample_prompt_randomization
+from moralgym_verl.game.prompts import sample_prompt_randomization
 from moralgym_verl.game.trajectory import FAB_STATES, TrajectoryResult, run_episode
 
 MORALITIES = ("game", "deon", "util", "gamedeon")
@@ -58,6 +60,19 @@ PROTOCOL_PRESETS: Dict[str, Dict] = {
 }
 
 logger = logging.getLogger(__name__)
+
+
+def apply_protocol(cfg: Dict, protocol: str) -> None:
+    """Apply a PROTOCOL_PRESETS bundle to cfg in place.
+
+    Called before individual CLI overrides so explicit flags still win.
+    """
+    preset = PROTOCOL_PRESETS[protocol]
+    cfg["game"]["num_rounds"] = preset["num_rounds"]
+    cfg.setdefault("prompt", {})["game_design"] = preset["game_design"]
+    cfg.setdefault("evaluation", {})["transcript"] = preset["transcript"]
+    if "opponents" in preset:
+        cfg["evaluation"]["opponents"] = preset["opponents"]
 
 
 def _parse_training_seed(*candidates: Optional[str]) -> Optional[int]:
@@ -133,17 +148,18 @@ def load_model_for_eval(
 ):
     """Load a trained model for evaluation.
 
-    Handles three cases:
-    - checkpoint=None + base_model: load base model only (no LoRA)
-    - checkpoint + base_model: load LoRA adapter on top of base model
-    - checkpoint only: load full-model checkpoint
+    Dispatch (on checkpoint contents, not argument shape):
+    - checkpoint=None: base model only (no adapter)
+    - checkpoint dir containing adapter_config.json: LoRA adapter merged
+      onto base_model
+    - any other checkpoint: full-model HF checkpoint (base_model unused)
     """
-    if checkpoint is None and base_model:
+    if checkpoint is None:
         model = AutoModelForCausalLM.from_pretrained(
             base_model, torch_dtype=torch.bfloat16, device_map="auto",
         )
         tokenizer = AutoTokenizer.from_pretrained(base_model)
-    elif base_model:
+    elif (Path(checkpoint) / "adapter_config.json").exists():
         model = AutoModelForCausalLM.from_pretrained(
             base_model, torch_dtype=torch.bfloat16, device_map="auto",
         )
@@ -178,6 +194,26 @@ def render_chat_inputs(tokenizer, messages, device):
     return text, inputs
 
 
+@torch.no_grad()
+def _generate(model, tokenizer, inputs, max_new_tokens, temperature):
+    """Sample one response from prepared inputs.
+
+    T>0: multinomial sampling with top_k=0 / top_p=1.0 — explicitly
+    overriding HF's defaults (top_k=50) so sampling is from the full
+    unclipped distribution, matching Tennant's
+    torch.multinomial(F.softmax(logits)) path. T<=0 or None: greedy argmax.
+    """
+    use_sampling = temperature is not None and temperature > 0
+    gen_kwargs = {"max_new_tokens": max_new_tokens, "do_sample": use_sampling}
+    if use_sampling:
+        gen_kwargs["temperature"] = temperature
+        gen_kwargs["top_k"] = 0
+        gen_kwargs["top_p"] = 1.0
+    outputs = model.generate(**inputs, **gen_kwargs)
+    generated = outputs[0][inputs["input_ids"].shape[1]:]
+    return tokenizer.decode(generated, skip_special_tokens=True)
+
+
 def make_policy_fn(
     model,
     tokenizer,
@@ -205,25 +241,12 @@ def make_policy_fn(
     prompt, i.e. exactly what the model saw.
     """
 
-    use_sampling = temperature is not None and temperature > 0
-
-    @torch.no_grad()
     def policy_fn(prompt: str) -> str:
         if prompt_wrapper is not None:
             prompt = prompt_wrapper(prompt)
         messages = [{"role": "user", "content": prompt}]
         _, inputs = render_chat_inputs(tokenizer, messages, model.device)
-        gen_kwargs = {"max_new_tokens": max_new_tokens, "do_sample": use_sampling}
-        if use_sampling:
-            # top_k=0 / top_p=1.0 explicitly override HF's defaults (top_k=50)
-            # so sampling is from the full unclipped distribution, matching
-            # Tennant's torch.multinomial(F.softmax(logits)) path.
-            gen_kwargs["temperature"] = temperature
-            gen_kwargs["top_k"] = 0
-            gen_kwargs["top_p"] = 1.0
-        outputs = model.generate(**inputs, **gen_kwargs)
-        generated = outputs[0][inputs["input_ids"].shape[1]:]
-        raw = tokenizer.decode(generated, skip_special_tokens=True)
+        raw = _generate(model, tokenizer, inputs, max_new_tokens, temperature)
         if raw_log is not None:
             raw_log.append({"prompt": prompt, "raw": raw})
         return raw
@@ -264,11 +287,9 @@ def make_chat_policy_fn(
         raise ValueError(f"wrap_position must be 'first' or 'latest', "
                          f"got {wrap_position!r}")
 
-    use_sampling = temperature is not None and temperature > 0
     state: Dict[str, list] = {"messages": []}
     wrap_fn = wrap_first_user if wrap_position == "first" else wrap_latest_user
 
-    @torch.no_grad()
     def policy_fn(prompt: str) -> str:
         state["messages"].append({"role": "user", "content": prompt})
         gen_messages = (
@@ -276,14 +297,7 @@ def make_chat_policy_fn(
             if prompt_wrapper is not None else state["messages"]
         )
         text, inputs = render_chat_inputs(tokenizer, gen_messages, model.device)
-        gen_kwargs = {"max_new_tokens": max_new_tokens, "do_sample": use_sampling}
-        if use_sampling:
-            gen_kwargs["temperature"] = temperature
-            gen_kwargs["top_k"] = 0
-            gen_kwargs["top_p"] = 1.0
-        outputs = model.generate(**inputs, **gen_kwargs)
-        generated = outputs[0][inputs["input_ids"].shape[1]:]
-        raw = tokenizer.decode(generated, skip_special_tokens=True)
+        raw = _generate(model, tokenizer, inputs, max_new_tokens, temperature)
         state["messages"].append({"role": "assistant", "content": raw})
         if raw_log is not None:
             # Log the fully rendered context, not just the last message —
@@ -558,7 +572,6 @@ def per_round_breakdown(results: List[TrajectoryResult]) -> Dict:
     }
 
     # Most common sequences
-    from collections import Counter
     seq_counts = Counter(sequences)
     total = len(sequences)
     top_sequences = [
@@ -597,7 +610,7 @@ def evaluate(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = Non
     # robustness cells for different moral values are pairwise paired).
     presentation_rng = random.Random(seed + 1_000_003)
 
-    eval_cfg = cfg["evaluation"]
+    eval_cfg = cfg.get("evaluation", {})
     opponents = eval_cfg.get("opponents", ["tit_for_tat", "always_defect"])
     num_episodes = eval_cfg.get("num_episodes", 20)
     temperature = eval_cfg.get("temperature", 1.0)
@@ -745,7 +758,8 @@ def main():
     parser = argparse.ArgumentParser(description="Evaluate a trained MoralGym model")
     parser.add_argument("--config", type=str, required=True)
     parser.add_argument("--checkpoint", type=str, required=True,
-                        help="Path to LoRA checkpoint, or 'base' for untuned model")
+                        help="LoRA adapter or full-model checkpoint path, or "
+                             "'base' for the untuned base model")
     parser.add_argument("--output", type=str, default=None,
                         help="Output JSON path (overrides config output_dir)")
     parser.add_argument("--num-episodes", type=int, default=None,
@@ -775,12 +789,6 @@ def main():
                         help="Override prompt.game_design. 'hist' fabricates a "
                              "round-1 history (Tennant); 'nohist' starts round 1 "
                              "fresh. Used for off-training-protocol eval.")
-    parser.add_argument("--hist-coop-bias", type=float, default=None,
-                        help="Override prompt.hist_coop_bias. Forces the fab_opp "
-                             "sampling distribution at eval, independent of the "
-                             "model's training-time bias. Use 0.5 for fair "
-                             "head-to-head across models trained at different "
-                             "biases (exposes all 4 fab cells uniformly).")
     parser.add_argument("--temperature", type=float, default=None,
                         help="Decoding temperature. Overrides "
                              "evaluation.temperature (default 1.0, matching "
@@ -826,13 +834,13 @@ def main():
                              "signal eval). 'none' = plain student prompt. "
                              f"Names: {sorted(MORAL_VALUE_REGISTRY)}; combine "
                              "2-3 with '+', e.g. deon_no_exploit+consequentialist.")
-    parser.add_argument("--transcript", type=str, default=None,
-                        choices=["true", "false"],
-                        help="Override evaluation.transcript. 'true' = the "
+    parser.add_argument("--transcript", action=argparse.BooleanOptionalAction,
+                        default=None,
+                        help="Override evaluation.transcript. --transcript = "
                              "episode conversation accumulates across rounds "
                              "(verl multi-turn training parity, Stage 1b); "
-                             "'false' = stateless Markov-1 prompt per round "
-                             "(default, Stage 1a).")
+                             "--no-transcript = stateless Markov-1 prompt per "
+                             "round (Stage 1a).")
     parser.add_argument("--save-raw-responses", action="store_true",
                         help="Save every (prompt, raw model output) pair to a "
                              "sibling JSONL file (<output>.responses.jsonl). "
@@ -850,12 +858,7 @@ def main():
 
     # Protocol preset first — individual CLI overrides below still win.
     if args.protocol is not None:
-        preset = PROTOCOL_PRESETS[args.protocol]
-        cfg["game"]["num_rounds"] = preset["num_rounds"]
-        cfg.setdefault("prompt", {})["game_design"] = preset["game_design"]
-        cfg.setdefault("evaluation", {})["transcript"] = preset["transcript"]
-        if "opponents" in preset:
-            cfg["evaluation"]["opponents"] = preset["opponents"]
+        apply_protocol(cfg, args.protocol)
 
     if args.num_episodes is not None:
         cfg["evaluation"]["num_episodes"] = args.num_episodes
@@ -877,8 +880,6 @@ def main():
         cfg["game"]["num_rounds"] = args.num_rounds
     if args.game_design is not None:
         cfg.setdefault("prompt", {})["game_design"] = args.game_design
-    if args.hist_coop_bias is not None:
-        cfg.setdefault("prompt", {})["hist_coop_bias"] = args.hist_coop_bias
     if args.temperature is not None:
         cfg.setdefault("evaluation", {})["temperature"] = args.temperature
     if args.max_new_tokens is not None:
@@ -896,13 +897,12 @@ def main():
     if args.moral_value is not None:
         cfg.setdefault("teacher", {})["moral_value"] = args.moral_value
     if args.transcript is not None:
-        cfg.setdefault("evaluation", {})["transcript"] = args.transcript == "true"
+        cfg.setdefault("evaluation", {})["transcript"] = args.transcript
 
     checkpoint = None if args.checkpoint == "base" else args.checkpoint
     raw_log = [] if args.save_raw_responses else None
     rollout_results = evaluate(cfg, checkpoint, raw_log=raw_log)
 
-    import os as _os
     # Base-eval label derives from model_name so distinct base models stay
     # distinguishable in plots that group by experiment_name. Preserves
     # bare "base" for google/gemma-2-2b-it to keep older eval JSONs/plots
@@ -964,14 +964,14 @@ def main():
         # (pre-2026-07 runs, multinomial n per state).
         "state_design": cfg.get("evaluation", {}).get("state_design",
                                                       "balanced"),
-        "run_name": _os.environ.get("MORALGYM_RUN_NAME"),
-        "slurm_job_id": _os.environ.get("SLURM_JOB_ID"),
+        "run_name": os.environ.get("MORALGYM_RUN_NAME"),
+        "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
         # Two distinct seeds: eval_seed drives this evaluation's RNG streams;
         # training_seed identifies which training run produced the checkpoint
         # (None for base-model eval). Was ambiguously a single "seed" key.
         "eval_seed": cfg.get("seed", 42),
         "training_seed": _parse_training_seed(
-            args.checkpoint, _os.environ.get("MORALGYM_RUN_NAME")
+            args.checkpoint, os.environ.get("MORALGYM_RUN_NAME")
         ),
         "timestamp": datetime.now().isoformat(),
     }

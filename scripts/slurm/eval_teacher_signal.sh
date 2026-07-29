@@ -26,6 +26,11 @@
 #         --num-rounds 1 --game-design hist --opponent random
 #   done
 # Stage 1b (multi-turn dynamics, config defaults): drop the extra flags.
+#
+# Env toggles: EVAL_GROUP=<dir> (results subdir), RUN_PROBES=off,
+# RUN_MT_PROBE=on, PROBE_TEMPERATURE=<T> (probe-B trace sampling; config
+# default 0.7 = training parity, pass 1.0 for July-comparable runs —
+# behavioral temperature is a separate --temperature forwarded arg).
 # =============================================================================
 
 set -euo pipefail
@@ -111,6 +116,7 @@ if [ "${MORAL_VALUE}" != "none" ] && [ "${RUN_PROBES:-on}" != "off" ]; then
             --game "${GAME}" \
             --moral-value "${MORAL_VALUE}" \
             --states fabricated \
+            ${PROBE_TEMPERATURE:+--temperature "${PROBE_TEMPERATURE}"} \
             --output-dir "${RUN_DIR}"
     echo "Probes complete: $(date)"
 fi
@@ -127,6 +133,7 @@ if [ "${MORAL_VALUE}" != "none" ] && [ "${RUN_MT_PROBE:-off}" = "on" ]; then
             --game "${GAME}" \
             --moral-value "${MORAL_VALUE}" \
             --states episode \
+            ${PROBE_TEMPERATURE:+--temperature "${PROBE_TEMPERATURE}"} \
             --output-dir "${RUN_DIR}"
     echo "Multi-turn probe complete: $(date)"
 fi

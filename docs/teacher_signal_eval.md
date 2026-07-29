@@ -198,6 +198,17 @@ deltas were internally consistent either way.
   reported. Metadata: behavioral `seed` split into `eval_seed` +
   `training_seed`; probe `seed` renamed `eval_seed`. `per_round` entries
   switched to the three-category `{p_C, p_D, p_illegal, n}` format.
+- **Soundness batch (2026-07-29, pre-MVP):** removed the eval-side
+  `--hist-coop-bias` flag (it was a silent no-op — nothing on the eval
+  path read it; the training-side `prompt.hist_coop_bias` in dataset.py
+  is untouched); `load_model_for_eval` now dispatches on
+  `adapter_config.json` existence so full-model checkpoints actually
+  load; probe B gained `--temperature` (+ launcher `PROBE_TEMPERATURE`
+  env) — config default 0.7 is training parity, July references used
+  1.0; `--transcript` is now a true boolean flag
+  (`--transcript`/`--no-transcript`); new mutation-verified tests:
+  test_scoring.py (betrayal/freeze/regret conventions) and
+  test_evaluate_integration.py (mock-policy end-to-end plumbing).
 - **Eval file restructure** (separate commit, no numerical change): rule
   is now *file = experiment, protocol = parameter*.
   `logprob_probe.py` → `probe_answer_token.py` (A) +
