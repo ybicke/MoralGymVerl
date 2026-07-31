@@ -94,6 +94,74 @@ def continuation_logprob(
     return cont_lp.sum().item(), cont_lp.shape[1]
 
 
+def generalized_jsd(
+    logp_s: torch.Tensor, logp_t: torch.Tensor, alpha: float
+) -> torch.Tensor:
+    """Per-position generalized JSD between two [K, V] log-prob tensors.
+
+    Mirrors SDPO's compute_self_distillation_loss (core_algos.py) exactly,
+    including its branch structure: alpha=0 -> KL(t||s) (forward KL),
+    alpha=1 -> KL(s||t) (reverse KL), else the mixture form
+    (1-a)*KL(s||m) + a*KL(t||m) with m = (1-a)*s + a*t.
+    Returns a [K] tensor (per-position loss, summed over vocab).
+    """
+    def kl(logp, logq):  # KL(p || q), summed over vocab
+        return (logp.exp() * (logp - logq)).sum(-1)
+
+    if alpha == 0.0:
+        return kl(logp_t, logp_s)
+    if alpha == 1.0:
+        return kl(logp_s, logp_t)
+    log_m = torch.logsumexp(
+        torch.stack([logp_s + math.log(1 - alpha), logp_t + math.log(alpha)]),
+        dim=0,
+    )
+    return (1 - alpha) * kl(logp_s, log_m) + alpha * kl(logp_t, log_m)
+
+
+@torch.no_grad()
+def dual_continuation_scores(
+    model, tokenizer,
+    student_prefix: torch.Tensor, teacher_prefix: torch.Tensor,
+    continuation: str, alpha: float,
+) -> Dict:
+    """Teacher-force `continuation` after both prefixes and read out, per
+    position, (a) the log-prob of the actual continuation token under each
+    prefix and (b) the full-vocabulary generalized JSD between the two
+    next-token distributions — the step-0 SDPO per-token loss.
+
+    Returns {lp_s, lp_t, num_tokens, token_jsd} where lp_* are summed
+    sequence log-probs (as continuation_logprob) and token_jsd is the
+    per-position JSD mean over the continuation. Same tokenization-seam
+    caveat as continuation_logprob.
+    """
+    cont_ids = tokenizer(
+        continuation, add_special_tokens=False, return_tensors="pt"
+    ).input_ids.to(student_prefix.device)
+    K = cont_ids.shape[1]
+    if K == 0:
+        return {"lp_s": 0.0, "lp_t": 0.0, "num_tokens": 0, "token_jsd": None}
+
+    rows = {}
+    for name, prefix in (("s", student_prefix), ("t", teacher_prefix)):
+        input_ids = torch.cat([prefix, cont_ids], dim=1)
+        logits = model(input_ids).logits
+        # Positions predicting the K continuation tokens.
+        start = prefix.shape[1] - 1
+        rows[name] = torch.log_softmax(
+            logits[0, start:start + K].float(), dim=-1
+        )
+    token_lp_s = rows["s"].gather(-1, cont_ids[0].unsqueeze(-1)).squeeze(-1)
+    token_lp_t = rows["t"].gather(-1, cont_ids[0].unsqueeze(-1)).squeeze(-1)
+    jsd = generalized_jsd(rows["s"], rows["t"], alpha)
+    return {
+        "lp_s": token_lp_s.sum().item(),
+        "lp_t": token_lp_t.sum().item(),
+        "num_tokens": K,
+        "token_jsd": jsd.mean().item(),
+    }
+
+
 def two_way_jsd(lp_c1: float, lp_d1: float, lp_c2: float, lp_d2: float) -> float:
     """JSD between the two-way {C, D} distributions implied by sequence
     logprobs (renormalized over the label pair, natural log)."""

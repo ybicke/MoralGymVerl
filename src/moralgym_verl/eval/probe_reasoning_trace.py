@@ -38,10 +38,12 @@ from typing import Dict, List, Optional
 
 import torch
 
-from moralgym_verl.eval.teacher_context import wrap_first_user
+from moralgym_verl.eval.teacher_context import (
+    load_distillation_alpha, wrap_first_user,
+)
 from moralgym_verl.eval.teacher_forcing import (
     PROBE_STATES, answer_logodds, chat_prefix, chat_prefix_messages,
-    continuation_logprob, delta_stats, probe_setup, sample_trace,
+    delta_stats, dual_continuation_scores, probe_setup, sample_trace,
 )
 from moralgym_verl.game.environment import FIXED_PAYOFFS
 from moralgym_verl.game.players import get_opponent_action
@@ -52,7 +54,7 @@ logger = logging.getLogger(__name__)
 
 
 def trace_probe(
-    model, tokenizer, config, wrapper,
+    model, tokenizer, config, wrapper, alpha: float,
     num_traces: int, max_new_tokens: int, temperature: float,
     trace_log: Optional[list] = None,
 ) -> Dict:
@@ -61,7 +63,8 @@ def trace_probe(
     answer logodds shift given the same reasoning.
 
     If `trace_log` is a list, every sampled trace is appended as
-    {"state", "trace", "parsed_action", "token_delta", "answer_delta"}."""
+    {"state", "trace", "parsed_action", "token_delta", "token_jsd",
+    "answer_delta"}."""
     cfg = copy.deepcopy(config)
     cfg.reasoning = True
     results = {}
@@ -70,7 +73,7 @@ def trace_probe(
         student_ids = chat_prefix(tokenizer, game_prompt, model.device)
         teacher_ids = chat_prefix(tokenizer, wrapper(game_prompt), model.device)
 
-        token_deltas, answer_deltas = [], []
+        token_deltas, token_jsds, answer_deltas = [], [], []
         n_empty = n_no_marker = n_parse_fail = 0
         for _ in range(num_traces):
             trace = sample_trace(model, tokenizer, student_ids,
@@ -84,16 +87,21 @@ def trace_probe(
             if parsed is None:
                 n_parse_fail += 1
             record = {"state": state, "trace": trace, "parsed_action": parsed,
-                      "token_delta": None, "answer_delta": None}
+                      "token_delta": None, "token_jsd": None,
+                      "answer_delta": None}
             if trace_log is not None:
                 trace_log.append(record)
-            # Distillation pressure on the full trace: mean per-token
-            # logprob difference, teacher-forced under both prompts.
-            lp_s, n_s = continuation_logprob(model, tokenizer, student_ids, trace)
-            lp_t, n_t = continuation_logprob(model, tokenizer, teacher_ids, trace)
-            if n_s:
-                record["token_delta"] = lp_t / n_t - lp_s / n_s
+            # Dual teacher-forced pass: sampled-token deltas (token_delta)
+            # AND full-vocab generalized JSD (token_jsd = the step-0 SDPO
+            # per-token loss, alpha from the training yaml).
+            sc = dual_continuation_scores(
+                model, tokenizer, student_ids, teacher_ids, trace, alpha)
+            if sc["num_tokens"]:
+                record["token_delta"] = (
+                    sc["lp_t"] / sc["num_tokens"] - sc["lp_s"] / sc["num_tokens"])
+                record["token_jsd"] = sc["token_jsd"]
                 token_deltas.append(record["token_delta"])
+                token_jsds.append(record["token_jsd"])
 
             # Answer shift with the reasoning held fixed: truncate the
             # trace at its final answer marker (find_action_marker — the
@@ -118,6 +126,7 @@ def trace_probe(
 
         results[state] = {
             "token_delta": delta_stats(token_deltas),
+            "token_jsd": delta_stats(token_jsds),
             "answer_delta": delta_stats(answer_deltas),
             "n_empty_traces": n_empty,
             "n_no_answer_marker": n_no_marker,
@@ -127,13 +136,14 @@ def trace_probe(
 
 
 def probe_episode(
-    model, tokenizer, config, wrapper,
+    model, tokenizer, config, wrapper, alpha: float,
     max_new_tokens: int, temperature: float,
 ) -> List[Dict]:
     """One student episode + per-round dual scoring (episode mode). Returns
-    one record per round: {round, trace, token_delta, answer_delta, agent,
-    opp}. The transcript stays plain; the teacher prefix wraps only the
-    first user message (wrap_first_user, training-exact)."""
+    one record per round: {round, trace, token_delta, token_jsd,
+    answer_delta, agent, opp}. The transcript stays plain; the teacher
+    prefix wraps only the first user message (wrap_first_user,
+    training-exact)."""
     messages: List[dict] = []
     agent_history: List[str] = []
     opp_history: List[str] = []
@@ -154,11 +164,14 @@ def probe_episode(
             tokenizer, wrap_first_user(messages[:-1], wrapper), model.device)
 
         record: Dict = {"round": rnd + 1, "trace": trace,
-                        "token_delta": None, "answer_delta": None}
-        lp_s, n_s = continuation_logprob(model, tokenizer, student_ids, trace)
-        lp_t, n_t = continuation_logprob(model, tokenizer, teacher_ids, trace)
-        if n_s:
-            record["token_delta"] = lp_t / n_t - lp_s / n_s
+                        "token_delta": None, "token_jsd": None,
+                        "answer_delta": None}
+        sc = dual_continuation_scores(
+            model, tokenizer, student_ids, teacher_ids, trace, alpha)
+        if sc["num_tokens"]:
+            record["token_delta"] = (
+                sc["lp_t"] / sc["num_tokens"] - sc["lp_s"] / sc["num_tokens"])
+            record["token_jsd"] = sc["token_jsd"]
 
         m = find_action_marker(trace)
         if m is not None:
@@ -238,7 +251,11 @@ def main() -> None:
     temperature = (args.temperature if args.temperature is not None
                    else eval_cfg.get("temperature", 0.7))
 
-    metadata = {**metadata, "temperature": temperature}
+    # Divergence weight for token_jsd, read from the SDPO training yaml so
+    # the probe measures the training loss verbatim (alpha=0.5 -> JSD).
+    alpha = load_distillation_alpha(metadata["teacher_template_source"])
+    metadata = {**metadata, "temperature": temperature,
+                "distillation_alpha": alpha}
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -250,15 +267,16 @@ def main() -> None:
         logger.info("Probe B (fabricated states), %d traces/state ...",
                     num_traces)
         probe_b = trace_probe(
-            model, tokenizer, config, wrapper,
+            model, tokenizer, config, wrapper, alpha,
             num_traces=num_traces,
             max_new_tokens=max_new_tokens,
             temperature=temperature,
             trace_log=trace_log,
         )
         for state, r in probe_b.items():
-            logger.info("  %s: token_delta %s, answer_delta %s",
+            logger.info("  %s: token_delta %s, token_jsd %s, answer_delta %s",
                         state, r["token_delta"]["mean"],
+                        r["token_jsd"]["mean"],
                         r["answer_delta"]["mean"])
 
         path_b = out_dir / "logprob_b.json"
@@ -279,7 +297,7 @@ def main() -> None:
                 args.episodes, config.num_rounds, opponent)
     all_records: List[Dict] = []
     for ep in range(args.episodes):
-        records = probe_episode(model, tokenizer, config, wrapper,
+        records = probe_episode(model, tokenizer, config, wrapper, alpha,
                                 max_new_tokens, temperature)
         for r in records:
             r["episode"] = ep
@@ -290,12 +308,14 @@ def main() -> None:
         rows = [r for r in all_records if r["round"] == rnd]
         per_round[f"round_{rnd}"] = {
             "token_delta": delta_stats([r["token_delta"] for r in rows]),
+            "token_jsd": delta_stats([r["token_jsd"] for r in rows]),
             "answer_delta": delta_stats([r["answer_delta"] for r in rows]),
         }
         td = per_round[f"round_{rnd}"]["token_delta"]
+        tj = per_round[f"round_{rnd}"]["token_jsd"]
         ad = per_round[f"round_{rnd}"]["answer_delta"]
-        logger.info("  round %d: token_delta %s  answer_delta %s",
-                    rnd, td["mean"], ad["mean"])
+        logger.info("  round %d: token_delta %s  token_jsd %s  answer_delta %s",
+                    rnd, td["mean"], tj["mean"], ad["mean"])
 
     with open(out_dir / "logprob_multiturn.json", "w") as f:
         json.dump({

@@ -52,6 +52,20 @@ def load_reprompt_template(yaml_path: str) -> str:
         ) from e
 
 
+def load_distillation_alpha(yaml_path: str, default: float = 0.5) -> float:
+    """Read actor_rollout_ref.actor.self_distillation.alpha from the SDPO
+    training yaml — single source of truth, so the probe's full-vocab JSD
+    cannot drift from the divergence the training loss actually uses."""
+    with open(yaml_path) as f:
+        cfg = yaml.safe_load(f)
+    try:
+        return float(
+            cfg["actor_rollout_ref"]["actor"]["self_distillation"]["alpha"]
+        )
+    except (KeyError, TypeError):
+        return default
+
+
 def wrap_latest_user(messages: list, wrapper) -> list:
     """Return a copy of a chat transcript with ONLY the last user message
     passed through `wrapper` (a callable str -> str).
