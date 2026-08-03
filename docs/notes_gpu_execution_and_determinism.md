@@ -281,13 +281,20 @@ trainer phase run the forward passes that compute the loss. Generation and
 scoring never interleave within a step, so scoring allocations cannot reach
 back into generation numerics.
 
-The exposure is specific to the probe B eval script
+The exposure was specific to the probe B eval script
 (`src/moralgym_verl/eval/probe_reasoning_trace.py`), a standalone HF-based
-loop: generate trace → score it (allocating the token_jsd temporaries) →
-generate next trace. An implementation convenience (and memory necessity —
-the [K × 256k] temporaries should be freed before the next generation), not a
-mirror of training. Statistically irrelevant: N sequential and N parallel
-draws from p_θ(· | x_s) are the same experiment. Restructuring the probe to
-generate-all-then-score would mimic training's phase separation and restore
-cross-version bit-reproducibility — not done, because that reproducibility
-has no scientific value (README §1, consequence 3).
+loop that originally interleaved: generate trace → score it (allocating the
+token_jsd temporaries) → generate next trace. Statistically irrelevant
+either way: N sequential and N interleaved draws from p_θ(· | x_s) are the
+same experiment.
+
+**Update 2026-08-03:** the probe was restructured to generate-all-then-score
+(`trace_probe` phase 1/2; `play_episode` + `score_rounds` for episode mode,
+phase-separated across all episodes in `main()`). Every trace is now sampled
+before any scoring forward pass runs, mirroring training's rollout→trainer
+split — so scoring-code changes can no longer perturb generation numerics,
+and same-seed generations stay bit-identical under future scoring edits.
+This closes only that one channel: bit-reproducibility across *generation*
+code changes, driver updates, or allocator-history differences was never on
+the table, and the scientific rule stands — conclusions must survive
+resampling (README §1, consequence 3).

@@ -34,7 +34,7 @@ import copy
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import torch
 
@@ -55,6 +55,43 @@ from moralgym_verl.game.prompts_reasoning import find_action_marker
 logger = logging.getLogger(__name__)
 
 
+def _score_trace(
+    model, tokenizer, student_ids, teacher_ids, trace: str, alpha: float,
+    coop_label: str, defect_label: str,
+) -> Dict:
+    """Phase-2 scoring of one stored trace.
+
+    Dual teacher-forced pass: sampled-token deltas (token_delta = the
+    distillation pressure on the reasoning) AND full-vocab generalized JSD
+    (token_jsd = the step-0 SDPO per-token loss, alpha from the training
+    yaml). Then the answer shift with the reasoning held fixed: truncate
+    the trace at its final answer marker (find_action_marker — the
+    parser's own definition) and compare label logodds there. answer_delta
+    is None when the trace has no marker."""
+    out: Dict = {"token_delta": None, "token_jsd": None, "answer_delta": None}
+    sc = dual_continuation_scores(
+        model, tokenizer, student_ids, teacher_ids, trace, alpha)
+    if sc["num_tokens"]:
+        out["token_delta"] = (
+            sc["lp_t"] / sc["num_tokens"] - sc["lp_s"] / sc["num_tokens"])
+        out["token_jsd"] = sc["token_jsd"]
+
+    m = find_action_marker(trace)
+    if m is not None:
+        reasoning_prefix = trace[: m.start(1)].rstrip()
+        cut_ids = tokenizer(
+            reasoning_prefix, add_special_tokens=False, return_tensors="pt"
+        ).input_ids.to(student_ids.device)
+        lo_s, _, _ = answer_logodds(
+            model, tokenizer, torch.cat([student_ids, cut_ids], dim=1),
+            coop_label, defect_label)
+        lo_t, _, _ = answer_logodds(
+            model, tokenizer, torch.cat([teacher_ids, cut_ids], dim=1),
+            coop_label, defect_label)
+        out["answer_delta"] = lo_t - lo_s
+    return out
+
+
 def trace_probe(
     model, tokenizer, config, wrapper, alpha: float,
     num_traces: int, max_new_tokens: int, temperature: float,
@@ -64,95 +101,95 @@ def trace_probe(
     traces scored under both prompts (= SDPO's teacher pass), plus the
     answer logodds shift given the same reasoning.
 
+    Two phases, mirroring training's rollout->trainer split (see
+    docs/notes_gpu_execution_and_determinism.md §7): ALL traces are
+    sampled before ANY scoring forward pass runs, so the scoring
+    temporaries can never perturb generation numerics — same-seed
+    generations stay bit-identical under changes to the scoring code.
+
     If `trace_log` is a list, every sampled trace is appended as
     {"state", "trace", "parsed_action", "token_delta", "token_jsd",
     "answer_delta"}."""
     cfg = copy.deepcopy(config)
     cfg.reasoning = True
-    results = {}
+
+    # Phase 1 — rollout: student prefixes and every trace draw, no scoring.
+    prompts: Dict[str, str] = {}
+    student_ids: Dict[str, torch.Tensor] = {}
+    sampled: List[Tuple[str, str]] = []   # (state, trace) in draw order
     for state, hist_a, hist_o in PROBE_STATES:
-        game_prompt = build_prompt(cfg, hist_a, hist_o)
-        student_ids = chat_prefix(tokenizer, game_prompt, model.device)
-        teacher_ids = chat_prefix(tokenizer, wrapper(game_prompt), model.device)
-
-        token_deltas, token_jsds, answer_deltas = [], [], []
-        n_empty = n_no_marker = n_parse_fail = 0
+        prompts[state] = build_prompt(cfg, hist_a, hist_o)
+        student_ids[state] = chat_prefix(
+            tokenizer, prompts[state], model.device)
         for _ in range(num_traces):
-            trace = sample_trace(model, tokenizer, student_ids,
-                                 max_new_tokens, temperature)
-            if not trace.strip():
-                n_empty += 1
-                continue
-            # Parse exactly as training / behavioral eval would (shared
-            # parse_action): None = would be an illegal move in training.
-            parsed = parse_action(trace, cfg)
-            if parsed is None:
-                n_parse_fail += 1
-            record = {"state": state, "trace": trace, "parsed_action": parsed,
-                      "token_delta": None, "token_jsd": None,
-                      "answer_delta": None}
-            if trace_log is not None:
-                trace_log.append(record)
-            # Dual teacher-forced pass: sampled-token deltas (token_delta)
-            # AND full-vocab generalized JSD (token_jsd = the step-0 SDPO
-            # per-token loss, alpha from the training yaml).
-            sc = dual_continuation_scores(
-                model, tokenizer, student_ids, teacher_ids, trace, alpha)
-            if sc["num_tokens"]:
-                record["token_delta"] = (
-                    sc["lp_t"] / sc["num_tokens"] - sc["lp_s"] / sc["num_tokens"])
-                record["token_jsd"] = sc["token_jsd"]
-                token_deltas.append(record["token_delta"])
-                token_jsds.append(record["token_jsd"])
+            sampled.append((state, sample_trace(
+                model, tokenizer, student_ids[state],
+                max_new_tokens, temperature)))
 
-            # Answer shift with the reasoning held fixed: truncate the
-            # trace at its final answer marker (find_action_marker — the
-            # parser's own definition) and compare label logodds there.
-            m = find_action_marker(trace)
-            if m is None:
-                n_no_marker += 1
-            else:
-                reasoning_prefix = trace[: m.start(1)].rstrip()
-                s_pref = torch.cat([student_ids, tokenizer(
-                    reasoning_prefix, add_special_tokens=False,
-                    return_tensors="pt").input_ids.to(model.device)], dim=1)
-                t_pref = torch.cat([teacher_ids, tokenizer(
-                    reasoning_prefix, add_special_tokens=False,
-                    return_tensors="pt").input_ids.to(model.device)], dim=1)
-                lo_s, _, _ = answer_logodds(
-                    model, tokenizer, s_pref, cfg.coop_label, cfg.defect_label)
-                lo_t, _, _ = answer_logodds(
-                    model, tokenizer, t_pref, cfg.coop_label, cfg.defect_label)
-                record["answer_delta"] = lo_t - lo_s
-                answer_deltas.append(record["answer_delta"])
+    # Phase 2 — scoring: teacher prefixes + teacher-forced passes over the
+    # stored traces.
+    teacher_ids = {
+        state: chat_prefix(tokenizer, wrapper(prompts[state]), model.device)
+        for state, _, _ in PROBE_STATES
+    }
+    buckets = {state: {"token_delta": [], "token_jsd": [], "answer_delta": [],
+                       "n_empty": 0, "n_no_marker": 0, "n_parse_fail": 0}
+               for state, _, _ in PROBE_STATES}
+    for state, trace in sampled:
+        b = buckets[state]
+        if not trace.strip():
+            b["n_empty"] += 1
+            continue
+        # Parse exactly as training / behavioral eval would (shared
+        # parse_action): None = would be an illegal move in training.
+        parsed = parse_action(trace, cfg)
+        if parsed is None:
+            b["n_parse_fail"] += 1
+        scores = _score_trace(model, tokenizer, student_ids[state],
+                              teacher_ids[state], trace, alpha,
+                              cfg.coop_label, cfg.defect_label)
+        if scores["answer_delta"] is None:
+            b["n_no_marker"] += 1
+        for key in ("token_delta", "token_jsd", "answer_delta"):
+            if scores[key] is not None:
+                b[key].append(scores[key])
+        if trace_log is not None:
+            trace_log.append({"state": state, "trace": trace,
+                              "parsed_action": parsed, **scores})
 
-        results[state] = {
-            "token_delta": delta_stats(token_deltas),
-            "token_jsd": delta_stats(token_jsds),
-            "answer_delta": delta_stats(answer_deltas),
-            "n_empty_traces": n_empty,
-            "n_no_answer_marker": n_no_marker,
-            "n_parse_fail": n_parse_fail,
+    return {
+        state: {
+            "token_delta": delta_stats(b["token_delta"]),
+            "token_jsd": delta_stats(b["token_jsd"]),
+            "answer_delta": delta_stats(b["answer_delta"]),
+            "n_empty_traces": b["n_empty"],
+            "n_no_answer_marker": b["n_no_marker"],
+            "n_parse_fail": b["n_parse_fail"],
         }
-    return results
+        for state, b in buckets.items()
+    }
 
 
-def probe_episode(
-    model, tokenizer, config, wrapper, alpha: float,
+def play_episode(
+    model, tokenizer, config, wrapper,
     max_new_tokens: int, temperature: float,
 ) -> List[Dict]:
-    """One student episode + per-round dual scoring (episode mode). Returns
-    one record per round: {round, reprompted, trace, token_delta, token_jsd,
-    answer_delta, agent, opp}. The transcript stays plain; the teacher
-    prefix wraps only the first user message (wrap_first_user,
-    training-exact). Illegal moves freeze the game state and prepend the
-    parse-failure reprompt to the next round's user message, exactly as
-    trajectory.run_episode / training do; `reprompted` marks the rounds
-    whose prompt carried that feedback."""
+    """Phase 1 — rollout: play one full student episode (generate, parse,
+    advance the game); no scoring passes. The transcript stays plain (as
+    in training rollouts). Illegal moves freeze the game state and prepend
+    the parse-failure reprompt to the next round's user message, exactly
+    as trajectory.run_episode / training do; `reprompted` marks the rounds
+    whose prompt carried that feedback.
+
+    Returns one dict per round with everything score_rounds needs:
+    {round, reprompted, trace, agent, opp, student_ids, teacher_messages}
+    — teacher_messages is the transcript up to that round with only the
+    first user turn value-wrapped (wrap_first_user, training-exact for
+    multi-turn SDPO)."""
     messages: List[dict] = []
     agent_history: List[str] = []
     opp_history: List[str] = []
-    records: List[Dict] = []
+    rounds: List[Dict] = []
     pending_feedback: Optional[str] = None
 
     for rnd in range(config.num_rounds):
@@ -166,54 +203,64 @@ def probe_episode(
             pending_feedback = None
         messages.append({"role": "user", "content": prompt})
 
-        # Student generates (plain context — as in training rollouts).
         student_ids = chat_prefix_messages(tokenizer, messages, model.device)
         trace = sample_trace(model, tokenizer, student_ids,
                              max_new_tokens, temperature)
         messages.append({"role": "assistant", "content": trace})
 
-        # Teacher prefix: identical transcript, first user turn wrapped.
-        teacher_ids = chat_prefix_messages(
-            tokenizer, wrap_first_user(messages[:-1], wrapper), model.device)
-
-        record: Dict = {"round": rnd + 1, "reprompted": reprompted,
-                        "trace": trace,
-                        "token_delta": None, "token_jsd": None,
-                        "answer_delta": None}
-        sc = dual_continuation_scores(
-            model, tokenizer, student_ids, teacher_ids, trace, alpha)
-        if sc["num_tokens"]:
-            record["token_delta"] = (
-                sc["lp_t"] / sc["num_tokens"] - sc["lp_s"] / sc["num_tokens"])
-            record["token_jsd"] = sc["token_jsd"]
-
-        m = find_action_marker(trace)
-        if m is not None:
-            reasoning_prefix = trace[: m.start(1)].rstrip()
-            cut_ids = tokenizer(reasoning_prefix, add_special_tokens=False,
-                                return_tensors="pt").input_ids.to(model.device)
-            lo_s, _, _ = answer_logodds(
-                model, tokenizer, torch.cat([student_ids, cut_ids], dim=1),
-                config.coop_label, config.defect_label)
-            lo_t, _, _ = answer_logodds(
-                model, tokenizer, torch.cat([teacher_ids, cut_ids], dim=1),
-                config.coop_label, config.defect_label)
-            record["answer_delta"] = lo_t - lo_s
+        round_rec: Dict = {
+            "round": rnd + 1, "reprompted": reprompted, "trace": trace,
+            "student_ids": student_ids,
+            "teacher_messages": wrap_first_user(messages[:-1], wrapper),
+        }
 
         # Advance the game (mirrors trajectory.run_episode semantics:
         # frozen state + reprompt feedback on the next round).
         action = parse_action(trace, config)
         if action is None:
             pending_feedback = parse_failure_feedback(config)
-            record["agent"], record["opp"] = "illegal", None
+            round_rec["agent"], round_rec["opp"] = "illegal", None
         else:
             opp_action = get_opponent_action(
                 config.opponent, opp_history, agent_history)
             agent_history.append(action)
             opp_history.append(opp_action)
-            record["agent"], record["opp"] = action, opp_action
-        records.append(record)
+            round_rec["agent"], round_rec["opp"] = action, opp_action
+        rounds.append(round_rec)
+    return rounds
+
+
+def score_rounds(
+    model, tokenizer, config, rounds: List[Dict], alpha: float,
+) -> List[Dict]:
+    """Phase 2 — scoring: dual teacher-forced pass per stored round.
+
+    Returns the per-round records written to logprob_multiturn:
+    {round, reprompted, trace, token_delta, token_jsd, answer_delta,
+    agent, opp}."""
+    records: List[Dict] = []
+    for r in rounds:
+        teacher_ids = chat_prefix_messages(
+            tokenizer, r["teacher_messages"], model.device)
+        scores = _score_trace(model, tokenizer, r["student_ids"], teacher_ids,
+                              r["trace"], alpha,
+                              config.coop_label, config.defect_label)
+        records.append({"round": r["round"], "reprompted": r["reprompted"],
+                        "trace": r["trace"], **scores,
+                        "agent": r["agent"], "opp": r["opp"]})
     return records
+
+
+def probe_episode(
+    model, tokenizer, config, wrapper, alpha: float,
+    max_new_tokens: int, temperature: float,
+) -> List[Dict]:
+    """One episode end to end: rollout (play_episode) then scoring
+    (score_rounds). main() phase-separates across ALL episodes instead of
+    calling this — kept for single-episode use and tests."""
+    rounds = play_episode(model, tokenizer, config, wrapper,
+                          max_new_tokens, temperature)
+    return score_rounds(model, tokenizer, config, rounds, alpha)
 
 
 def main() -> None:
@@ -311,10 +358,16 @@ def main() -> None:
     # --states episode: per-round signal decay over live episodes.
     logger.info("Probe B (episode states): %d episodes x %d rounds vs %s ...",
                 args.episodes, config.num_rounds, opponent)
+    # Phase separation across ALL episodes (training's rollout->trainer
+    # split): every episode is played before any scoring pass runs.
+    episode_rounds = [
+        play_episode(model, tokenizer, config, wrapper,
+                     max_new_tokens, temperature)
+        for _ in range(args.episodes)
+    ]
     all_records: List[Dict] = []
-    for ep in range(args.episodes):
-        records = probe_episode(model, tokenizer, config, wrapper, alpha,
-                                max_new_tokens, temperature)
+    for ep, rounds in enumerate(episode_rounds):
+        records = score_rounds(model, tokenizer, config, rounds, alpha)
         for r in records:
             r["episode"] = ep
         all_records.extend(records)

@@ -39,14 +39,13 @@ def test_probe_episode_reprompts_after_parse_failure(monkeypatch):
                    "Reasoning...\n\nAction: action3",
                    "Reasoning...\n\nAction: action3"])
     student_user_msgs = []
-    calls = {"n": 0}
 
     def fake_prefix(tokenizer, messages, device):
-        # Exactly two calls per round: student first, then teacher (with the
-        # first user turn wrapped). Capture the student one.
-        if calls["n"] % 2 == 0:
+        # Student prefixes are plain; teacher prefixes have the FIRST user
+        # turn value-wrapped ("[MV]"). Rollout phase runs all student calls
+        # before the scoring phase runs any teacher call.
+        if not messages[0]["content"].startswith("[MV]"):
             student_user_msgs.append(messages[-1]["content"])
-        calls["n"] += 1
         return torch.zeros((1, 1), dtype=torch.long)
 
     monkeypatch.setattr(prt, "chat_prefix_messages", fake_prefix)
