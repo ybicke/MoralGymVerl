@@ -47,7 +47,9 @@ from moralgym_verl.eval.teacher_forcing import (
 )
 from moralgym_verl.game.environment import FIXED_PAYOFFS
 from moralgym_verl.game.players import get_opponent_action
-from moralgym_verl.game.prompts import build_prompt, parse_action
+from moralgym_verl.game.prompts import (
+    build_prompt, parse_action, parse_failure_feedback,
+)
 from moralgym_verl.game.prompts_reasoning import find_action_marker
 
 logger = logging.getLogger(__name__)
@@ -140,17 +142,28 @@ def probe_episode(
     max_new_tokens: int, temperature: float,
 ) -> List[Dict]:
     """One student episode + per-round dual scoring (episode mode). Returns
-    one record per round: {round, trace, token_delta, token_jsd,
+    one record per round: {round, reprompted, trace, token_delta, token_jsd,
     answer_delta, agent, opp}. The transcript stays plain; the teacher
     prefix wraps only the first user message (wrap_first_user,
-    training-exact)."""
+    training-exact). Illegal moves freeze the game state and prepend the
+    parse-failure reprompt to the next round's user message, exactly as
+    trajectory.run_episode / training do; `reprompted` marks the rounds
+    whose prompt carried that feedback."""
     messages: List[dict] = []
     agent_history: List[str] = []
     opp_history: List[str] = []
     records: List[Dict] = []
+    pending_feedback: Optional[str] = None
 
     for rnd in range(config.num_rounds):
         prompt = build_prompt(config, agent_history, opp_history)
+        reprompted = pending_feedback is not None
+        if pending_feedback:
+            # Training parity (same construction as trajectory.run_episode):
+            # after an illegal move, the next user message is prefixed with
+            # the parse-failure reprompt — the transcript training would see.
+            prompt = pending_feedback + "\n\n" + prompt
+            pending_feedback = None
         messages.append({"role": "user", "content": prompt})
 
         # Student generates (plain context — as in training rollouts).
@@ -163,7 +176,8 @@ def probe_episode(
         teacher_ids = chat_prefix_messages(
             tokenizer, wrap_first_user(messages[:-1], wrapper), model.device)
 
-        record: Dict = {"round": rnd + 1, "trace": trace,
+        record: Dict = {"round": rnd + 1, "reprompted": reprompted,
+                        "trace": trace,
                         "token_delta": None, "token_jsd": None,
                         "answer_delta": None}
         sc = dual_continuation_scores(
@@ -186,9 +200,11 @@ def probe_episode(
                 config.coop_label, config.defect_label)
             record["answer_delta"] = lo_t - lo_s
 
-        # Advance the game (mirrors trajectory.run_episode semantics).
+        # Advance the game (mirrors trajectory.run_episode semantics:
+        # frozen state + reprompt feedback on the next round).
         action = parse_action(trace, config)
         if action is None:
+            pending_feedback = parse_failure_feedback(config)
             record["agent"], record["opp"] = "illegal", None
         else:
             opp_action = get_opponent_action(
