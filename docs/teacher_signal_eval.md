@@ -256,7 +256,7 @@ containing `behavioral.json`, `behavioral.responses.jsonl`,
 `logprob_a.json`, `logprob_b.json` + `.traces.jsonl`, and for multi-turn
 probe runs `logprob_multiturn.json` + `.traces.jsonl`; mirrored to
 `$STORE/eval_results/teacher_signal/`. Slurm logs:
-`~/logs/slurm/teacher_signal_*`. Analysis commands: see the experiment
+`~/logs_verl/slurm/teacher_signal_*`. Analysis commands: see the experiment
 index below.
 
 ## Out of scope for Session 1
@@ -347,7 +347,7 @@ cd ~/MoralGymVerl
 /usr/bin/python3.11 scripts/analysis/recovery_rate.py       # 1b recovery/sucker/drift from episode_moves
 ```
 
-Slurm logs: `~/logs/slurm/teacher_signal_*_<jobid>.{out,err}`.
+Slurm logs: `~/logs_verl/slurm/teacher_signal_*_<jobid>.{out,err}`.
 Session-2 decision mapping: see the decision matrix above + memory note
 `project_teacher_signal_session1`.
 

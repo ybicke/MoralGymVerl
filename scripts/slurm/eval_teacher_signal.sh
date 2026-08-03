@@ -47,7 +47,7 @@ MORAL_VALUE="${2:?Usage: eval_teacher_signal.sh <game> <moral_value> [num_episod
 NUM_EPISODES="${3:-25}"
 
 # Redirect output early so errors are never lost to /dev/null
-LOG_BASE="${HOME}/logs"
+LOG_BASE="${HOME}/logs_verl"
 mkdir -p "${LOG_BASE}/slurm"
 RUN_NAME="teacher_signal_${GAME}_${MORAL_VALUE}_${SLURM_JOB_ID}"
 exec > "${LOG_BASE}/slurm/${RUN_NAME}.out" 2> "${LOG_BASE}/slurm/${RUN_NAME}.err"
