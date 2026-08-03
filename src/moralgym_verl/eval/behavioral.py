@@ -44,6 +44,24 @@ from moralgym_verl.game.trajectory import FAB_STATES, TrajectoryResult, run_epis
 
 logger = logging.getLogger(__name__)
 
+# Simple CLI -> config overrides: (arg attribute, config section, key).
+# Applied uniformly in main(); flags with multi-key effects (--game,
+# --opponent) stay explicit there.
+CFG_OVERRIDES = [
+    ("num_episodes", "evaluation", "num_episodes"),
+    ("num_rounds", "game", "num_rounds"),
+    ("game_design", "prompt", "game_design"),
+    ("temperature", "evaluation", "temperature"),
+    ("max_new_tokens", "evaluation", "max_new_tokens"),
+    ("eval_tokens", "evaluation", "tokens"),
+    ("eval_layout", "evaluation", "layout"),
+    ("eval_prose", "evaluation", "prose"),
+    ("eval_role", "evaluation", "role"),
+    ("eval_payoffs", "evaluation", "payoffs"),
+    ("moral_value", "teacher", "moral_value"),
+    ("transcript", "evaluation", "transcript"),
+]
+
 
 def _parse_training_seed(*candidates: Optional[str]) -> Optional[int]:
     """Recover the training seed from checkpoint path or MORALGYM_RUN_NAME.
@@ -195,36 +213,40 @@ def evaluate(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = Non
             for t, c in zip(trajectories, episode_configs)
         ]
         all_results.append(result)
-
-        print(f"\nvs {opp}:")
-        print(f"  Cooperation rate:        {result['cooperation_rate']:.1%}"
-              f" (± {result['cooperation_rate_std']:.1%})")
-        print(f"  Mutual cooperation rate: {result['mutual_cooperation_rate']:.1%}")
-        print(f"  Exploitation rate:       {result['exploitation_rate']:.1%}")
-        print(f"  Sucker rate:             {result['sucker_rate']:.1%}")
-        print(f"  Mutual defection rate:   {result['mutual_defection_rate']:.1%}")
-        print(f"  Mean reward:             {result['mean_reward']:.3f}"
-              f" (± {result['mean_reward_std']:.3f})")
-        if result["p_c_given_opp_c"] is not None:
-            print(f"  P(C | opp prev C):       {result['p_c_given_opp_c']:.1%}  # reciprocity")
-        if result["p_c_given_opp_d"] is not None:
-            print(f"  P(C | opp prev D):       {result['p_c_given_opp_d']:.1%}  # forgiveness")
-        for rnd_key in sorted(result["per_round"]):
-            rnd = result["per_round"][rnd_key]
-            print(f"  {rnd_key}: C rate = {rnd['p_C']:.1%}"
-                  + (f" (illegal {rnd['p_illegal']:.1%})"
-                     if rnd["p_illegal"] else ""))
-        if result["top_sequences"]:
-            print(f"  Top sequence: {result['top_sequences'][0]['sequence']}"
-                  f" ({result['top_sequences'][0]['fraction']:.0%})")
-        if result.get("state_conditioning"):
-            print(f"  State conditioning P(·| agent_prev, opp_prev):")
-            for state, m in sorted(result["state_conditioning"].items()):
-                print(f"    {state}: C={m['p_C']:.1%} D={m['p_D']:.1%}"
-                      f" illegal={m['p_illegal']:.1%} (n={m['n']})")
-        print(f"  Parse failure rate: {result['parse_failure_rate']:.1%}")
+        _print_summary(opp, result)
 
     return all_results
+
+
+def _print_summary(opp: str, result: Dict) -> None:
+    """Human-readable console summary of one opponent's result block."""
+    print(f"\nvs {opp}:")
+    print(f"  Cooperation rate:        {result['cooperation_rate']:.1%}"
+          f" (± {result['cooperation_rate_std']:.1%})")
+    print(f"  Mutual cooperation rate: {result['mutual_cooperation_rate']:.1%}")
+    print(f"  Exploitation rate:       {result['exploitation_rate']:.1%}")
+    print(f"  Sucker rate:             {result['sucker_rate']:.1%}")
+    print(f"  Mutual defection rate:   {result['mutual_defection_rate']:.1%}")
+    print(f"  Mean reward:             {result['mean_reward']:.3f}"
+          f" (± {result['mean_reward_std']:.3f})")
+    if result["p_c_given_opp_c"] is not None:
+        print(f"  P(C | opp prev C):       {result['p_c_given_opp_c']:.1%}  # reciprocity")
+    if result["p_c_given_opp_d"] is not None:
+        print(f"  P(C | opp prev D):       {result['p_c_given_opp_d']:.1%}  # forgiveness")
+    for rnd_key in sorted(result["per_round"]):
+        rnd = result["per_round"][rnd_key]
+        print(f"  {rnd_key}: C rate = {rnd['p_C']:.1%}"
+              + (f" (illegal {rnd['p_illegal']:.1%})"
+                 if rnd["p_illegal"] else ""))
+    if result["top_sequences"]:
+        print(f"  Top sequence: {result['top_sequences'][0]['sequence']}"
+              f" ({result['top_sequences'][0]['fraction']:.0%})")
+    if result.get("state_conditioning"):
+        print(f"  State conditioning P(·| agent_prev, opp_prev):")
+        for state, m in sorted(result["state_conditioning"].items()):
+            print(f"    {state}: C={m['p_C']:.1%} D={m['p_D']:.1%}"
+                  f" illegal={m['p_illegal']:.1%} (n={m['n']})")
+    print(f"  Parse failure rate: {result['parse_failure_rate']:.1%}")
 
 
 def main():
@@ -333,9 +355,6 @@ def main():
     if args.protocol is not None:
         apply_protocol(cfg, args.protocol)
 
-    if args.num_episodes is not None:
-        cfg["evaluation"]["num_episodes"] = args.num_episodes
-
     # --game / --opponent let one config evaluate any (game, opponent) cell.
     # Needed for cross-game / cross-opponent sweeps driven by eval_plan.sh.
     if args.game is not None:
@@ -345,32 +364,11 @@ def main():
     if args.opponent is not None:
         cfg.setdefault("evaluation", {})["opponents"] = [args.opponent]
 
-    # --num-rounds / --game-design force eval off the training protocol
-    # (e.g. rolling a 1-round-trained T-model out over 5 rounds without
-    # fabricated history). eval_plan.sh passes these from a plan-level
-    # protocol_override: block.
-    if args.num_rounds is not None:
-        cfg["game"]["num_rounds"] = args.num_rounds
-    if args.game_design is not None:
-        cfg.setdefault("prompt", {})["game_design"] = args.game_design
-    if args.temperature is not None:
-        cfg.setdefault("evaluation", {})["temperature"] = args.temperature
-    if args.max_new_tokens is not None:
-        cfg.setdefault("evaluation", {})["max_new_tokens"] = args.max_new_tokens
-    if args.eval_tokens is not None:
-        cfg.setdefault("evaluation", {})["tokens"] = args.eval_tokens
-    if args.eval_layout is not None:
-        cfg.setdefault("evaluation", {})["layout"] = args.eval_layout
-    if args.eval_prose is not None:
-        cfg.setdefault("evaluation", {})["prose"] = args.eval_prose
-    if args.eval_role is not None:
-        cfg.setdefault("evaluation", {})["role"] = args.eval_role
-    if args.eval_payoffs is not None:
-        cfg.setdefault("evaluation", {})["payoffs"] = args.eval_payoffs
-    if args.moral_value is not None:
-        cfg.setdefault("teacher", {})["moral_value"] = args.moral_value
-    if args.transcript is not None:
-        cfg.setdefault("evaluation", {})["transcript"] = args.transcript
+    # Everything else is a plain one-key override (CFG_OVERRIDES).
+    for arg_name, section, key in CFG_OVERRIDES:
+        value = getattr(args, arg_name)
+        if value is not None:
+            cfg.setdefault(section, {})[key] = value
 
     checkpoint = None if args.checkpoint == "base" else args.checkpoint
     raw_log = [] if args.save_raw_responses else None
