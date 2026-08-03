@@ -1,5 +1,21 @@
 # MVP Eval — Metrics, Math, and Results
 
+> **Status note 2026-08-03 (insights only — tables below still show the July
+> runs; full refresh pending soundness review in a later session).**
+> The MVP was rerun on post-refactor code `755e55b` as the current `mvp/` group (jobs
+> 2991881/2991884/2991885/2991886): probe A byte-identical, probe B and decay
+> within noise, behavioral 7/8 cells n.s. — refactor regression check passed.
+> Two findings to verify before folding into this document:
+> (1) §1's determinism claim is falsified for sampled rollouts: an exact
+> same-code same-seed resubmission (job 2993459, different node) diverged at a
+> near-tie token in episode 2 (2/200 lines byte-equal; eps 0–1 identical, so
+> the PRNG replays — the forward pass varies in the last bit across jobs).
+> Deterministic layers (probe A, teacher-forced scoring) DO replay byte-exactly.
+> (2) The `none` DC baseline is unstable: 0.66 (July) / 0.40 / 0.46 (two
+> same-code runs), pooled ≈ 0.51 — which would make the behavioral DC delta
+> significant (~+0.33 pooled), revising §2's "DC n.s." and feeding the §6 DC
+> story. UNVERIFIED — re-derive before adopting.
+
 ## 0 · Motivation — what SDPO trains, and what we need to know before training
 
 SDPO fine-tunes a student policy toward an EMA teacher that sees the same prompt *wrapped with a moral value*. Before spending GPU-hours training, we can measure — exactly, at step 0 — what signal that loss would distill: where the teacher and student distributions disagree, in which direction the disagreement points at the decision token, and whether it points the right way in each game state. This eval does that with three instruments at increasing distance from raw behavior (behavioral sampling, an answer-token probe, and trace-level scoring that computes the training loss verbatim), plus a multi-turn decay probe for signal reach. The headline question: **does the deontological value produce a trainable, correctly-signed signal in every state — in particular DC, where the agent is exploiting a cooperator?**
@@ -107,15 +123,43 @@ $$
 |---|---|---|
 | Behavioral (§2) | one full reasoning trace per round, parsed to a move | none |
 | Probe A (§3) | **nothing** — zero sampling, fully deterministic | the two label continuations only (2 entries read, not the full vocab) |
-| Probe B (§4) | per state, a loop: generate trace → score it → generate next → … | each trace under both prompts: per-token log-probs + full-256k `token_jsd` + answer log-odds at the truncation point |
+| Probe B (§4) | phase 1: all traces per state drawn up front (since `755e55b`; the July code interleaved generate→score per trace) | phase 2: each stored trace under both prompts: per-token log-probs + full-256k `token_jsd` + answer log-odds at the truncation point |
 
-**Determinism and reproducibility.** Everything is deterministic: same code + same seed + same flags → bit-identical results, across nodes and days (verified repeatedly). What is *not* guaranteed is bitwise identity **across code versions**: GPU float addition is non-associative and kernel selection depends on ambient memory state, so a code change (even one that only *reads* extra tensors) can shift late-decimal logits; because probe B **interleaves** generation and scoring, the large `token_jsd` allocations after trace 1 change the numerics under which trace 2+ are generated — at a near-tie the (identical) random draw picks a different token and the trace diverges from there. First-sample bit-reproduction plus later divergence confirmed this mechanism empirically.
+**Determinism and reproducibility** *(corrected 2026-08-03 — the original
+version of this paragraph claimed bit-identical replay "across nodes and days,
+verified repeatedly"; that claim was tested directly and is **false**).*
+Two layers behave differently:
+
+- **Deterministic layer** — probe A and teacher-forced scoring of any *given*
+  trace replay byte-identically across jobs, nodes, and even code versions
+  (verified: `logprob_a.json` byte-equal between July job 2927896 and August
+  job 2991884).
+- **Sampled layer** — behavioral rollouts and probe-B traces are **not**
+  bit-reproducible across jobs, even at identical code + seed + flags
+  (verified: job 2993459, an exact resubmission of 2991881 on a different
+  node, matched episodes 0–1 byte-exactly — the seeded PRNG replays its draw
+  sequence — then flipped a near-tie token mid-episode 2; 2/200 lines equal).
+  Proposed mechanism (*consistent with all observations but not yet verified
+  at the logit level*): GPU float addition is non-associative and kernel
+  selection varies with job/node context, so logits carry last-bit variation;
+  at a near-50/50 token the identical random number lands on the other side of
+  the shifted boundary, and once a flip changes a response's *length* the runs
+  consume different draw counts and desynchronize — all later episodes are
+  fresh samples. Verification path: same-node resubmission, plus
+  teacher-forcing both divergent-episode variants and reading the logits at
+  the flip position. The same mechanism operates across code versions, and (July,
+  "token_jsd incident") operated *within* a job when probe B still interleaved
+  generation with scoring — the large `token_jsd` allocations changed the
+  numerics under which later traces were generated. Since `755e55b` probe B is
+  phase-separated (all traces drawn before any scoring pass), which removes
+  the intra-job trigger but does not — and cannot — restore cross-job bitwise
+  replay.
 
 Three consequences, in order of importance:
 
 1. **No bias.** A last-bit logit shift leaves the sampling distribution unchanged for all practical purposes — reruns are fresh *unbiased* samples, and scoring of any given trace is exact. Noise, not bias.
 2. **Conclusions must survive resampling.** Two bit-identical runs are the *same sample twice*, not a replication. The accidental fresh sample is what exposed the DC instability (§4) — a feature, not a bug.
-3. Bitwise cross-version replay has no scientific value; if ever needed for numerics debugging, generate-all-then-score restructuring or `torch.use_deterministic_algorithms` would restore it.
+3. Bitwise replay across jobs has no scientific value and is not achievable in practice: the generate-all-then-score restructuring (done, `755e55b`) removes only the *intra-job* scoring-perturbation trigger, and cross-job/node last-bit variation remains (verified 2026-08-03, job 2993459). Sampled results compare statistically, always; probe A is the byte-exact regression anchor.
 
 **Sampling temperature.** $T$ affects only *which traces get sampled* — teacher-forced scoring of a fixed trace is $T$-independent. Training rollouts sample at $T{=}0.7$ (config), so probe-B measurements of "what SDPO would distill" should sample at 0.7 (training parity); the MVP probe-B numbers (§4) were taken at $T{=}1.0$ for July comparability and are *not* directly comparable to 0.7 runs (different trace distributions; metadata records the temperature).
 

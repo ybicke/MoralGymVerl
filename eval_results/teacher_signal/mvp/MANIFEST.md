@@ -1,28 +1,49 @@
-# MANIFEST — mvp (CANONICAL group)
+# MANIFEST — mvp (post-refactor runs, 2026-08-03; formerly mvp_recheck)
 
-Post-BOS-fix reference results. Math/process/tables: README.md (kept separate
-from docs/teacher_signal_eval.md for now — merge decision pending).
-Rule: NEVER compare across temperature or code-fix boundaries.
+2026-08-03, code 755e55b (eval soundness batch 551ebca + probe-B phase
+separation). Faithful protocol replication of the canonical mvp/ group
+(stage1a, 200 eps, T=1.0, seed 42; probe B n=32 T=0.7; decay companion
+config defaults). Purpose: confirm the 2026-08-03 eval refactors did not
+change results. NOT a new reference — mvp/ stays canonical.
 
-- **prisoners_dilemma__none_2927894** (2026-07-29, e5eeab2): behavioral
-  stage1a, 200 eps, **T=1.0**. P(C|CC,CD,DC,DD) = 8/4/66/52. Reference until
-  Tier-1 re-measures this cell at canonical T=0.7 — do not mix with T=0.7 cells.
-- **prisoners_dilemma__deontological_2927896** (2026-07-29, e5eeab2):
-  behavioral stage1a, 200 eps, **T=1.0**. 96/28/78/40 → CC +88pp, CD +24pp vs
-  none; DC/DD n.s. Same Tier-1 supersession caveat.
-  **Probe-B files here are NOT the originals**: logprob_b.json/.traces.jsonl
-  were overwritten 2026-07-30 by the token_jsd rerun (n=8, T=1.0, code
-  0bdb0f8). Originals (e5eeab2) survive in the $STORE copy
-  (/capstor/store/cscs/swissai/aa004/bickery/eval_results/teacher_signal/mvp/,
-  staged 07-29) and are bitwise-regenerable from e5eeab2. n=8 answer_delta at
-  DC/DD is resampling-unstable — superseded by the n=32 run below.
-- **prisoners_dilemma__deontological_2927898** (2026-07-29, e5eeab2): 1-ep
-  decay companion (ignore behavioral for tables). logprob_multiturn re-run
-  2026-07-30 with token_jsd (0bdb0f8): decay re-certified — wrap-first teacher
-  signal ≈0 by round 3 (token_jsd 0.039→0.002 by r4).
-- **prisoners_dilemma__deontological_probeB_n32_T07** (job 2933208, 2026-07-30,
-  0bdb0f8, direct srun — staged to $STORE manually): **DEFINITIVE probe-B
-  table.** 32 traces/state, **T=0.7** (canonical), 0 parse fails. answer_delta:
-  CC +4.54±0.40 (31/32 C-ward), CD +2.12±0.10 (32/32), DC +0.00±0.47 (17/15
-  mode split — teacher moderates, doesn't direct), DD −1.29. token_jsd
-  0.04–0.056 nats/token uniform. Retires the July/n=8 "DC +3.98" claim.
+Comparison vs the July canonical group — now only in $STORE/git history (script: session scratchpad compare_mvp_recheck.py):
+the new code consumes the SAME RNG draw sequence — early episodes are
+bit-identical to canonical, and the first divergence is a single near-tie
+token flip mid-generation ("chose"→"played", none ep 1; the length-equal
+flip even re-syncs, eps 2-6 bit-identical again). After the first
+length-changing flip the stream desynchronizes, so downstream episodes
+are effectively resampled (~194/200 raw generations differ) →
+statistical comparison, not bitwise.
+
+CORRECTION (2026-08-03, job 2993459 = mvp_check/): the divergence
+trigger is NOT the code version. An exact same-code same-seed
+resubmission of 2991881 (node nid006136 vs nid007490) also diverged the
+same way: eps 0-1 bit-identical, near-tie flip in ep 2, 2/200 lines
+equal, (D,C) 46% vs 40%. Last-bit logit variation exists across
+jobs/nodes generally; bitwise replay of SAMPLED rollouts is never
+guaranteed. Deterministic layers (probe A, teacher-forced scoring of a
+given trace) do replay byte-exactly. Consequences: the refactor is fully
+exonerated, and none/(D,C) is a high-variance cell — three estimates
+(0.66 July / 0.40 / 0.46 same-code) pool to ~0.51 (n=150), July's 0.66
+being a +2.2σ draw. Interpretive follow-ups (behavioral DC delta likely
+significant vs pooled baseline) are flagged in mvp/README.md status note,
+pending verification.
+
+- **prisoners_dilemma__none_2991881** (vs 2927894): 6/0/40/54 vs 8/4/66/52.
+  (D,C) −26pp (z=2.6, p=0.009 uncorrected, not Bonferroni-x8-significant)
+  — sole flag of the recheck, UNRESOLVED at n=50/state; other cells n.s.
+  Prompts byte-identical 200/200.
+- **prisoners_dilemma__deontological_2991884** (vs 2927896): 96/36/90/40
+  vs 96/28/78/40, all n.s. Probe A EXACTLY bitwise identical to canonical.
+  Launcher probe B here is n=8 — ignore, see the n=32 run below.
+- **prisoners_dilemma__deontological_2991885** (vs 2927898, decay
+  companion): all per-round stats ≤1.8 SEM; wrap-first signal ≈0 by round
+  3 reproduced (token_jsd 0.040/0.017/0.005/0.003/0.002).
+- **prisoners_dilemma__deontological_probeB_n32_T07** (job 2991886, vs
+  2933208): all cells ≤1.4 SEM, 0 parse fails; DC remains a mode split
+  (12/20 vs 17/15, n.s.) — "moderates, doesn't direct" holds. Staged to
+  $STORE manually (direct sbatch --wrap skips launcher stage-out).
+
+Verdict: refactor regression check PASSES on every probe and on 7/8
+behavioral cells; none/(D,C) needs a 200/state tie-breaker before being
+called anything but sampling noise.
