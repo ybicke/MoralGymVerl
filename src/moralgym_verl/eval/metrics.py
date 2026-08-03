@@ -13,7 +13,7 @@ from typing import Dict, Iterator, List, Tuple
 import numpy as np
 
 from moralgym_verl.eval.baselines import compute_regret
-from moralgym_verl.eval.scoring import iter_scored_decisions
+from moralgym_verl.eval.scoring import iter_decisions, iter_scored_decisions
 from moralgym_verl.game.trajectory import TrajectoryResult
 
 MORALITIES = ("game", "deon", "util", "gamedeon")
@@ -40,23 +40,13 @@ def _iter_conditioned(
     result: TrajectoryResult,
 ) -> Iterator[Tuple[int, str, str, str]]:
     """Yield (round_idx, agent_prev, opp_prev, agent_move) for each round with
-    a prior legal state to condition on. round_idx is 1-indexed and points to
-    the round of the yielded move (the decision being conditioned).
-
-    `last_legal` is seeded from fabricated history (if any) and only advances
-    on legal (C/D, C/D) rounds. After an illegal round the state is frozen —
-    so the next legal decision is conditioned on the same prior pair the
-    opponent policy saw. Cold-start round 1 has no prior and is skipped.
+    a prior legal state to condition on. Cold-start round 1 has no prior and
+    is skipped. The state-freeze convention itself lives in scoring.iter_decisions
+    — the single implementation shared with reward scoring.
     """
-    last_agent = result.fab_agent
-    last_opp = result.fab_opp
-    for idx, (move, opp_move) in enumerate(
-        zip(result.agent_moves, result.opponent_moves), start=1
-    ):
-        if last_agent is not None and last_opp is not None:
-            yield idx, last_agent, last_opp, move
-        if move in ("C", "D") and opp_move in ("C", "D"):
-            last_agent, last_opp = move, opp_move
+    for d in iter_decisions(result):
+        if d["agent_prev"] is not None and d["opp_prev"] is not None:
+            yield d["round_idx"], d["agent_prev"], d["opp_prev"], d["agent_move"]
 
 
 def _score_rewards(results: List[TrajectoryResult]) -> Dict:
@@ -179,9 +169,6 @@ def aggregate_rollout_metrics(
         "mean_reward_std": float(np.std(total_rewards)),
         "cond_given_opp_c": cond_opp_c,
         "cond_given_opp_d": cond_opp_d,
-        # Backward-compat scalars (reciprocity / forgiveness); null if unconditioned.
-        "p_c_given_opp_c": cond_opp_c["p_C"] if cond_opp_c["n"] else None,
-        "p_c_given_opp_d": cond_opp_d["p_C"] if cond_opp_d["n"] else None,
         "state_conditioning": state_conditioning or None,
         "per_round_state_conditioning": per_round_state_conditioning or None,
         **reward_block,

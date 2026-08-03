@@ -2,8 +2,8 @@
 
 Usage:
     python -m moralgym_verl.eval.behavioral \
-        --config configs/nemo_rl/a1_hist_norm.yaml \
-        --checkpoint $STORAGE_ROOT/results/a1_hist_norm_<jobid>/step_50/policy/weights/model
+        --config configs/eval/teacher_signal_9b.yaml \
+        --checkpoint base --protocol stage1a --moral-value deon_no_exploit
 
 Runs the model against each evaluation opponent for multiple episodes
 and reports cooperation metrics. Works with any HuggingFace-compatible
@@ -229,10 +229,10 @@ def _print_summary(opp: str, result: Dict) -> None:
     print(f"  Mutual defection rate:   {result['mutual_defection_rate']:.1%}")
     print(f"  Mean reward:             {result['mean_reward']:.3f}"
           f" (± {result['mean_reward_std']:.3f})")
-    if result["p_c_given_opp_c"] is not None:
-        print(f"  P(C | opp prev C):       {result['p_c_given_opp_c']:.1%}  # reciprocity")
-    if result["p_c_given_opp_d"] is not None:
-        print(f"  P(C | opp prev D):       {result['p_c_given_opp_d']:.1%}  # forgiveness")
+    if result["cond_given_opp_c"]["n"]:
+        print(f"  P(C | opp prev C):       {result['cond_given_opp_c']['p_C']:.1%}  # reciprocity")
+    if result["cond_given_opp_d"]["n"]:
+        print(f"  P(C | opp prev D):       {result['cond_given_opp_d']['p_C']:.1%}  # forgiveness")
     for rnd_key in sorted(result["per_round"]):
         rnd = result["per_round"][rnd_key]
         print(f"  {rnd_key}: C rate = {rnd['p_C']:.1%}"
@@ -375,9 +375,9 @@ def main():
     rollout_results = evaluate(cfg, checkpoint, raw_log=raw_log)
 
     # Base-eval label derives from model_name so distinct base models stay
-    # distinguishable in plots that group by experiment_name. Preserves
-    # bare "base" for google/gemma-2-2b-it to keep older eval JSONs/plots
-    # backward-compatible (that was the default base before multi-model evals).
+    # distinguishable in tooling that groups by experiment_name. The named
+    # mappings are grouping keys the plotting scripts match on — change
+    # them only together with those scripts.
     def _base_label(model_name: str) -> str:
         m = (model_name or "").lower()
         if "gemma-2-2b" in m:
@@ -431,15 +431,15 @@ def main():
                                   ("payoffs", "fixed")]
         },
         # 'balanced' = deterministic FAB_STATES cycle (exactly n/4 per
-        # state, paired across every run); 'random' = legacy uniform draw
-        # (pre-2026-07 runs, multinomial n per state).
+        # state, paired across every run); 'random' = uniform draw inside
+        # run_episode (multinomial n per state).
         "state_design": cfg.get("evaluation", {}).get("state_design",
                                                       "balanced"),
         "run_name": os.environ.get("MORALGYM_RUN_NAME"),
         "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
         # Two distinct seeds: eval_seed drives this evaluation's RNG streams;
         # training_seed identifies which training run produced the checkpoint
-        # (None for base-model eval). Was ambiguously a single "seed" key.
+        # (None for base-model eval).
         "eval_seed": cfg.get("seed", 42),
         "training_seed": _parse_training_seed(
             args.checkpoint, os.environ.get("MORALGYM_RUN_NAME")

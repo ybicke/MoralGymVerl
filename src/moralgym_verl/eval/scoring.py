@@ -55,26 +55,46 @@ def score_decision(
     }
 
 
+def iter_decisions(
+    result: TrajectoryResult,
+) -> Iterator[Dict]:
+    """Walk one trajectory yielding each decision with its conditioning state.
+
+    This is the single implementation of the state-freeze convention:
+    (agent_prev, opp_prev) is the last LEGAL (C/D, C/D) pair — seeded from
+    fabricated history if any, frozen across illegal rounds (so the next
+    legal decision is conditioned on the same pair the opponent policy
+    saw), and None/None at a cold round 1. Both scoring and the metrics
+    aggregator condition through this iterator; round_idx is 1-indexed.
+    """
+    last_agent = result.fab_agent
+    last_opp = result.fab_opp
+    for idx, entry in enumerate(result.per_round, start=1):
+        yield {
+            "round_idx": idx,
+            "agent_prev": last_agent,
+            "opp_prev": last_opp,
+            **entry,
+        }
+        if entry["agent_move"] in ("C", "D") and entry["opp_move"] in ("C", "D"):
+            last_agent, last_opp = entry["agent_move"], entry["opp_move"]
+
+
 def iter_scored_decisions(
     result: TrajectoryResult,
 ) -> Iterator[Dict]:
     """Walk one trajectory yielding per-decision scoring info.
 
-    opp_prev tracks the last legal opponent action (advances only on legal
-    rounds, honoring the state-freeze convention for illegal). Seeded from
-    fab_opp for hist eval; None for cold-start, which makes round 1's deon
-    reward = 0 (matches design_doc.md §Round 1 behavior: Game Design 1).
+    opp_prev comes from iter_decisions (state-freeze convention). None at
+    cold-start round 1 makes its deon reward = 0 (matches design_doc.md
+    §Round 1 behavior: Game Design 1).
     """
-    last_opp = result.fab_opp
-    for entry in result.per_round:
-        scores = score_decision(
-            entry["agent_move"], last_opp,
-            entry["agent_pts"], entry["opp_pts"],
-        )
+    for d in iter_decisions(result):
         yield {
-            "agent_move": entry["agent_move"],
-            "opp_prev": last_opp,
-            "scores": scores,
+            "agent_move": d["agent_move"],
+            "opp_prev": d["opp_prev"],
+            "scores": score_decision(
+                d["agent_move"], d["opp_prev"],
+                d["agent_pts"], d["opp_pts"],
+            ),
         }
-        if entry["opp_move"] in ("C", "D"):
-            last_opp = entry["opp_move"]
