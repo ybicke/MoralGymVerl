@@ -86,8 +86,8 @@ def iter_scored_decisions(
     """Walk one trajectory yielding per-decision scoring info.
 
     opp_prev comes from iter_decisions (state-freeze convention). None at
-    cold-start round 1 makes its deon reward = 0 (matches design_doc.md
-    §Round 1 behavior: Game Design 1).
+    cold-start round 1 makes its deon reward = 0 — there is no prior
+    kindness to betray.
     """
     for d in iter_decisions(result):
         yield {

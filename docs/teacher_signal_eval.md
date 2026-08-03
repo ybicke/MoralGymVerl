@@ -145,7 +145,7 @@ wording if this becomes interesting.)
 | state fabrication | `game/trajectory.py:95` | agent_prev, opp_prev each `random.choice(["C","D"])` per episode, written into the prompt as one history sentence |
 | episode | `game/trajectory.py:run_episode` | one decision (single-round) or 5 real rounds vs scripted bots (`game/players.py`); transcript mode accumulates the full conversation exactly like verl's agent loop |
 | parsing | `game/prompts_reasoning.py:77` | strict: final `Action: <label>` with required separator, else `illegal`; same parser as training |
-| aggregation | `eval/behavioral.py:373` | all rates over legal moves, illegal reported separately; per state `p_C+p_D+p_illegal = 1`, so P(D\|state) = 1−P(C\|state) given a legal parse |
+| aggregation | `eval/metrics.py` (`aggregate_rollout_metrics`) | all rates over legal moves, illegal reported separately; per state `p_C+p_D+p_illegal = 1`, so P(D\|state) = 1−P(C\|state) given a legal parse |
 | probes | `eval/probe_answer_token.py` (A), `eval/probe_reasoning_trace.py` (B; `--states fabricated\|episode`), primitives in `eval/teacher_forcing.py` | formulas above; episode mode computes the probe-B pair per round with the value wrapped only into message 1 (training-exact `wrap_first`) |
 | offline analysis | `scripts/analysis/*.py` | commands in the index below; `robustness_slices.py` hard-fails unless its per-episode recomputation exactly matches the runtime `state_conditioning` (proves prompt↔episode alignment) |
 
@@ -184,7 +184,7 @@ deltas were internally consistent either way.
 - **Double-BOS fix.** Eval re-tokenized the rendered chat template with
   HF's default `add_special_tokens=True`, prepending a second `<bos>`
   (ids `[2, 2, 106, ...]`); verl training paths produce a single BOS.
-  Now one shared path (`behavioral.render_chat_inputs`,
+  Now one shared path (`generation.render_chat_inputs`,
   `add_special_tokens=False`), token-identical to training and guarded by
   `tests/test_tokenization_parity.py`. Pre-fix runs measured every cell
   under the extra token.

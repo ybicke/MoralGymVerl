@@ -52,7 +52,7 @@ def _iter_conditioned(
 def _score_rewards(results: List[TrajectoryResult]) -> Dict:
     """Compute mean reward streams and regrets per morality.
 
-    Emits two versions of each metric (see eval_implementation_spec.md §C):
+    Emits two versions of each metric:
       - primary (mean_r_*, regret_*): includes illegal decisions (r_m=-6),
         matches Tennant's scale — directly comparable to her Figure 5.
       - legal-only (mean_r_*_legal, regret_*_legal): parseable decisions
@@ -97,7 +97,8 @@ def aggregate_rollout_metrics(
     """Aggregate metrics across completed rollout episodes.
 
     Illegal (parse-failure) decisions are tracked as a third category rather
-    than collapsed into D — see spec docs/experimental/eval_implementation_spec.md.
+    than collapsed into D — collapsing would conflate "chose to defect" with
+    "failed to answer" (see docs/teacher_signal_eval.md, aggregation row).
     """
     total_decisions = sum(len(r.agent_moves) for r in results)
     total_parse_failures = sum(r.parse_failures for r in results)
