@@ -16,7 +16,7 @@ import pytest
 transformers = pytest.importorskip("transformers")
 pytest.importorskip("torch")
 
-from moralgym_verl.eval.behavioral import render_chat_inputs
+from moralgym_verl.eval.generation import render_chat_inputs
 
 MODEL = "google/gemma-2-9b-it"
 
