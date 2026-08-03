@@ -87,11 +87,14 @@ def continuation_logprob(
     ).input_ids.to(prefix_ids.device)
     input_ids = torch.cat([prefix_ids, cont_ids], dim=1)
     logits = model(input_ids).logits
-    logprobs = torch.log_softmax(logits[:, :-1].float(), dim=-1)
-    targets = input_ids[:, 1:]
-    token_lp = logprobs.gather(-1, targets.unsqueeze(-1)).squeeze(-1)
-    cont_lp = token_lp[:, prefix_ids.shape[1] - 1:]
-    return cont_lp.sum().item(), cont_lp.shape[1]
+    # fp32 softmax only over the K positions predicting the continuation —
+    # over the full sequence it materializes a [seq, vocab] fp32 tensor
+    # (gigabytes for a long transcript at Gemma's 256k vocab).
+    K = cont_ids.shape[1]
+    start = prefix_ids.shape[1] - 1
+    logprobs = torch.log_softmax(logits[:, start:start + K].float(), dim=-1)
+    token_lp = logprobs.gather(-1, cont_ids.unsqueeze(-1)).squeeze(-1)
+    return token_lp.sum().item(), K
 
 
 def generalized_jsd(

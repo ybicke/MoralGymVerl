@@ -11,6 +11,14 @@ state, no sampling noise. Per fabricated state (first/CC/CD/DC/DD):
 Reciprocity in logit space = state-dependent sign flip of delta: toward C
 in opp-C states, NOT toward C in opp-D states.
 
+Interpretation caveat: the labels are teacher-forced as " <label>"
+continuations, whose tokenization may differ from what the model would
+naturally emit after the chat-template newline (seam effect, see
+teacher_forcing.continuation_logprob). Absolute p_coop_* values are
+therefore NOT comparable to behavioral cooperation rates — trust only
+the deltas and JSDs, where the seam is identical on both sides. The
+forced token ids are recorded in the output metadata for audit.
+
 Writes logprob_a.json into --output-dir.
 
 Usage (inside the moralgym_verl container, 1 GPU):
@@ -92,7 +100,18 @@ def main() -> None:
                     state, r["p_coop_student"], r["p_coop_teacher"],
                     r["delta"], r["jsd"])
 
-    metadata = {**metadata, "probe": "logprob_a_answer_token"}
+    # Audit trail for the tokenization-seam caveat (module docstring): the
+    # exact ids each " <label>" continuation was forced as.
+    metadata = {
+        **metadata,
+        "probe": "logprob_a_answer_token",
+        "continuation_token_ids": {
+            f" {label}": tokenizer(
+                f" {label}", add_special_tokens=False
+            ).input_ids
+            for label in (config.coop_label, config.defect_label)
+        },
+    }
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     path_a = out_dir / "logprob_a.json"

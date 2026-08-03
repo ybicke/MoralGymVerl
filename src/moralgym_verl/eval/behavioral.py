@@ -99,6 +99,11 @@ def evaluate(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = Non
     # module stream. Reset per evaluate() call -> presentations are
     # reproducible and identical across runs with the same flags (e.g.
     # robustness cells for different moral values are pairwise paired).
+    # The stream runs CONTINUOUSLY across the opponents loop: in
+    # randomized-presentation runs, opponent #2's draws depend on opponent
+    # #1 having consumed the stream first. Runs are paired only if their
+    # opponent lists match — don't compare a multi-opponent run against
+    # single-opponent (--opponent) sweeps of the same cells.
     presentation_rng = random.Random(seed + 1_000_003)
 
     eval_cfg = cfg.get("evaluation", {})
@@ -401,6 +406,10 @@ def main():
     if moral_value != "none":
         experiment_name = f"{experiment_name}__mv_{moral_value}"
 
+    # Defaults here must mirror evaluate()'s .get() fallbacks — metadata is
+    # built AFTER the (expensive) eval, so a key evaluate() tolerated must
+    # never raise here and lose the finished run.
+    eval_block = cfg.get("evaluation", {})
     metadata = {
         "experiment_name": experiment_name,
         "protocol": args.protocol or "custom",
@@ -410,22 +419,21 @@ def main():
         "checkpoint": args.checkpoint,
         "base_model": cfg["policy"]["model_name"],
         "game_type": cfg["game"]["type"],
-        # Fallback must match evaluate()'s behavior (which defaults to "hist").
         "game_design": cfg.get("prompt", {}).get("game_design", "hist"),
-        "num_episodes": cfg["evaluation"]["num_episodes"],
+        "num_episodes": eval_block.get("num_episodes", 20),
         "num_rounds": cfg["game"]["num_rounds"],
         "intrinsic": cfg["reward"]["intrinsic"],
         "lambda": cfg["reward"]["lambda"],
         "game_reward": cfg["reward"].get("game_reward", "raw"),
-        "eval_temperature": cfg["evaluation"].get("temperature", 1.0),
-        "eval_max_new_tokens": cfg["evaluation"].get("max_new_tokens", 10),
+        "eval_temperature": eval_block.get("temperature", 1.0),
+        "eval_max_new_tokens": eval_block.get("max_new_tokens", 10),
         "minimal_parsing": cfg.get("prompt", {}).get("minimal_parsing", False),
-        "transcript": cfg.get("evaluation", {}).get("transcript", False),
+        "transcript": eval_block.get("transcript", False),
         # Presentation axes (fixed = Tennant-exact; randomize/sample = the
         # representation-robustness protocol). Distinguishes robustness
         # runs from standard cells in downstream analysis.
         "eval_presentation": {
-            axis: cfg.get("evaluation", {}).get(axis, default)
+            axis: eval_block.get(axis, default)
             for axis, default in [("tokens", "fixed"), ("layout", "fixed"),
                                   ("prose", "fixed"), ("role", "fixed"),
                                   ("payoffs", "fixed")]
@@ -433,8 +441,7 @@ def main():
         # 'balanced' = deterministic FAB_STATES cycle (exactly n/4 per
         # state, paired across every run); 'random' = uniform draw inside
         # run_episode (multinomial n per state).
-        "state_design": cfg.get("evaluation", {}).get("state_design",
-                                                      "balanced"),
+        "state_design": eval_block.get("state_design", "balanced"),
         "run_name": os.environ.get("MORALGYM_RUN_NAME"),
         "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
         # Two distinct seeds: eval_seed drives this evaluation's RNG streams;
