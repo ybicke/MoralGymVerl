@@ -8,3 +8,13 @@ __pycache__/
 
 # Local logs from setup/download runs
 *.log
+
+# Eval result data stays out of git (mirrored to $STORE); track only the
+# canonical/superseded record (MANIFEST.md) and analysis docs (README.md)
+eval_results/**
+!eval_results/**/
+!eval_results/**/MANIFEST.md
+!eval_results/**/README.md
+
+# Editor config (interpreter pin + debug launch configs, machine-specific)
+.vscode/
