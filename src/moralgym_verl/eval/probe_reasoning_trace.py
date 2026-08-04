@@ -1,26 +1,19 @@
 """Probe B — student reasoning traces scored under teacher vs student prompt.
 
-Measures what SDPO would actually distill: sample reasoning traces from the
-STUDENT prompt (that is what SDPO scores), teacher-force each trace under
-both prompts, and report per state/round
-    token_delta  = (teacher - student) mean per-token logprob — the
-                   distillation pressure on the reasoning itself;
-    answer_delta = label log-odds shift at the answer position with the SAME
-                   student reasoning held fixed (trace truncated at its final
-                   `Action:` marker via the parser's own find_action_marker).
+What SDPO would actually distill: sample traces from the STUDENT prompt
+(that is what SDPO scores), teacher-force each under both prompts. Per
+state/round: token_delta = (teacher - student) mean per-token logprob
+(distillation pressure on the reasoning); answer_delta = label log-odds
+shift with the SAME reasoning held fixed (trace truncated at its final
+`Action:` marker via the parser's own find_action_marker).
 
-Two state sources (--states):
-    fabricated  (default) — single decision per PROBE_STATES fabricated
-        prior round (first/CC/CD/DC/DD); writes logprob_b.json +
-        logprob_b.traces.jsonl.
-    episode     — live multi-turn episodes vs a scripted opponent; the moral
-        value is wrapped ONLY into the episode's first user message
-        (wrap_first_user, training-exact for multi-turn SDPO) and the
-        per-round deltas show whether that episode-start signal still moves
-        late-round tokens (signal decay); writes logprob_multiturn.json +
-        logprob_multiturn.traces.jsonl.
+--states fabricated (default): one decision per PROBE_STATES prior round
+-> logprob_b.json (+traces). --states episode: live multi-turn episodes,
+value wrapped ONLY into the first user message (training-exact for
+multi-turn SDPO); per-round deltas show signal decay
+-> logprob_multiturn.json (+traces).
 
-Usage (inside the moralgym_verl container, 1 GPU):
+Usage (container, 1 GPU):
     python3 -m moralgym_verl.eval.probe_reasoning_trace \
         --config configs/eval/teacher_signal_9b.yaml \
         --moral-value deontological --game prisoners_dilemma \
@@ -59,15 +52,11 @@ def _score_trace(
     model, tokenizer, student_ids, teacher_ids, trace: str, alpha: float,
     coop_label: str, defect_label: str,
 ) -> Dict:
-    """Phase-2 scoring of one stored trace.
-
-    Dual teacher-forced pass: sampled-token deltas (token_delta = the
-    distillation pressure on the reasoning) AND full-vocab generalized JSD
-    (token_jsd = the step-0 SDPO per-token loss, alpha from the training
-    yaml). Then the answer shift with the reasoning held fixed: truncate
-    the trace at its final answer marker (find_action_marker — the
-    parser's own definition) and compare label logodds there. answer_delta
-    is None when the trace has no marker."""
+    """Phase-2 scoring of one stored trace: dual teacher-forced pass
+    (token_delta + full-vocab generalized JSD = step-0 SDPO per-token
+    loss), then the answer log-odds shift with the reasoning held fixed
+    (truncated at find_action_marker — the parser's own definition).
+    answer_delta is None when the trace has no marker."""
     out: Dict = {"token_delta": None, "token_jsd": None, "answer_delta": None}
     sc = dual_continuation_scores(
         model, tokenizer, student_ids, teacher_ids, trace, alpha)
@@ -98,18 +87,14 @@ def trace_probe(
     trace_log: Optional[list] = None,
 ) -> Dict:
     """Fabricated-state probe: per PROBE_STATES state, num_traces student
-    traces scored under both prompts (= SDPO's teacher pass), plus the
-    answer logodds shift given the same reasoning.
+    traces scored under both prompts, plus the answer shift given the
+    same reasoning.
 
     Two phases, mirroring training's rollout->trainer split (see
     docs/notes_gpu_execution_and_determinism.md §7): ALL traces are
-    sampled before ANY scoring forward pass runs, so the scoring
-    temporaries can never perturb generation numerics — same-seed
-    generations stay bit-identical under changes to the scoring code.
-
-    If `trace_log` is a list, every sampled trace is appended as
-    {"state", "trace", "parsed_action", "token_delta", "token_jsd",
-    "answer_delta"}."""
+    sampled before ANY scoring pass, so scoring-code changes can never
+    perturb generation numerics. trace_log (list) collects every sampled
+    trace with its scores."""
     cfg = copy.deepcopy(config)
     cfg.reasoning = True
 
@@ -174,18 +159,13 @@ def play_episode(
     model, tokenizer, config, wrapper,
     max_new_tokens: int, temperature: float,
 ) -> List[Dict]:
-    """Phase 1 — rollout: play one full student episode (generate, parse,
-    advance the game); no scoring passes. The transcript stays plain (as
-    in training rollouts). Illegal moves freeze the game state and prepend
-    the parse-failure reprompt to the next round's user message, exactly
-    as trajectory.run_episode / training do; `reprompted` marks the rounds
-    whose prompt carried that feedback.
-
-    Returns one dict per round with everything score_rounds needs:
-    {round, reprompted, trace, agent, opp, student_ids, teacher_messages}
-    — teacher_messages is the transcript up to that round with only the
-    first user turn value-wrapped (wrap_first_user, training-exact for
-    multi-turn SDPO)."""
+    """Phase 1 — rollout: play one full student episode; no scoring
+    passes. Transcript stays plain (as in training). Illegal moves freeze
+    the game state and prepend the parse-failure reprompt to the next
+    round's user message (as trajectory.run_episode / training do;
+    `reprompted` marks those rounds). Returns one dict per round with
+    everything score_rounds needs; teacher_messages = the transcript so
+    far with only the first user turn value-wrapped (training-exact)."""
     messages: List[dict] = []
     agent_history: List[str] = []
     opp_history: List[str] = []
@@ -233,11 +213,8 @@ def play_episode(
 def score_rounds(
     model, tokenizer, config, rounds: List[Dict], alpha: float,
 ) -> List[Dict]:
-    """Phase 2 — scoring: dual teacher-forced pass per stored round.
-
-    Returns the per-round records written to logprob_multiturn:
-    {round, reprompted, trace, token_delta, token_jsd, answer_delta,
-    agent, opp}."""
+    """Phase 2 — scoring: dual teacher-forced pass per stored round;
+    returns the per-round records written to logprob_multiturn."""
     records: List[Dict] = []
     for r in rounds:
         teacher_ids = chat_prefix_messages(

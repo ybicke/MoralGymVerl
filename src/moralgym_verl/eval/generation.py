@@ -16,9 +16,9 @@ from moralgym_verl.eval.teacher_context import wrap_first_user, wrap_latest_user
 def render_chat_inputs(tokenizer, messages, device):
     """Chat-template `messages` into generation inputs, training-exact.
 
-    add_special_tokens=False because the rendered template already starts
-    with <bos> — the HF default would prepend a second one, deviating from
-    verl's training tokenization. Returns (rendered_text, model inputs).
+    add_special_tokens=False: the rendered template already starts with
+    <bos>; the HF default would prepend a second, deviating from verl's
+    training tokenization. Returns (rendered_text, model inputs).
     """
     text = tokenizer.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True,
@@ -33,10 +33,9 @@ def render_chat_inputs(tokenizer, messages, device):
 def generate(model, tokenizer, inputs, max_new_tokens, temperature):
     """Sample one response from prepared inputs.
 
-    T>0: multinomial sampling with top_k=0 / top_p=1.0 — explicitly
-    overriding HF's defaults (top_k=50) so sampling is from the full
-    unclipped distribution, matching Tennant's
-    torch.multinomial(F.softmax(logits)) path. T<=0 or None: greedy argmax.
+    T>0: multinomial with top_k=0 / top_p=1.0 (overriding HF's top_k=50)
+    — full unclipped distribution, matching Tennant's multinomial path.
+    T<=0 or None: greedy argmax.
     """
     use_sampling = temperature is not None and temperature > 0
     gen_kwargs = {"max_new_tokens": max_new_tokens, "do_sample": use_sampling}
@@ -59,21 +58,11 @@ def make_policy_fn(
 ):
     """Policy function for run_episode.
 
-    Default: T=1.0 multinomial sampling with top_k=0, top_p=1.0 — mirrors
-    Tennant's `respond_to_batch(..., top_k=0, top_p=1.0)` from trl.core
-    (used in every generation call in her inference_vsRandom.py). This
-    measures the stochastic policy the model was trained to emit, and
-    matches GovSim-style deployment where greedy NL decoding can degenerate.
-
-    Pass `temperature=0` (or None) to fall back to greedy argmax.
-
-    If `raw_log` is a list, each call appends a dict
-    {"prompt": <user_text>, "raw": <model_output>} for offline inspection
-    (e.g. debugging unexpected parse failures on hyper-peaked policies).
-
-    `prompt_wrapper` (teacher-signal eval) is applied to the game prompt
-    before chat templating — raw_log therefore records the wrapped
-    prompt, i.e. exactly what the model saw.
+    Default T=1.0 multinomial (top_k=0, top_p=1.0) mirrors Tennant's
+    trl respond_to_batch — measures the stochastic policy as trained;
+    temperature=0/None -> greedy. raw_log (list) collects {"prompt",
+    "raw"} per call. prompt_wrapper (teacher-signal eval) is applied
+    before chat templating, so raw_log records exactly what the model saw.
     """
 
     def policy_fn(prompt: str) -> str:
@@ -98,25 +87,17 @@ def make_chat_policy_fn(
     prompt_wrapper=None,
     wrap_position: str = "first",
 ):
-    """Transcript-mode policy for multi-turn eval (Stage 1b).
+    """Transcript-mode policy for multi-turn eval (Stage 1b): the episode
+    conversation accumulates, mirroring verl's multi-turn agent loop, so
+    history-dependent behavior is expressible exactly as in training.
 
-    Mirrors verl's multi-turn agent loop (SDPO tool_agent_loop.py): the
-    episode conversation accumulates — every prior round's user message
-    AND the model's own responses stay in context, so history-dependent
-    behavior (grudges, forgiveness) is expressible exactly as in training.
-
-    Teacher semantics: the stored transcript is always plain; when
-    `prompt_wrapper` is set, `wrap_position` decides where the moral
-    value appears at generation time:
-      'first'  (default) — wrap only the episode's FIRST user turn.
-                Training-exact: multi-turn SDPO wraps raw_prompt (the
-                initial message); all later rounds are shared response-
-                region tokens (see teacher_context.wrap_first_user).
-      'latest' — wrap the current round's user turn (persistent-context
-                ablation; measures the "value always adjacent" variant).
-
-    The caller MUST call `policy_fn.reset()` between episodes (evaluate()
-    does) — otherwise conversations leak across episodes.
+    The stored transcript stays plain; with `prompt_wrapper`,
+    `wrap_position` picks where the value appears at generation time:
+    'first' (default) = episode's first user turn, training-exact for
+    multi-turn SDPO (see teacher_context.wrap_first_user); 'latest' =
+    current turn (persistent-context ablation). The caller MUST call
+    policy_fn.reset() between episodes (evaluate() does) — otherwise
+    conversations leak across episodes.
     """
     if wrap_position not in ("first", "latest"):
         raise ValueError(f"wrap_position must be 'first' or 'latest', "

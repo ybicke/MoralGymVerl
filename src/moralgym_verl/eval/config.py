@@ -20,10 +20,9 @@ from moralgym_verl.game.environment import (
 )
 from moralgym_verl.game.prompts import sample_prompt_randomization
 
-# Named experiment protocols (--protocol): the flag bundle that defines a
-# stage lives in ONE executable place instead of being re-typed on every
-# sbatch line. Applied before individual CLI overrides, so explicit flags
-# still win; the chosen name is recorded in metadata.
+# Named experiment protocols (--protocol): a stage's flag bundle in ONE
+# executable place. Applied before individual CLI overrides (explicit
+# flags still win); the chosen name is recorded in metadata.
 PROTOCOL_PRESETS: Dict[str, Dict] = {
     # Single fabricated-history round vs random: per-state policy table.
     "stage1a": {"num_rounds": 1, "game_design": "hist",
@@ -60,26 +59,19 @@ def build_eval_config(
 ) -> EpisodeConfig:
     """Build an EpisodeConfig for evaluation.
 
-    All presentation draws go through `rng` when given. `evaluate()`
-    passes a dedicated stream (seeded independently of everything else)
-    so that turning presentation randomization on/off does not perturb
-    any other random draws — fixed and randomized runs stay paired.
-    Falls back to module `random` (probe callers, fixed presentation —
-    which consumes no draws anyway).
+    All presentation draws go through `rng` when given (evaluate() passes
+    its dedicated stream so toggling randomization never perturbs other
+    draws — fixed and randomized runs stay paired). Falls back to module
+    `random` (probe callers; fixed presentation consumes no draws anyway).
     """
     game = cfg["game"]
     prompt_cfg = cfg["prompt"]
     eval_cfg = cfg.get("evaluation", {})
 
-    # Eval defaults to Tennant-exact: fixed action3/action4 tokens, fixed
-    # layout (=0), fixed prose order, agent_is_row=True, fixed payoffs.
-    # Training-time randomization flags do NOT propagate to eval.
-    # Override per-config under the `evaluation:` block:
-    #   evaluation.tokens:  fixed | randomize   (default: fixed)
-    #   evaluation.layout:  fixed | randomize   (default: fixed) — matrix grid permutation
-    #   evaluation.prose:   fixed | randomize   (default: fixed) — opener/closer label order
-    #   evaluation.role:    fixed | randomize   (default: fixed) — agent_is_row coin flip
-    #   evaluation.payoffs: fixed | sample      (default: fixed)
+    # Defaults are Tennant-exact (fixed tokens/layout/prose/role/payoffs);
+    # training-time randomization flags do NOT propagate to eval. Override
+    # per-config under `evaluation:` — tokens/layout/prose/role:
+    # fixed|randomize, payoffs: fixed|sample.
 
     randomize_layout = eval_cfg.get("layout", "fixed") == "randomize"
     randomize_prose = eval_cfg.get("prose", "fixed") == "randomize"

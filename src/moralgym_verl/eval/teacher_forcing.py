@@ -1,11 +1,10 @@
 """Teacher-forcing measurement primitives shared by the logprob probes.
 
-Machinery, not an experiment: chat-prefix construction, teacher-forced
-continuation logprobs, answer-token log-odds, two-way JSD, trace sampling
-and delta statistics — plus `probe_setup`, the shared CLI/config/model
-setup that keeps the probe entry points in lockstep. The experiments that
-use these live in probe_answer_token.py (probe A) and
-probe_reasoning_trace.py (probe B).
+Machinery, not an experiment: chat prefixes, teacher-forced logprobs,
+answer log-odds, JSDs, trace sampling, delta stats, and `probe_setup`
+(shared CLI/config/model setup keeping the probe entry points in
+lockstep). The experiments live in probe_answer_token.py (A) and
+probe_reasoning_trace.py (B).
 """
 
 from __future__ import annotations
@@ -40,12 +39,10 @@ _PRESENTATION_AXES = ("tokens", "layout", "prose", "role", "payoffs")
 
 
 def force_fixed_presentation(cfg: Dict) -> List[str]:
-    """Force all presentation axes to 'fixed' in `cfg` (in place).
-
-    Probes are fixed-presentation diagnostics: cells must stay comparable
-    across values/runs and never draw from an unpaired RNG stream.
-    Returns the axes that had to be overridden (logged as a warning).
-    """
+    """Force all presentation axes to 'fixed' in `cfg` (in place); return
+    the overridden axes (logged as a warning). Probes are fixed-
+    presentation diagnostics: cells must stay comparable across values/
+    runs and never draw from an unpaired RNG stream."""
     randomized = [ax for ax in _PRESENTATION_AXES
                   if cfg.get("evaluation", {}).get(ax, "fixed") != "fixed"]
     if randomized:
@@ -76,20 +73,19 @@ def continuation_logprob(
 ) -> Tuple[float, int]:
     """Sum of token logprobs of `continuation` teacher-forced after prefix.
 
-    Note: the continuation is tokenized independently and concatenated to
-    prefix_ids, which can differ from how the joined text would tokenize at
-    the seam (SentencePiece boundary merges). Teacher and student passes use
-    the identical construction, so reported deltas are internally consistent;
-    absolute logprobs are not exactly "the model's natural tokenization".
+    Seam caveat: the continuation is tokenized independently and
+    concatenated, which can differ from how the joined text would tokenize
+    (SentencePiece boundary merges). Teacher and student use the identical
+    construction, so deltas are consistent; absolute logprobs are not
+    "the model's natural tokenization".
     """
     cont_ids = tokenizer(
         continuation, add_special_tokens=False, return_tensors="pt"
     ).input_ids.to(prefix_ids.device)
     input_ids = torch.cat([prefix_ids, cont_ids], dim=1)
     logits = model(input_ids).logits
-    # fp32 softmax only over the K positions predicting the continuation —
-    # over the full sequence it materializes a [seq, vocab] fp32 tensor
-    # (gigabytes for a long transcript at Gemma's 256k vocab).
+    # fp32 softmax only over the K continuation positions — full-sequence
+    # would materialize a [seq, vocab] fp32 tensor (GBs at Gemma's 256k vocab).
     K = cont_ids.shape[1]
     start = prefix_ids.shape[1] - 1
     logprobs = torch.log_softmax(logits[:, start:start + K].float(), dim=-1)
@@ -100,14 +96,11 @@ def continuation_logprob(
 def generalized_jsd(
     logp_s: torch.Tensor, logp_t: torch.Tensor, alpha: float
 ) -> torch.Tensor:
-    """Per-position generalized JSD between two [K, V] log-prob tensors.
-
-    Mirrors SDPO's compute_self_distillation_loss (core_algos.py) exactly,
-    including its branch structure: alpha=0 -> KL(t||s) (forward KL),
-    alpha=1 -> KL(s||t) (reverse KL), else the mixture form
-    (1-a)*KL(s||m) + a*KL(t||m) with m = (1-a)*s + a*t.
-    Returns a [K] tensor (per-position loss, summed over vocab).
-    """
+    """Per-position generalized JSD between two [K, V] log-prob tensors;
+    returns [K]. Mirrors SDPO's compute_self_distillation_loss
+    (core_algos.py) exactly, branches included: alpha=0 -> KL(t||s),
+    alpha=1 -> KL(s||t), else (1-a)*KL(s||m) + a*KL(t||m),
+    m = (1-a)*s + a*t."""
     def kl(logp, logq):  # KL(p || q), summed over vocab
         return (logp.exp() * (logp - logq)).sum(-1)
 
@@ -128,16 +121,12 @@ def dual_continuation_scores(
     student_prefix: torch.Tensor, teacher_prefix: torch.Tensor,
     continuation: str, alpha: float,
 ) -> Dict:
-    """Teacher-force `continuation` after both prefixes and read out, per
-    position, (a) the log-prob of the actual continuation token under each
-    prefix and (b) the full-vocabulary generalized JSD between the two
-    next-token distributions — the step-0 SDPO per-token loss.
-
-    Returns {lp_s, lp_t, num_tokens, token_jsd} where lp_* are summed
-    sequence log-probs (as continuation_logprob) and token_jsd is the
-    per-position JSD mean over the continuation. Same tokenization-seam
-    caveat as continuation_logprob.
-    """
+    """Teacher-force `continuation` after both prefixes: per-position
+    actual-token logprobs under each, plus the full-vocab generalized JSD
+    between the two next-token distributions (the step-0 SDPO per-token
+    loss). Returns {lp_s, lp_t, num_tokens, token_jsd} (lp_* = summed
+    sequence logprobs, token_jsd = per-position mean). Same seam caveat
+    as continuation_logprob."""
     cont_ids = tokenizer(
         continuation, add_special_tokens=False, return_tensors="pt"
     ).input_ids.to(student_prefix.device)
@@ -215,15 +204,12 @@ def delta_stats(xs: List[Optional[float]]) -> Dict:
 
 
 def probe_setup(args, opponent: str = "tit_for_tat"):
-    """Shared CLI setup for the probe entry points.
-
-    Handles: config load + --game override, moral-value guard and teacher
-    wrapper (template from the training yaml), seeding, model load, fixed
-    presentation, EpisodeConfig. Keeps the two probe main()s in lockstep.
-
-    Returns (cfg, config, model, tokenizer, wrapper, metadata) — metadata
-    carries the provenance fields shared by all probe outputs.
-    """
+    """Shared CLI setup keeping the two probe main()s in lockstep: config
+    + --game override, moral-value guard, teacher wrapper (template from
+    the training yaml), seeding, model load, fixed presentation,
+    EpisodeConfig. Returns (cfg, config, model, tokenizer, wrapper,
+    metadata) — metadata holds the provenance fields shared by all probe
+    outputs."""
     cfg = load_config(args.config)
     if args.game is not None:
         cfg["game"]["type"] = args.game

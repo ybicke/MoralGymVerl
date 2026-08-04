@@ -5,22 +5,13 @@ Usage:
         --config configs/eval/teacher_signal_9b.yaml \
         --checkpoint base --protocol stage1a --moral-value deon_no_exploit
 
-Runs the model against each evaluation opponent for multiple episodes
-and reports cooperation metrics. Works with any HuggingFace-compatible
-checkpoint (full model or LoRA adapter).
+Plays the model against each configured opponent and reports cooperation
+metrics. Accepts any HF-compatible checkpoint (full model or LoRA adapter).
 
-Structure (one function per abstraction level):
-    evaluate            orchestrator: seed -> policy -> per-opponent runs
-      seed_streams      RNG convention (shared stream + presentation stream)
-      build_policy      teacher wrapper, model load, policy construction
-      run_opponent      episode loop + result-block assembly for one opponent
-    main                CLI: build_parser -> apply_overrides -> evaluate
-                        -> build_metadata -> JSON out
-
-Shared machinery lives in sibling modules: config loading / protocol
-presets / EpisodeConfig construction in `config`, model + LoRA loading in
-`model_loading`, chat rendering + policy functions in `generation`,
-trajectory aggregation in `metrics`.
+Structure: evaluate() = seed_streams -> build_policy -> run_opponent per
+opponent; main() = build_parser -> apply_overrides -> evaluate ->
+build_metadata -> JSON out. Shared machinery lives in the sibling modules
+(config, model_loading, generation, metrics).
 """
 
 from __future__ import annotations
@@ -74,22 +65,14 @@ CFG_OVERRIDES = [
 def seed_streams(cfg: Dict) -> random.Random:
     """Seed all RNG streams; return the dedicated presentation stream.
 
-    Eval seed — fixed across all training seeds (not to be confused with
-    grpo.seed, which varies per training run). Keeping eval deterministic
-    means seed-level CIs reflect training variance only. Matches Tennant.
-
-    Convention: one global seed seeds module `random` (opponent bots +
-    legacy fab_history coin flips), numpy (aggregate metrics), and torch
-    (policy sampling). Presentation sampling gets its OWN stream (the
-    returned `random.Random`): toggling randomization axes must not
-    perturb the shared stream, so fixed and randomized runs stay paired
-    on everything else. Fabricated states don't consume RNG at all in
-    the default balanced design (deterministic FAB_STATES cycle).
-
-    The presentation stream is offset so it never mirrors the module
-    stream. Re-seeded per evaluate() call -> presentations are
-    reproducible and identical across runs with the same flags (e.g.
-    robustness cells for different moral values are pairwise paired).
+    One eval seed — fixed across training seeds, so seed-level CIs reflect
+    training variance only (matches Tennant) — seeds module `random`
+    (opponent bots), numpy (metrics), and torch (policy sampling).
+    Presentation sampling gets its OWN offset stream: toggling
+    randomization axes must not perturb the shared stream, so fixed and
+    randomized runs stay paired on everything else. Re-seeded per call ->
+    same flags give identical presentations (cells pairwise paired).
+    Balanced fabricated states consume no RNG at all.
     """
     seed = cfg.get("seed", 42)
     random.seed(seed)
@@ -99,12 +82,11 @@ def seed_streams(cfg: Dict) -> random.Random:
 
 
 def build_policy(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = None):
-    """Load the model and construct the policy function run_episode consumes.
+    """Load the model and build the policy function run_episode consumes.
 
-    Handles the teacher-signal wrapper (Session 1): every game prompt is
-    wrapped in the SDPO reprompt template with a static moral value in the
-    {feedback} slot. moral_value 'none' -> no wrapping, plain student eval
-    (baseline).
+    moral_value != 'none' wraps every game prompt in the SDPO reprompt
+    template with the value in the {feedback} slot (teacher-signal eval);
+    'none' -> plain student baseline.
     """
     eval_cfg = cfg.get("evaluation", {})
     temperature = eval_cfg.get("temperature", 1.0)
@@ -136,9 +118,8 @@ def build_policy(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] =
     logger.info("Loading model from %s (base: %s)", checkpoint or "base", base_model)
     model, tokenizer = load_model_for_eval(checkpoint, base_model)
 
-    # transcript=true (Stage 1b): conversation accumulates across rounds,
-    # mirroring verl multi-turn training. Default false = stateless
-    # Markov-1 prompts (Stage 1a / legacy protocol).
+    # transcript=true (Stage 1b): conversation accumulates across rounds
+    # (verl multi-turn parity); default = stateless Markov-1 prompts (Stage 1a).
     if eval_cfg.get("transcript", False):
         policy_fn = make_chat_policy_fn(
             model, tokenizer, max_new_tokens=max_new_tokens,
@@ -167,11 +148,10 @@ def run_opponent(
 ) -> Dict:
     """Run all episodes against one opponent; return its result block.
 
-    The presentation stream runs CONTINUOUSLY across the opponents loop:
-    in randomized-presentation runs, opponent #2's draws depend on opponent
-    #1 having consumed the stream first. Runs are paired only if their
-    opponent lists match — don't compare a multi-opponent run against
-    single-opponent (--opponent) sweeps of the same cells.
+    The presentation stream is consumed continuously across the opponents
+    loop, so runs are paired only if their opponent lists match — don't
+    compare a multi-opponent run against single-opponent (--opponent)
+    sweeps of the same cells.
     """
     eval_cfg = cfg.get("evaluation", {})
     num_episodes = eval_cfg.get("num_episodes", 20)
@@ -182,10 +162,8 @@ def run_opponent(
     game_reward_type = cfg["reward"].get("game_reward", "raw")
     shaping = cfg["reward"].get("shaping") or {}
 
-    # State design (fabricated-history runs): 'balanced' (default)
-    # cycles FAB_STATES deterministically -> exactly num_episodes/4
-    # decisions per state, identical allocation in every run;
-    # 'random' reproduces the legacy uniform draw inside run_episode.
+    # 'balanced' (default) cycles FAB_STATES deterministically (n/4 per
+    # state, identical every run); 'random' = legacy uniform draw in run_episode.
     state_design = eval_cfg.get("state_design", "balanced")
     fabricate = game_design == "hist"
 
@@ -214,11 +192,9 @@ def run_opponent(
     breakdown = per_round_breakdown(trajectories)
     result["per_round"] = breakdown["per_round"]
     result["top_sequences"] = breakdown["top_sequences"]
-    # Full per-episode move sequences ('illegal' markers preserved) plus
-    # the presentation each episode was rendered with — raw material for
-    # offline dynamics metrics (recovery rate, Stage 1b) and for
-    # per-axis robustness slices in randomized-presentation runs
-    # (constant in fixed runs; harmless, keeps the format uniform).
+    # Per-episode move sequences ('illegal' preserved) + presentation:
+    # raw material for offline dynamics metrics and per-axis robustness
+    # slices (constant in fixed runs; kept for a uniform format).
     result["episode_moves"] = [
         {"agent": t.agent_moves, "opp": t.opponent_moves,
          "presentation": {
@@ -281,12 +257,9 @@ def _print_summary(opp: str, result: Dict) -> None:
 
 
 def _parse_training_seed(*candidates: Optional[str]) -> Optional[int]:
-    """Recover the training seed from checkpoint path or MORALGYM_RUN_NAME.
-
-    Both carry the `_seed<N>_` pattern set by scripts/slurm/train.sh when a
-    seed was passed. Returns None for base-model eval or runs that used the
-    config's default grpo.seed (untagged).
-    """
+    """Training seed from checkpoint path or MORALGYM_RUN_NAME (the
+    `_seed<N>_` tag set by train.sh). None for base-model eval or
+    untagged runs (config's default grpo.seed)."""
     for c in candidates:
         if c:
             m = re.search(r"_seed(\d+)(?:_|$)", str(c))
@@ -296,12 +269,9 @@ def _parse_training_seed(*candidates: Optional[str]) -> Optional[int]:
 
 
 def _base_label(model_name: str) -> str:
-    """Base-eval experiment label derived from model_name.
-
-    Distinct base models stay distinguishable in tooling that groups by
-    experiment_name. The named mappings are grouping keys the plotting
-    scripts match on — change them only together with those scripts.
-    """
+    """Base-eval experiment label from model_name. The named mappings are
+    grouping keys the plotting scripts match on — change them only
+    together with those scripts."""
     m = (model_name or "").lower()
     if "gemma-2-2b" in m:
         return "base"
@@ -440,13 +410,12 @@ def build_metadata(
 ) -> Dict:
     """Provenance metadata block written alongside the rollout results.
 
-    Invariant: defaults here must mirror evaluate()'s .get() fallbacks —
-    metadata is built AFTER the (expensive) eval, so a key evaluate()
-    tolerated must never raise here and lose the finished run. Enforced by
-    tests/test_behavioral_metadata.py (minimal-config case).
+    Defaults must mirror evaluate()'s .get() fallbacks: metadata is built
+    AFTER the expensive eval and must never raise on a config evaluate()
+    tolerated (enforced by tests/test_behavioral_metadata.py).
     """
-    # Moral value suffix keeps teacher-signal runs distinguishable from the
-    # plain baseline in any tooling that groups by experiment_name.
+    # __mv_ suffix keeps teacher-signal runs distinguishable from the
+    # plain baseline in tooling that groups by experiment_name.
     moral_value = cfg.get("teacher", {}).get("moral_value", "none")
     experiment_name = (
         _base_label(cfg["policy"]["model_name"]) if checkpoint is None
@@ -475,24 +444,18 @@ def build_metadata(
         "eval_max_new_tokens": eval_block.get("max_new_tokens", 10),
         "minimal_parsing": cfg.get("prompt", {}).get("minimal_parsing", False),
         "transcript": eval_block.get("transcript", False),
-        # Presentation axes (fixed = Tennant-exact; randomize/sample = the
-        # representation-robustness protocol). Distinguishes robustness
-        # runs from standard cells in downstream analysis.
+        # fixed = Tennant-exact; randomize/sample = robustness protocol.
         "eval_presentation": {
             axis: eval_block.get(axis, default)
             for axis, default in [("tokens", "fixed"), ("layout", "fixed"),
                                   ("prose", "fixed"), ("role", "fixed"),
                                   ("payoffs", "fixed")]
         },
-        # 'balanced' = deterministic FAB_STATES cycle (exactly n/4 per
-        # state, paired across every run); 'random' = uniform draw inside
-        # run_episode (multinomial n per state).
         "state_design": eval_block.get("state_design", "balanced"),
         "run_name": os.environ.get("MORALGYM_RUN_NAME"),
         "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
-        # Two distinct seeds: eval_seed drives this evaluation's RNG streams;
-        # training_seed identifies which training run produced the checkpoint
-        # (None for base-model eval).
+        # eval_seed drives this run's RNG; training_seed identifies the
+        # training run that produced the checkpoint (None for base eval).
         "eval_seed": cfg.get("seed", 42),
         "training_seed": _parse_training_seed(
             args.checkpoint, os.environ.get("MORALGYM_RUN_NAME")

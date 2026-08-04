@@ -14,12 +14,10 @@ logger = logging.getLogger(__name__)
 
 
 def merge_lora_weights(model, checkpoint_path: str):
-    """Merge LoRA adapter weights into the base model in-place.
-
-    Computes W' = W + (lora_alpha / r) * lora_B @ lora_A for each adapted layer.
-    Same math as PeftModel.merge_and_unload() and the NeMo-RL vLLM refit patch
-    (patch 3 in docs/nemorl_patches.md), but without the peft dependency — which
-    is not installed in the NeMo-RL container.
+    """Merge LoRA adapter weights into the base model in-place:
+    W' = W + (lora_alpha / r) * lora_B @ lora_A per adapted layer. Same
+    math as PeftModel.merge_and_unload(), without the peft dependency
+    (not installed in the NeMo-RL container).
     """
     from safetensors.torch import load_file
 

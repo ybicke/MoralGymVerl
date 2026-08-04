@@ -30,12 +30,9 @@ def score_decision(
     agent_pts: Optional[int],
     opp_pts: Optional[int],
 ) -> Dict[str, float]:
-    """Return four reward streams for one decision.
-
-    agent_pts/opp_pts are ignored on illegal (they are None in that case).
-    opp_prev may be None at cold round 1; deon reward is 0 in that case
-    (no prior kindness to betray).
-    """
+    """Four reward streams for one decision. agent_pts/opp_pts are None
+    (ignored) on illegal; opp_prev None at cold round 1 -> deon reward 0
+    (no prior kindness to betray)."""
     if agent_move not in ("C", "D"):
         return {
             "r_game": ILLEGAL_PENALTY,
@@ -83,12 +80,8 @@ def iter_decisions(
 def iter_scored_decisions(
     result: TrajectoryResult,
 ) -> Iterator[Dict]:
-    """Walk one trajectory yielding per-decision scoring info.
-
-    opp_prev comes from iter_decisions (state-freeze convention). None at
-    cold-start round 1 makes its deon reward = 0 — there is no prior
-    kindness to betray.
-    """
+    """Walk one trajectory yielding per-decision scoring info (opp_prev
+    from iter_decisions — the state-freeze convention)."""
     for d in iter_decisions(result):
         yield {
             "agent_move": d["agent_move"],

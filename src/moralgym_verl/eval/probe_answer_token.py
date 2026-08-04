@@ -1,27 +1,20 @@
 """Probe A — answer-token log-odds shift (teacher vs student prompt).
 
-Non-reasoning closer ("Your answer:"): for both action labels, teacher-force
-the label continuation and sum its token logprobs under the plain (student)
-and moral-value (teacher) prompt. Deterministic — two forward passes per
-state, no sampling noise. Per fabricated state (first/CC/CD/DC/DD):
-    logodds = logP(coop) - logP(defect)          (per prompt)
-    delta   = logodds_teacher - logodds_student
-    jsd     = Jensen-Shannon divergence of the two-way {C, D} distributions
-              (the divergence family the SDPO loss uses).
-Reciprocity in logit space = state-dependent sign flip of delta: toward C
-in opp-C states, NOT toward C in opp-D states.
+Non-reasoning closer: teacher-force both action labels and sum token
+logprobs under the plain (student) and moral-value (teacher) prompt —
+deterministic, two forward passes per fabricated state (first/CC/CD/DC/DD).
+Per state: logodds = logP(coop) - logP(defect); delta = teacher - student;
+jsd = two-way {C, D} JSD (the SDPO divergence family). Reciprocity in
+logit space = state-dependent sign flip of delta.
 
-Interpretation caveat: the labels are teacher-forced as " <label>"
-continuations, whose tokenization may differ from what the model would
-naturally emit after the chat-template newline (seam effect, see
-teacher_forcing.continuation_logprob). Absolute p_coop_* values are
-therefore NOT comparable to behavioral cooperation rates — trust only
-the deltas and JSDs, where the seam is identical on both sides. The
-forced token ids are recorded in the output metadata for audit.
+Caveat: labels are forced as " <label>" continuations, whose tokenization
+may differ from natural emission (seam effect, see
+teacher_forcing.continuation_logprob) — absolute p_coop_* are NOT
+comparable to behavioral cooperation rates; trust the deltas and JSDs,
+where the seam is identical on both sides. Forced token ids are recorded
+in metadata for audit.
 
-Writes logprob_a.json into --output-dir.
-
-Usage (inside the moralgym_verl container, 1 GPU):
+Writes logprob_a.json into --output-dir. Usage (container, 1 GPU):
     python3 -m moralgym_verl.eval.probe_answer_token \
         --config configs/eval/teacher_signal_9b.yaml \
         --moral-value deontological --game prisoners_dilemma \
@@ -100,8 +93,7 @@ def main() -> None:
                     state, r["p_coop_student"], r["p_coop_teacher"],
                     r["delta"], r["jsd"])
 
-    # Audit trail for the tokenization-seam caveat (module docstring): the
-    # exact ids each " <label>" continuation was forced as.
+    # Seam-caveat audit trail: the exact ids each label was forced as.
     metadata = {
         **metadata,
         "probe": "logprob_a_answer_token",

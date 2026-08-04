@@ -20,11 +20,9 @@ MORALITIES = ("game", "deon", "util", "gamedeon")
 
 
 def _three_category(moves: List[str]) -> Dict:
-    """Distribution over {C, D, illegal} plus sample size.
-
-    Empty input returns all-zero probabilities with n=0 so callers can emit the
-    key unconditionally; downstream consumers gate on `n > 0`.
-    """
+    """Distribution over {C, D, illegal} plus sample size. Empty input ->
+    all-zero probabilities with n=0, so callers can emit the key
+    unconditionally and consumers gate on n > 0."""
     n = len(moves)
     if n == 0:
         return {"p_C": 0.0, "p_D": 0.0, "p_illegal": 0.0, "n": 0}
@@ -39,25 +37,20 @@ def _three_category(moves: List[str]) -> Dict:
 def _iter_conditioned(
     result: TrajectoryResult,
 ) -> Iterator[Tuple[int, str, str, str]]:
-    """Yield (round_idx, agent_prev, opp_prev, agent_move) for each round with
-    a prior legal state to condition on. Cold-start round 1 has no prior and
-    is skipped. The state-freeze convention itself lives in scoring.iter_decisions
-    — the single implementation shared with reward scoring.
-    """
+    """Yield (round_idx, agent_prev, opp_prev, agent_move) for each round
+    with a prior legal state (cold-start round 1 is skipped). The
+    state-freeze convention lives in scoring.iter_decisions — the single
+    implementation shared with reward scoring."""
     for d in iter_decisions(result):
         if d["agent_prev"] is not None and d["opp_prev"] is not None:
             yield d["round_idx"], d["agent_prev"], d["opp_prev"], d["agent_move"]
 
 
 def _score_rewards(results: List[TrajectoryResult]) -> Dict:
-    """Compute mean reward streams and regrets per morality.
-
-    Emits two versions of each metric:
-      - primary (mean_r_*, regret_*): includes illegal decisions (r_m=-6),
-        matches Tennant's scale — directly comparable to her Figure 5.
-      - legal-only (mean_r_*_legal, regret_*_legal): parseable decisions
-        only, isolates moral signal from parseability.
-    """
+    """Mean reward streams and regrets per morality, two versions each:
+    primary (mean_r_*, regret_*) includes illegal decisions (r_m=-6),
+    Tennant's scale (comparable to her Figure 5); legal-only (*_legal)
+    isolates moral signal from parseability."""
     if not results:
         return {}
 
@@ -96,9 +89,9 @@ def aggregate_rollout_metrics(
 ) -> Dict:
     """Aggregate metrics across completed rollout episodes.
 
-    Illegal (parse-failure) decisions are tracked as a third category rather
-    than collapsed into D — collapsing would conflate "chose to defect" with
-    "failed to answer" (see docs/teacher_signal_eval.md, aggregation row).
+    Illegal (parse-failure) decisions are a third category, never
+    collapsed into D — that would conflate "chose to defect" with "failed
+    to answer" (docs/teacher_signal_eval.md, aggregation row).
     """
     total_decisions = sum(len(r.agent_moves) for r in results)
     total_parse_failures = sum(r.parse_failures for r in results)
@@ -177,12 +170,9 @@ def aggregate_rollout_metrics(
 
 
 def per_round_breakdown(results: List[TrajectoryResult]) -> Dict:
-    """Compute per-round move distributions and most common move sequences.
-
-    Per-round entries use the same three-category convention ({C, D,
-    illegal} via _three_category) as the rest of the metrics — illegal
-    moves are NOT folded into D.
-    """
+    """Per-round move distributions ({C, D, illegal}, same three-category
+    convention as everywhere — illegal NOT folded into D) and most common
+    move sequences."""
     if not results:
         return {}
 
