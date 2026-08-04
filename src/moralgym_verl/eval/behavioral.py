@@ -9,6 +9,14 @@ Runs the model against each evaluation opponent for multiple episodes
 and reports cooperation metrics. Works with any HuggingFace-compatible
 checkpoint (full model or LoRA adapter).
 
+Structure (one function per abstraction level):
+    evaluate            orchestrator: seed -> policy -> per-opponent runs
+      seed_streams      RNG convention (shared stream + presentation stream)
+      build_policy      teacher wrapper, model load, policy construction
+      run_opponent      episode loop + result-block assembly for one opponent
+    main                CLI: build_parser -> apply_overrides -> evaluate
+                        -> build_metadata -> JSON out
+
 Shared machinery lives in sibling modules: config loading / protocol
 presets / EpisodeConfig construction in `config`, model + LoRA loading in
 `model_loading`, chat rendering + policy functions in `generation`,
@@ -45,8 +53,8 @@ from moralgym_verl.game.trajectory import FAB_STATES, TrajectoryResult, run_epis
 logger = logging.getLogger(__name__)
 
 # Simple CLI -> config overrides: (arg attribute, config section, key).
-# Applied uniformly in main(); flags with multi-key effects (--game,
-# --opponent) stay explicit there.
+# Applied uniformly in apply_overrides(); flags with multi-key effects
+# (--game, --opponent) stay explicit there.
 CFG_OVERRIDES = [
     ("num_episodes", "evaluation", "num_episodes"),
     ("num_rounds", "game", "num_rounds"),
@@ -63,64 +71,58 @@ CFG_OVERRIDES = [
 ]
 
 
-def _parse_training_seed(*candidates: Optional[str]) -> Optional[int]:
-    """Recover the training seed from checkpoint path or MORALGYM_RUN_NAME.
+def seed_streams(cfg: Dict) -> random.Random:
+    """Seed all RNG streams; return the dedicated presentation stream.
 
-    Both carry the `_seed<N>_` pattern set by scripts/slurm/train.sh when a
-    seed was passed. Returns None for base-model eval or runs that used the
-    config's default grpo.seed (untagged).
+    Eval seed — fixed across all training seeds (not to be confused with
+    grpo.seed, which varies per training run). Keeping eval deterministic
+    means seed-level CIs reflect training variance only. Matches Tennant.
+
+    Convention: one global seed seeds module `random` (opponent bots +
+    legacy fab_history coin flips), numpy (aggregate metrics), and torch
+    (policy sampling). Presentation sampling gets its OWN stream (the
+    returned `random.Random`): toggling randomization axes must not
+    perturb the shared stream, so fixed and randomized runs stay paired
+    on everything else. Fabricated states don't consume RNG at all in
+    the default balanced design (deterministic FAB_STATES cycle).
+
+    The presentation stream is offset so it never mirrors the module
+    stream. Re-seeded per evaluate() call -> presentations are
+    reproducible and identical across runs with the same flags (e.g.
+    robustness cells for different moral values are pairwise paired).
     """
-    for c in candidates:
-        if c:
-            m = re.search(r"_seed(\d+)(?:_|$)", str(c))
-            if m:
-                return int(m.group(1))
-    return None
-
-
-def evaluate(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = None):
-    """Run multi-turn rollout evaluation against each configured opponent."""
-    # Eval seed — fixed across all training seeds (not to be confused with
-    # grpo.seed, which varies per training run). Keeping eval deterministic
-    # means seed-level CIs reflect training variance only. Matches Tennant.
-    #
-    # Convention: one global seed seeds module `random` (opponent bots +
-    # legacy fab_history coin flips), numpy (aggregate metrics), and torch
-    # (policy sampling). Presentation sampling gets its OWN stream
-    # (`presentation_rng` below): toggling randomization axes must not
-    # perturb the shared stream, so fixed and randomized runs stay paired
-    # on everything else. Fabricated states don't consume RNG at all in
-    # the default balanced design (deterministic FAB_STATES cycle).
     seed = cfg.get("seed", 42)
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    # Dedicated presentation stream; offset so it never mirrors the
-    # module stream. Reset per evaluate() call -> presentations are
-    # reproducible and identical across runs with the same flags (e.g.
-    # robustness cells for different moral values are pairwise paired).
-    # The stream runs CONTINUOUSLY across the opponents loop: in
-    # randomized-presentation runs, opponent #2's draws depend on opponent
-    # #1 having consumed the stream first. Runs are paired only if their
-    # opponent lists match — don't compare a multi-opponent run against
-    # single-opponent (--opponent) sweeps of the same cells.
-    presentation_rng = random.Random(seed + 1_000_003)
+    return random.Random(seed + 1_000_003)
 
+
+def build_policy(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = None):
+    """Load the model and construct the policy function run_episode consumes.
+
+    Handles the teacher-signal wrapper (Session 1): every game prompt is
+    wrapped in the SDPO reprompt template with a static moral value in the
+    {feedback} slot. moral_value 'none' -> no wrapping, plain student eval
+    (baseline).
+    """
     eval_cfg = cfg.get("evaluation", {})
-    opponents = eval_cfg.get("opponents", ["tit_for_tat", "always_defect"])
-    num_episodes = eval_cfg.get("num_episodes", 20)
     temperature = eval_cfg.get("temperature", 1.0)
     max_new_tokens = eval_cfg.get("max_new_tokens", 10)
 
-    # Teacher-signal eval (Session 1): wrap every game prompt in the SDPO
-    # reprompt template with a static moral value in the {feedback} slot.
-    # moral_value 'none' -> no wrapping, plain student eval (baseline).
     teacher_cfg = cfg.get("teacher") or {}
     moral_value_name = teacher_cfg.get("moral_value", "none")
     moral_value_text = get_moral_value(moral_value_name)
     prompt_wrapper = None
     if moral_value_text:
-        template = load_reprompt_template(teacher_cfg["template_source"])
+        template_source = teacher_cfg.get("template_source")
+        if not template_source:
+            raise ValueError(
+                f"config sets teacher.moral_value={moral_value_name!r} but no "
+                f"teacher.template_source (path to the SDPO training yaml the "
+                f"reprompt_template is read from)"
+            )
+        template = load_reprompt_template(template_source)
         prompt_wrapper = partial(
             wrap_prompt,
             reprompt_template=template,
@@ -128,16 +130,16 @@ def evaluate(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = Non
             feedback_template=teacher_cfg.get("feedback_template"),
         )
         logger.info("Teacher context: moral_value=%s, template from %s",
-                    moral_value_name, teacher_cfg["template_source"])
+                    moral_value_name, template_source)
 
     base_model = cfg["policy"]["model_name"]
     logger.info("Loading model from %s (base: %s)", checkpoint or "base", base_model)
     model, tokenizer = load_model_for_eval(checkpoint, base_model)
+
     # transcript=true (Stage 1b): conversation accumulates across rounds,
     # mirroring verl multi-turn training. Default false = stateless
     # Markov-1 prompts (Stage 1a / legacy protocol).
-    transcript_mode = eval_cfg.get("transcript", False)
-    if transcript_mode:
+    if eval_cfg.get("transcript", False):
         policy_fn = make_chat_policy_fn(
             model, tokenizer, max_new_tokens=max_new_tokens,
             temperature=temperature, raw_log=raw_log,
@@ -157,69 +159,93 @@ def evaluate(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = Non
                 "greedy" if not (temperature and temperature > 0)
                 else f"sampling T={temperature} (top_k=0, top_p=1.0)",
                 max_new_tokens)
+    return policy_fn
 
+
+def run_opponent(
+    cfg: Dict, opponent: str, policy_fn, presentation_rng: random.Random,
+) -> Dict:
+    """Run all episodes against one opponent; return its result block.
+
+    The presentation stream runs CONTINUOUSLY across the opponents loop:
+    in randomized-presentation runs, opponent #2's draws depend on opponent
+    #1 having consumed the stream first. Runs are paired only if their
+    opponent lists match — don't compare a multi-opponent run against
+    single-opponent (--opponent) sweeps of the same cells.
+    """
+    eval_cfg = cfg.get("evaluation", {})
+    num_episodes = eval_cfg.get("num_episodes", 20)
+    prompt_cfg = cfg.get("prompt", {})
+    game_design = prompt_cfg.get("game_design", "hist")
     lambda_val = cfg["reward"]["lambda"]
     intrinsic_type = cfg["reward"]["intrinsic"]
     game_reward_type = cfg["reward"].get("game_reward", "raw")
     shaping = cfg["reward"].get("shaping") or {}
 
+    # State design (fabricated-history runs): 'balanced' (default)
+    # cycles FAB_STATES deterministically -> exactly num_episodes/4
+    # decisions per state, identical allocation in every run;
+    # 'random' reproduces the legacy uniform draw inside run_episode.
+    state_design = eval_cfg.get("state_design", "balanced")
+    fabricate = game_design == "hist"
+
+    logger.info("Evaluating vs %s (%d episodes)", opponent, num_episodes)
+    trajectories: List[TrajectoryResult] = []
+    episode_configs: List[EpisodeConfig] = []
+    for ep_idx in range(num_episodes):
+        if hasattr(policy_fn, "reset"):
+            policy_fn.reset()   # fresh conversation per episode
+        config = build_eval_config(cfg, opponent, rng=presentation_rng)
+        episode_configs.append(config)
+        fab_state = (FAB_STATES[ep_idx % len(FAB_STATES)]
+                     if fabricate and state_design == "balanced" else None)
+        traj = run_episode(
+            config, policy_fn,
+            lambda_val=lambda_val,
+            intrinsic_type=intrinsic_type,
+            fabricate_history=fabricate,
+            fab_state=fab_state,
+            game_reward_type=game_reward_type,
+            shaping=shaping,
+        )
+        trajectories.append(traj)
+
+    result = aggregate_rollout_metrics(trajectories, opponent, num_episodes)
+    breakdown = per_round_breakdown(trajectories)
+    result["per_round"] = breakdown["per_round"]
+    result["top_sequences"] = breakdown["top_sequences"]
+    # Full per-episode move sequences ('illegal' markers preserved) plus
+    # the presentation each episode was rendered with — raw material for
+    # offline dynamics metrics (recovery rate, Stage 1b) and for
+    # per-axis robustness slices in randomized-presentation runs
+    # (constant in fixed runs; harmless, keeps the format uniform).
+    result["episode_moves"] = [
+        {"agent": t.agent_moves, "opp": t.opponent_moves,
+         "presentation": {
+             "coop_label": c.coop_label, "defect_label": c.defect_label,
+             "matrix_layout": c.matrix_layout,
+             "opener_order": list(c.opener_order),
+             "closer_order": list(c.closer_order),
+             "agent_is_row": c.agent_is_row,
+             "payoffs": {"T": c.T, "R": c.R, "P": c.P, "S": c.S},
+         }}
+        for t, c in zip(trajectories, episode_configs)
+    ]
+    return result
+
+
+def evaluate(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = None):
+    """Run multi-turn rollout evaluation against each configured opponent."""
+    presentation_rng = seed_streams(cfg)
+    policy_fn = build_policy(cfg, checkpoint, raw_log)
+    opponents = cfg.get("evaluation", {}).get(
+        "opponents", ["tit_for_tat", "always_defect"])
+
     all_results = []
     for opp in opponents:
-        logger.info("Evaluating vs %s (%d episodes)", opp, num_episodes)
-        trajectories: List[TrajectoryResult] = []
-        prompt_cfg = cfg.get("prompt", {})
-        game_design = prompt_cfg.get("game_design", "hist")
-
-        # State design (fabricated-history runs): 'balanced' (default)
-        # cycles FAB_STATES deterministically -> exactly num_episodes/4
-        # decisions per state, identical allocation in every run;
-        # 'random' reproduces the legacy uniform draw inside run_episode.
-        state_design = eval_cfg.get("state_design", "balanced")
-        fabricate = game_design == "hist"
-
-        episode_configs: List[EpisodeConfig] = []
-        for ep_idx in range(num_episodes):
-            if hasattr(policy_fn, "reset"):
-                policy_fn.reset()   # fresh conversation per episode
-            config = build_eval_config(cfg, opp, rng=presentation_rng)
-            episode_configs.append(config)
-            fab_state = (FAB_STATES[ep_idx % len(FAB_STATES)]
-                         if fabricate and state_design == "balanced" else None)
-            traj = run_episode(
-                config, policy_fn,
-                lambda_val=lambda_val,
-                intrinsic_type=intrinsic_type,
-                fabricate_history=fabricate,
-                fab_state=fab_state,
-                game_reward_type=game_reward_type,
-                shaping=shaping,
-            )
-            trajectories.append(traj)
-
-        result = aggregate_rollout_metrics(trajectories, opp, num_episodes)
-        breakdown = per_round_breakdown(trajectories)
-        result["per_round"] = breakdown["per_round"]
-        result["top_sequences"] = breakdown["top_sequences"]
-        # Full per-episode move sequences ('illegal' markers preserved) plus
-        # the presentation each episode was rendered with — raw material for
-        # offline dynamics metrics (recovery rate, Stage 1b) and for
-        # per-axis robustness slices in randomized-presentation runs
-        # (constant in fixed runs; harmless, keeps the format uniform).
-        result["episode_moves"] = [
-            {"agent": t.agent_moves, "opp": t.opponent_moves,
-             "presentation": {
-                 "coop_label": c.coop_label, "defect_label": c.defect_label,
-                 "matrix_layout": c.matrix_layout,
-                 "opener_order": list(c.opener_order),
-                 "closer_order": list(c.closer_order),
-                 "agent_is_row": c.agent_is_row,
-                 "payoffs": {"T": c.T, "R": c.R, "P": c.P, "S": c.S},
-             }}
-            for t, c in zip(trajectories, episode_configs)
-        ]
+        result = run_opponent(cfg, opp, policy_fn, presentation_rng)
         all_results.append(result)
         _print_summary(opp, result)
-
     return all_results
 
 
@@ -254,7 +280,42 @@ def _print_summary(opp: str, result: Dict) -> None:
     print(f"  Parse failure rate: {result['parse_failure_rate']:.1%}")
 
 
-def main():
+def _parse_training_seed(*candidates: Optional[str]) -> Optional[int]:
+    """Recover the training seed from checkpoint path or MORALGYM_RUN_NAME.
+
+    Both carry the `_seed<N>_` pattern set by scripts/slurm/train.sh when a
+    seed was passed. Returns None for base-model eval or runs that used the
+    config's default grpo.seed (untagged).
+    """
+    for c in candidates:
+        if c:
+            m = re.search(r"_seed(\d+)(?:_|$)", str(c))
+            if m:
+                return int(m.group(1))
+    return None
+
+
+def _base_label(model_name: str) -> str:
+    """Base-eval experiment label derived from model_name.
+
+    Distinct base models stay distinguishable in tooling that groups by
+    experiment_name. The named mappings are grouping keys the plotting
+    scripts match on — change them only together with those scripts.
+    """
+    m = (model_name or "").lower()
+    if "gemma-2-2b" in m:
+        return "base"
+    if "gemma-2-9b" in m:
+        return "base_gemma2_9b"
+    if "mistral-7b" in m:
+        return "base_mistral7b"
+    if "llama-3-8b" in m or "meta-llama-3-8b" in m:
+        return "base_llama3_8b"
+    tag = m.split("/", 1)[-1].replace("/", "_").replace("-", "_")
+    return f"base_{tag}"
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Evaluate a trained MoralGym model")
     parser.add_argument("--config", type=str, required=True)
     parser.add_argument("--checkpoint", type=str, required=True,
@@ -347,16 +408,14 @@ def main():
                              "Use for debugging unexpected parse failures or "
                              "comparing eval-time generations against training "
                              "logs. Off by default — adds ~50-200 KB per eval.")
-    args = parser.parse_args()
+    return parser
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
 
-    cfg = load_config(args.config)
+def apply_overrides(cfg: Dict, args: argparse.Namespace) -> None:
+    """Apply protocol preset and CLI overrides to cfg in place.
 
-    # Protocol preset first — individual CLI overrides below still win.
+    Protocol preset first — individual CLI overrides below still win.
+    """
     if args.protocol is not None:
         apply_protocol(cfg, args.protocol)
 
@@ -375,27 +434,17 @@ def main():
         if value is not None:
             cfg.setdefault(section, {})[key] = value
 
-    checkpoint = None if args.checkpoint == "base" else args.checkpoint
-    raw_log = [] if args.save_raw_responses else None
-    rollout_results = evaluate(cfg, checkpoint, raw_log=raw_log)
 
-    # Base-eval label derives from model_name so distinct base models stay
-    # distinguishable in tooling that groups by experiment_name. The named
-    # mappings are grouping keys the plotting scripts match on — change
-    # them only together with those scripts.
-    def _base_label(model_name: str) -> str:
-        m = (model_name or "").lower()
-        if "gemma-2-2b" in m:
-            return "base"
-        if "gemma-2-9b" in m:
-            return "base_gemma2_9b"
-        if "mistral-7b" in m:
-            return "base_mistral7b"
-        if "llama-3-8b" in m or "meta-llama-3-8b" in m:
-            return "base_llama3_8b"
-        tag = m.split("/", 1)[-1].replace("/", "_").replace("-", "_")
-        return f"base_{tag}"
+def build_metadata(
+    cfg: Dict, args: argparse.Namespace, checkpoint: Optional[str],
+) -> Dict:
+    """Provenance metadata block written alongside the rollout results.
 
+    Invariant: defaults here must mirror evaluate()'s .get() fallbacks —
+    metadata is built AFTER the (expensive) eval, so a key evaluate()
+    tolerated must never raise here and lose the finished run. Enforced by
+    tests/test_behavioral_metadata.py (minimal-config case).
+    """
     # Moral value suffix keeps teacher-signal runs distinguishable from the
     # plain baseline in any tooling that groups by experiment_name.
     moral_value = cfg.get("teacher", {}).get("moral_value", "none")
@@ -406,11 +455,8 @@ def main():
     if moral_value != "none":
         experiment_name = f"{experiment_name}__mv_{moral_value}"
 
-    # Defaults here must mirror evaluate()'s .get() fallbacks — metadata is
-    # built AFTER the (expensive) eval, so a key evaluate() tolerated must
-    # never raise here and lose the finished run.
     eval_block = cfg.get("evaluation", {})
-    metadata = {
+    return {
         "experiment_name": experiment_name,
         "protocol": args.protocol or "custom",
         "moral_value": moral_value,
@@ -454,7 +500,25 @@ def main():
         "timestamp": datetime.now().isoformat(),
     }
 
-    output = {"metadata": metadata, "opponents": rollout_results}
+
+def main():
+    args = build_parser().parse_args()
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
+    cfg = load_config(args.config)
+    apply_overrides(cfg, args)
+
+    checkpoint = None if args.checkpoint == "base" else args.checkpoint
+    raw_log = [] if args.save_raw_responses else None
+    rollout_results = evaluate(cfg, checkpoint, raw_log=raw_log)
+
+    output = {
+        "metadata": build_metadata(cfg, args, checkpoint),
+        "opponents": rollout_results,
+    }
     output_path = Path(args.output) if args.output else Path("results") / "eval_results.json"
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:

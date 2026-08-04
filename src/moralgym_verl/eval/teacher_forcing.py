@@ -235,7 +235,13 @@ def probe_setup(args, opponent: str = "tit_for_tat"):
                          "always compares against the plain prompt.")
 
     teacher_cfg = cfg.get("teacher") or {}
-    template = load_reprompt_template(teacher_cfg["template_source"])
+    template_source = teacher_cfg.get("template_source")
+    if not template_source:
+        raise ValueError(
+            "config has no teacher.template_source (path to the SDPO training "
+            "yaml the reprompt_template is read from) — required by the probes"
+        )
+    template = load_reprompt_template(template_source)
     feedback_template = teacher_cfg.get("feedback_template")
 
     def wrapper(prompt: str) -> str:
