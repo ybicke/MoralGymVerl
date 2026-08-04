@@ -1,8 +1,8 @@
 """Metric aggregation over completed eval trajectories.
 
 Consumes TrajectoryResult lists from run_episode; produces the per-opponent
-result blocks written to behavioral.json. Reward scoring constants live in
-`scoring`, regret baselines in `baselines` — this module only aggregates.
+result blocks written to behavioral.json. Reward scoring constants and
+regret baselines live in `scoring` — this module only aggregates.
 """
 
 from __future__ import annotations
@@ -12,8 +12,9 @@ from typing import Dict, Iterator, List, Tuple
 
 import numpy as np
 
-from moralgym_verl.eval.baselines import compute_regret
-from moralgym_verl.eval.scoring import iter_decisions, iter_scored_decisions
+from moralgym_verl.eval.scoring import (
+    compute_regret, iter_decisions, iter_scored_decisions,
+)
 from moralgym_verl.game.trajectory import TrajectoryResult
 
 MORALITIES = ("game", "deon", "util", "gamedeon")

@@ -10,7 +10,7 @@ _iter_conditioned pulls in behavioral, which needs torch installed but no
 GPU/model).
 """
 
-from moralgym_verl.eval.baselines import compute_regret
+from moralgym_verl.eval.scoring import compute_regret
 from moralgym_verl.eval.scoring import (
     BETRAYAL_PENALTY, ILLEGAL_PENALTY, iter_scored_decisions, score_decision,
 )

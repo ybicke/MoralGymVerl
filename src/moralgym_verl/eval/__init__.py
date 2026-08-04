@@ -21,9 +21,8 @@ Shared machinery (imported by the entry points, not runnable):
     model_loading    checkpoint dispatch (base / LoRA merge / full model)
     generation       chat rendering, sampling, policy functions
     metrics          trajectory aggregation for behavioral.json
-    scoring          per-decision reward streams; iter_decisions holds the
-                     single state-freeze conditioning convention
-    baselines        per-game moral maxima/minima -> regret
+    scoring          per-decision reward streams + regret baselines;
+                     iter_decisions holds the single state-freeze convention
     teacher_context  SDPO reprompt-template wrapping (torch-free)
     teacher_forcing  logprob measurement primitives shared by the probes
 """
