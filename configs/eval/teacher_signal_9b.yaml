@@ -63,10 +63,11 @@ reward:
   game_reward: normalized
 
 probe:
-  # Logprob probe (eval/logprob_probe.py): reasoning traces sampled per state for
-  # the trace-level distillation-pressure metric. 0 disables probe B;
-  # probe A (answer-token logodds/JSD) always runs with the probe script.
-  num_traces: 8
+  # Probe B (eval/probe_reasoning_trace.py): reasoning traces sampled per
+  # state for the trace-level distillation-pressure metric (--num-traces
+  # overrides). 32 = the n>=32 floor for trace-level claims (n=8 results
+  # don't survive resampling — see the retracted DC +3.98).
+  num_traces: 32
 
 teacher:
   # Swept via --moral-value; 'none' = plain student prompt (baseline anchor).
