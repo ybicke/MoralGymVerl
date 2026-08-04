@@ -76,6 +76,22 @@ echo "Output:       ${OUTPUT}"
 echo "Started:      $(date)"
 echo "============================================="
 
+# Env fingerprint — record the numerics-relevant stack per run (driver,
+# CUDA libs, kernel) so cross-job divergence can be checked against env
+# drift, not just guessed at.
+echo "--- env fingerprint ---"
+echo "TORCH_DETERMINISTIC=${TORCH_DETERMINISTIC:-unset} CUBLAS_WORKSPACE_CONFIG=${CUBLAS_WORKSPACE_CONFIG:-unset}"
+uname -r
+nvidia-smi --query-gpu=name,driver_version,clocks.sm,clocks.mem --format=csv
+srun --environment=moralgym_verl --gpus-per-task=1 python3 -c "
+import torch, transformers
+print('torch', torch.__version__, '| cuda', torch.version.cuda, '| cudnn', torch.backends.cudnn.version())
+print('transformers', transformers.__version__)
+print('tf32 matmul', torch.backends.cuda.matmul.allow_tf32, '| tf32 cudnn', torch.backends.cudnn.allow_tf32)
+print('deterministic_algorithms', torch.are_deterministic_algorithms_enabled())
+"
+echo "--- end fingerprint ---"
+
 # --save-raw-responses: keep every (wrapped prompt, reasoning trace) pair —
 # reading whether the model actually invokes the moral value is half the
 # point of the screening. Extra args after the 3 positionals are forwarded.
