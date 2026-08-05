@@ -7,7 +7,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH -C thp_never&nvidia_vboost_enabled
-#SBATCH --time=02:00:00
+#SBATCH --time=03:00:00
 
 # =============================================================================
 # Session 1 — Teacher-signal eval (one game x moral-value cell)
