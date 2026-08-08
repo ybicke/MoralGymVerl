@@ -31,7 +31,8 @@ import numpy as np
 import torch
 
 from moralgym_verl.eval.config import (
-    PROTOCOL_PRESETS, apply_protocol, build_eval_config, load_config,
+    PROTOCOL_PRESETS, apply_protocol, build_eval_config, git_provenance,
+    load_config,
 )
 from moralgym_verl.eval.generation import make_chat_policy_fn, make_policy_fn
 from moralgym_verl.eval.metrics import aggregate_rollout_metrics, per_round_breakdown
@@ -205,9 +206,9 @@ def run_opponent(
     result["top_sequences"] = breakdown["top_sequences"]
     # Per-episode move sequences ('illegal' preserved): raw material for
     # offline dynamics metrics (recovery_rate.py). The presentation is
-    # attached per episode ONLY when an axis is randomized (the case
-    # robustness_slices.py consumes); in fixed runs every episode is
-    # identical, so it is written once at the result level instead.
+    # attached per episode ONLY when an axis is randomized (what offline
+    # per-axis robustness slicing consumes); in fixed runs every episode
+    # is identical, so it is written once at the result level instead.
     result["episode_moves"] = [
         {"agent": t.agent_moves, "opp": t.opponent_moves}
         for t in trajectories
@@ -488,6 +489,8 @@ def build_metadata(
         "eval_temperature": eval_block.get("temperature", 1.0),
         "eval_max_new_tokens": eval_block.get("max_new_tokens", 10),
         "minimal_parsing": cfg.get("prompt", {}).get("minimal_parsing", False),
+        "reasoning": cfg.get("prompt", {}).get("reasoning", False),
+        "show_horizon": cfg.get("prompt", {}).get("show_horizon", False),
         "conversation": eval_block.get("conversation", False),
         # fixed = Tennant-exact; randomize/sample = robustness protocol.
         "eval_presentation": {
@@ -506,6 +509,10 @@ def build_metadata(
             args.checkpoint, os.environ.get("MORALGYM_RUN_NAME")
         ),
         "timestamp": datetime.now().isoformat(),
+        # Provenance: ties the result file to the exact eval code and
+        # experiment description that produced it.
+        "git_commit": git_provenance(),
+        "config": args.config,
     }
 
 

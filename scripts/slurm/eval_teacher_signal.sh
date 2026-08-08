@@ -54,7 +54,7 @@ mkdir -p "${LOG_BASE}/slurm"
 RUN_NAME="teacher_signal_${GAME}_${MORAL_VALUE}_${SLURM_JOB_ID}"
 exec > "${LOG_BASE}/slurm/${RUN_NAME}.out" 2> "${LOG_BASE}/slurm/${RUN_NAME}.err"
 
-CONFIG="configs/eval/teacher_signal_9b.yaml"
+CONFIG="${CONFIG:-configs/eval/teacher_signal_9b.yaml}"
 # Results layout: eval_results/teacher_signal/<EVAL_GROUP>/<cell>/
 #   EVAL_GROUP names the experiment campaign (single_round, multi_round,
 #   robustness, smoke, ...; default: adhoc). Set at

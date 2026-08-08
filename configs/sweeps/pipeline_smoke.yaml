@@ -1,0 +1,13 @@
+# End-to-end pipeline smoke: 2 cells, matrix vs prose.
+# Exercises the sweep driver, env routing (REPRESENTATION to probes),
+# manifest, in-container git provenance, arm labels, and comparability.
+# Not evidence — behavioral n=8; probe A is the meaningful readout.
+name: pipeline_smoke
+num_episodes: 8
+axes:
+  game: [prisoners_dilemma]
+  moral_value: [deontological]
+  representation: [matrix, prose]
+  protocol: [single_round]
+env:
+  RUN_PROBES: "on"

@@ -11,9 +11,32 @@ Three layers, one file:
 from __future__ import annotations
 
 import random
+import subprocess
+from pathlib import Path
 from typing import Dict, Optional
 
 import yaml
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def git_provenance() -> Optional[str]:
+    """Short commit hash of the repo the eval code ran from, with a
+    '-dirty' suffix when the working tree had uncommitted changes.
+    None when git or the repo is unavailable (e.g. stripped container) —
+    provenance is best-effort and must never fail an eval run."""
+    try:
+        rev = subprocess.run(
+            ["git", "-C", str(_REPO_ROOT), "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=10, check=True,
+        ).stdout.strip()
+        status = subprocess.run(
+            ["git", "-C", str(_REPO_ROOT), "status", "--porcelain"],
+            capture_output=True, text=True, timeout=10, check=True,
+        ).stdout.strip()
+        return f"{rev}-dirty" if status else rev
+    except Exception:
+        return None
 
 from moralgym_verl.game.environment import (
     EpisodeConfig, sample_labels, sample_payoffs,

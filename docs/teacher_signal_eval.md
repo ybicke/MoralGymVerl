@@ -146,8 +146,8 @@ wording if this becomes interesting.)
 | episode | `game/trajectory.py:run_episode` | one decision (single-round) or 5 real rounds vs scripted bots (`game/players.py`); transcript mode accumulates the full conversation exactly like verl's agent loop |
 | parsing | `game/prompts_reasoning.py:77` | strict: final `Action: <label>` with required separator, else `illegal`; same parser as training |
 | aggregation | `eval/metrics.py` (`aggregate_rollout_metrics`) | all rates over legal moves, illegal reported separately; per state `p_C+p_D+p_illegal = 1`, so P(D\|state) = 1−P(C\|state) given a legal parse; episodes with zero legal decisions are excluded from the episode-mean rates (counted in `num_episodes_all_illegal` / `num_episodes_no_legal_pairs`, rates `null` if every episode is excluded) — never averaged in as 0.0 |
-| probes | `eval/probe_answer_token.py` (A), `eval/probe_reasoning_trace.py` (B; `--states fabricated\|episode`), primitives in `eval/teacher_forcing.py` | formulas above; episode mode computes the probe-B pair per round with the value wrapped only into message 1 (training-exact `wrap_first`) |
-| offline analysis | `scripts/analysis/*.py` | commands in the index below; `robustness_slices.py` hard-fails unless its per-episode recomputation exactly matches the runtime `state_conditioning` (proves prompt↔episode alignment) |
+| probes | `eval/probe_a.py` (A), `eval/probe_b.py` (B; `--states fabricated\|episode`), primitives in `eval/teacher_forcing.py` | formulas above; episode mode computes the probe-B pair per round with the value wrapped only into message 1 (training-exact `wrap_first`) |
+| offline analysis | `scripts/analysis/summarize_eval_cells.py` (cross-arm tables + comparability check), `scripts/analysis/recovery_rate.py` (multi-round dynamics) | commands in the index below; the one-off investigation scripts (teacher_signal_table, check_parsing, rebuild_state_table, robustness_slices) were removed 2026-08-08 — resurrect from git history if an old analysis must be reproduced |
 
 ## Statistical properties (verified against code and data, 2026-07-16)
 
@@ -323,8 +323,8 @@ experiment index below.
 | Probes A+B single-round (in same jobs) | — | deon: strong state-flipped signal, survives reasoning (A CC +7.8/DD −7.25; B ansΔ\|oppC +2.07); util: A≈0 everywhere, reasoning-mediated only |
 
 CAVEAT: behavioral.json files of these runs hold STALE old-parser metrics —
-use `scripts/analysis/rebuild_state_table.py` (strict parser, offline) as
-the source of truth for their behavioral numbers.
+`rebuild_state_table.py` (strict parser, offline; removed 2026-08-08,
+in git history) was the source of truth for their behavioral numbers.
 
 ## Completed 2026-07-16 (analyzed with robustness_slices.py / recovery_rate.py)
 
@@ -340,11 +340,8 @@ the source of truth for their behavioral numbers.
 
 ```bash
 cd ~/MoralGymVerl
-/usr/bin/python3.11 scripts/analysis/check_parsing.py --eval-dir eval_results/teacher_signal/stage1b_multiturn
-/usr/bin/python3.11 scripts/analysis/teacher_signal_table.py --eval-dir eval_results/teacher_signal/<stage>
-/usr/bin/python3.11 scripts/analysis/rebuild_state_table.py --eval-dir eval_results/teacher_signal/<stage>
-/usr/bin/python3.11 scripts/analysis/robustness_slices.py   # R1/R2 vs fixed baseline + per-axis slices
-/usr/bin/python3.11 scripts/analysis/recovery_rate.py       # 1b recovery/sucker/drift from episode_moves
+/usr/bin/python3.11 scripts/analysis/summarize_eval_cells.py eval_results/teacher_signal/<group>
+/usr/bin/python3.11 scripts/analysis/recovery_rate.py       # multi-round recovery/sucker/drift from episode_moves
 ```
 
 Slurm logs: `~/logs_verl/slurm/teacher_signal_*_<jobid>.{out,err}`.
