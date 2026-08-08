@@ -60,7 +60,6 @@ CFG_OVERRIDES = [
     ("eval_role", "evaluation", "role"),
     ("eval_payoffs", "evaluation", "payoffs"),
     ("moral_value", "teacher", "moral_value"),
-    ("conversation", "evaluation", "conversation"),
 ]
 
 
@@ -128,19 +127,18 @@ def build_policy(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] =
     base_model = cfg["policy"]["model_name"]
     logger.info("Loading model from %s (base: %s)", checkpoint or "base", base_model)
     model, tokenizer = load_model_for_eval(checkpoint, base_model)
-    # TODO:Is accumulation in the transcript mode really necessary? Is it accumulating the entire conversation across rounds in context?
-    # conversation=true (multi_round_conversation): the dialogue accumulates
-    # across rounds (verl multi-turn parity); default = stateless Markov-1
-    # prompts.
-    if eval_cfg.get("conversation", False):
+    # Multi-round episodes are conversations (verl multi-turn parity):
+    # run_episode sends env messages for rounds >= 2, so the policy must
+    # accumulate the dialogue. Single-round = one-shot stateless policy.
+    if cfg["game"]["num_rounds"] > 1:
         policy_fn = make_chat_policy_fn(
             model, tokenizer, max_new_tokens=max_new_tokens,
             temperature=temperature, raw_log=raw_log,
             prompt_wrapper=prompt_wrapper,
             wrap_position=teacher_cfg.get("wrap_position", "first"),
         )
-        logger.info("Conversation mode ON (wrap_position=%s): episode "
-                    "dialogues accumulate (verl multi-turn parity)",
+        logger.info("Multi-round: conversation policy (wrap_position=%s), "
+                    "episode dialogues accumulate (verl multi-turn parity)",
                     teacher_cfg.get("wrap_position", "first"))
     else:
         policy_fn = make_policy_fn(
@@ -410,13 +408,6 @@ def build_parser() -> argparse.ArgumentParser:
                              "signal eval). 'none' = plain student prompt. "
                              f"Names: {sorted(MORAL_VALUE_REGISTRY)}; combine "
                              "2-3 with '+', e.g. deon_no_exploit+consequentialist.")
-    parser.add_argument("--conversation", action=argparse.BooleanOptionalAction,
-                        default=None,
-                        help="Override evaluation.conversation. --conversation "
-                             "= the episode dialogue accumulates across rounds "
-                             "(verl multi-turn training parity, protocol "
-                             "multi_round_conversation); --no-conversation = "
-                             "stateless Markov-1 prompt per round.")
     parser.add_argument("--save-raw-responses", action="store_true",
                         help="Save every (prompt, raw model output) pair to a "
                              "sibling JSONL file (<output>.responses.jsonl). "
@@ -491,7 +482,6 @@ def build_metadata(
         "minimal_parsing": cfg.get("prompt", {}).get("minimal_parsing", False),
         "reasoning": cfg.get("prompt", {}).get("reasoning", False),
         "show_horizon": cfg.get("prompt", {}).get("show_horizon", False),
-        "conversation": eval_block.get("conversation", False),
         # fixed = Tennant-exact; randomize/sample = robustness protocol.
         "eval_presentation": {
             axis: eval_block.get(axis, default)

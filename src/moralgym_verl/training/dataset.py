@@ -90,6 +90,7 @@ def _sample_config_from_yaml(cfg: dict[str, Any]) -> tuple[EpisodeConfig, dict[s
         minimal_parsing=prompt_cfg.get("minimal_parsing", False),
         reasoning=prompt_cfg.get("reasoning", False),
         representation=prompt_cfg.get("representation", "matrix"),
+        restate_rules_per_round=prompt_cfg.get("restate_rules_per_round", False),
     )
 
     # Game state for reward_fn: same fields as NeMo-RL's extra_env_info
@@ -108,6 +109,7 @@ def _sample_config_from_yaml(cfg: dict[str, Any]) -> tuple[EpisodeConfig, dict[s
         "minimal_parsing": config.minimal_parsing,
         "reasoning": config.reasoning,
         "representation": config.representation,
+        "restate_rules_per_round": config.restate_rules_per_round,
         "lambda_val": float(reward_cfg.get("lambda", 0.0)),
         "intrinsic": reward_cfg.get("intrinsic", "none"),
         "intrinsic_timing": reward_cfg.get("intrinsic_timing", "backward"),

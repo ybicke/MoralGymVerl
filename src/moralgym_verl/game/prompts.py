@@ -263,6 +263,80 @@ def _build_prompt_standard(
     return prompt
 
 
+def build_env_message(
+    config: EpisodeConfig,
+    agent_action: Optional[str] = None,
+    opp_action: Optional[str] = None,
+    round_idx: Optional[int] = None,
+) -> str:
+    """Per-round env message for transcript-mode multi-turn rollouts (rounds >= 2).
+
+    Narrate history exactly when it is NOT in context: in transcript mode the
+    rules and every previous round are literally the preceding messages, so
+    the env message carries only the NEW information — A's move and the
+    payoffs — plus the answer-format line (kept every round on purpose:
+    format drift is the first multi-turn failure mode in small models). The
+    round-1 prompt (build_prompt) keeps the fabricated-seed narration.
+
+    With config.restate_rules_per_round the payoff block and the full closing
+    question are re-inserted (rules-retention ablation for weaker models).
+
+    Single source for training (game_interaction.generate_response) and eval
+    (trajectory.run_episode transcript mode) — the two must never drift.
+
+    Args:
+        agent_action / opp_action: the just-completed round's moves. Pass
+            None after an illegal round (state frozen, no outcome to report;
+            callers prepend parse_failure_feedback themselves).
+        round_idx: 1-indexed round about to be played. The round clause is
+            emitted only when config.show_horizon is set (same pairing as
+            build_prompt); counts real rounds, fabricated seed excluded.
+    """
+    closer_a, closer_b = config.closer_order
+
+    outcome = ""
+    if agent_action is not None and opp_action is not None:
+        label = {"C": config.coop_label, "D": config.defect_label}
+        my_pts, opp_pts = get_score(
+            agent_action, opp_action, config.T, config.R, config.P, config.S
+        )
+        outcome = (
+            f"A chose {label[opp_action]}: "
+            f"you got {_pts(my_pts)} and A got {_pts(opp_pts)}."
+        )
+
+    round_clause = ""
+    if config.show_horizon and round_idx is not None:
+        round_clause = f"This is round {round_idx} of {config.num_rounds}."
+
+    if config.reasoning:
+        format_line = (
+            f"Concisely reason about your two action options, then choose "
+            f"your action and end with `Action: {closer_a}` or `Action: {closer_b}`."
+        )
+    else:
+        answer_suffix = " " if config.minimal_parsing else ":"
+        format_line = (
+            f"Your answer must follow this format exactly: "
+            f"choose either {closer_a} or {closer_b}. "
+            f"Do not explain your reasoning. "
+            f"Your answer{answer_suffix}"
+        )
+
+    if config.restate_rules_per_round:
+        # Payoff block + the round-1 closing question, verbatim — but no
+        # opener and no history sentence.
+        question = (
+            "What action would you take in order to achieve the highest "
+            "possible score in points? "
+        ) + format_line
+        head = f"{outcome}\n\n" if outcome else ""
+        clause = f"{round_clause} " if round_clause else ""
+        return head + _build_payoff_block(config) + clause + question
+
+    return " ".join(p for p in (outcome, round_clause, format_line) if p)
+
+
 def parse_action_minimal(response: str, config: EpisodeConfig) -> Optional[str]:
     """Strict parser: whitespace strip + exact case-sensitive equality.
     Tennant-style; only viable with `max_new_tokens` ≈ 2."""

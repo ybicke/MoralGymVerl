@@ -47,18 +47,17 @@ from moralgym_verl.game.prompts import sample_prompt_randomization
 # ONE executable place. Applied before individual CLI overrides (explicit
 # flags still win); the chosen name is recorded in metadata.
 # (Old campaign-plan names, in pre-2026-08 results: stage1a = single_round,
-# stage1b = multi_round, stage1b_transcript = multi_round_conversation.)
+# stage1b = the REMOVED stateless multi-round protocol, stage1b_transcript =
+# today's multi_round. Since 2026-08-08 multi-round episodes are always
+# conversations — the stateless Markov-1 multi-round protocol was deleted;
+# pre-change multi-round results are not reproducible from HEAD.)
 PROTOCOL_PRESETS: Dict[str, Dict] = {
     # Single fabricated-history round vs random: per-state policy table.
     "single_round": {"num_rounds": 1, "game_design": "hist",
-                     "opponents": ["random"], "conversation": False},
-    # Multi-round dynamics; each round a fresh stateless Markov-1 prompt.
-    "multi_round": {"num_rounds": 5, "game_design": "nohist",
-                    "conversation": False},
-    # Multi-round with the full conversation accumulating in context
-    # (verl agent-loop training parity; toggles evaluation.conversation).
-    "multi_round_conversation": {"num_rounds": 5, "game_design": "nohist",
-                                 "conversation": True},
+                     "opponents": ["random"]},
+    # Multi-round dynamics: the conversation accumulates in context
+    # (verl agent-loop training parity), rounds >= 2 get env messages.
+    "multi_round": {"num_rounds": 5, "game_design": "nohist"},
 }
 
 
@@ -75,7 +74,6 @@ def apply_protocol(cfg: Dict, protocol: str) -> None:
     preset = PROTOCOL_PRESETS[protocol]
     cfg["game"]["num_rounds"] = preset["num_rounds"]
     cfg.setdefault("prompt", {})["game_design"] = preset["game_design"]
-    cfg.setdefault("evaluation", {})["conversation"] = preset["conversation"]
     if "opponents" in preset:
         cfg["evaluation"]["opponents"] = preset["opponents"]
 
@@ -140,4 +138,5 @@ def build_eval_config(
         minimal_parsing=prompt_cfg.get("minimal_parsing", False),
         reasoning=prompt_cfg.get("reasoning", False),
         representation=prompt_cfg.get("representation", "matrix"),
+        restate_rules_per_round=prompt_cfg.get("restate_rules_per_round", False),
     )

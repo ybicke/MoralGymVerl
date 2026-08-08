@@ -34,17 +34,12 @@ Each dataset row must carry extra_info.interaction_kwargs with
 {"name": "moralgym", "ground_truth": <JSON game state>} — dataset.py
 writes this automatically. kwargs are forwarded to start_interaction().
 
-KNOWN GAP: per-turn rewards returned by generate_response land in
-non_tensor_batch["turn_scores"] but no trainer path sums them into the
-reward tensor — the final reward still comes from the reward manager
-calling compute_score on the full decoded transcript. Multi-turn
-training therefore needs a small custom reward manager that sums
-turn_scores (see repo docs / TODO).
+Per-turn rewards returned by generate_response are accumulated by
+ToolAgentLoop into non_tensor_batch["turn_scores"]; MoralGymRewardManager
+(training/reward_manager.py) sums them into the scalar episode reward.
 
 Note: verl's multi-turn infrastructure calls start_interaction() once
 per rollout (before turn 1) and generate_response() after each LLM turn.
-Per-turn scores are summed by verl's rollout engine into the sequence reward
-used by GRPO advantage estimation.
 """
 
 from __future__ import annotations
@@ -58,7 +53,7 @@ from typing import Any, Optional
 from moralgym_verl.game.environment import EpisodeConfig
 from moralgym_verl.game.players import get_opponent_action
 from moralgym_verl.game.prompts import (
-    build_prompt,
+    build_env_message,
     parse_action,
     parse_failure_feedback,
 )
@@ -129,6 +124,7 @@ class GameInteraction(BaseInteraction):
             minimal_parsing=state.get("minimal_parsing", False),
             reasoning=state.get("reasoning", False),
             representation=state.get("representation", "matrix"),
+            restate_rules_per_round=state.get("restate_rules_per_round", False),
         )
 
         agent_history = list(state.get("agent_history", []))
@@ -182,8 +178,10 @@ class GameInteraction(BaseInteraction):
                 logger.debug(f"[{instance_id[:8]}] round={inst['round']} PARSE_FAIL reward={reward:.2f} done={done}")
             if done:
                 return True, "", reward, {"parse_fail": True, "feedback": feedback}
-            # Re-prompt with the same (frozen) game state
-            next_prompt = feedback + "\n\n" + build_prompt(config, inst["agent_history"], inst["opp_history"])
+            # Re-prompt: state frozen, no outcome to report
+            next_prompt = feedback + "\n\n" + build_env_message(
+                config, round_idx=inst["round"] + 1
+            )
             return False, next_prompt, reward, {"parse_fail": True}
 
         opp_action = get_opponent_action(
@@ -238,8 +236,13 @@ class GameInteraction(BaseInteraction):
                 "feedback": feedback,
             }
 
-        # Build next-round prompt
-        next_prompt = build_prompt(config, inst["agent_history"], inst["opp_history"])
+        # Env message for the next round. The rules (round-1 prompt) and all
+        # previous rounds are already in the conversation the model is
+        # conditioned on — only the new outcome is sent. Eval parity:
+        # trajectory.run_episode transcript mode builds the same message.
+        next_prompt = build_env_message(
+            config, action, opp_action, round_idx=inst["round"] + 1
+        )
         return False, next_prompt, reward, {}
 
     async def finalize_interaction(self, instance_id: str, **kwargs) -> None:

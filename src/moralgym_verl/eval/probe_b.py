@@ -41,7 +41,7 @@ from moralgym_verl.eval.teacher_forcing import (
 from moralgym_verl.game.environment import FIXED_PAYOFFS
 from moralgym_verl.game.players import get_opponent_action
 from moralgym_verl.game.prompts import (
-    build_prompt, parse_action, parse_failure_feedback,
+    build_env_message, build_prompt, parse_action, parse_failure_feedback,
 )
 from moralgym_verl.game.prompts_reasoning import find_action_marker
 
@@ -171,9 +171,19 @@ def play_episode(
     opp_history: List[str] = []
     rounds: List[Dict] = []
     pending_feedback: Optional[str] = None
+    prev_agent: Optional[str] = None
+    prev_opp: Optional[str] = None
 
     for rnd in range(config.num_rounds):
-        prompt = build_prompt(config, agent_history, opp_history)
+        if rnd == 0:
+            prompt = build_prompt(config, agent_history, opp_history)
+        else:
+            # Rounds >= 2 send only the env message (training parity with
+            # game_interaction / trajectory.run_episode): rules + history
+            # are already in the accumulated messages.
+            prompt = build_env_message(
+                config, prev_agent, prev_opp, round_idx=rnd + 1
+            )
         reprompted = pending_feedback is not None
         if pending_feedback:
             # Training parity (same construction as trajectory.run_episode):
@@ -199,12 +209,14 @@ def play_episode(
         action = parse_action(trace, config)
         if action is None:
             pending_feedback = parse_failure_feedback(config)
+            prev_agent = prev_opp = None
             round_rec["agent"], round_rec["opp"] = "illegal", None
         else:
             opp_action = get_opponent_action(
                 config.opponent, opp_history, agent_history)
             agent_history.append(action)
             opp_history.append(opp_action)
+            prev_agent, prev_opp = action, opp_action
             round_rec["agent"], round_rec["opp"] = action, opp_action
         rounds.append(round_rec)
     return rounds

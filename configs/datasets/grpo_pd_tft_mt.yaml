@@ -24,3 +24,7 @@ prompt:
   randomize_layout: true
   randomize_label_order: true
   randomize_role: true
+  # Rounds >= 2 env messages (conversation rollout): false (default) =
+  # outcome + answer-format line only; true = additionally re-insert the
+  # payoff block + question (rules-retention ablation for weaker models).
+  restate_rules_per_round: false

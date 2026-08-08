@@ -14,7 +14,7 @@ from typing import Callable, Dict, List, Tuple
 from moralgym_verl.game.environment import EpisodeConfig, get_score
 from moralgym_verl.game.players import get_opponent_action
 from moralgym_verl.game.prompts import (
-    build_prompt, parse_action, parse_failure_feedback,
+    build_env_message, build_prompt, parse_action, parse_failure_feedback,
 )
 from moralgym_verl.rewards import compute_episode_rewards, compute_round_reward
 
@@ -93,7 +93,13 @@ def run_episode(
             per-episode randomization (labels, matrix_layout, opener/closer
             prose, agent_is_row) is already baked in — drawn by the caller
             at EpisodeConfig construction time.
-        policy_fn: callable(prompt) -> raw_response string.
+        policy_fn: callable(prompt) -> raw_response string. For
+            num_rounds > 1 it MUST accumulate the episode conversation
+            (make_chat_policy_fn): multi-round episodes are conversations
+            (verl multi-turn parity), and rounds >= 2 receive only the
+            build_env_message outcome message — the rules and history live
+            in the accumulated dialogue. Single-round episodes work with
+            any policy_fn.
         lambda_val: Weight for intrinsic reward.
         intrinsic_type: Which intrinsic reward variant to use.
         verbose: Print round-by-round results.
@@ -126,9 +132,22 @@ def run_episode(
     per_round: List[Dict] = []
     parse_failures = 0
     pending_feedback: str | None = None
+    # Previous round's outcome for the env message; None after an illegal
+    # round (state frozen, nothing to report).
+    prev_agent: str | None = None
+    prev_opp: str | None = None
 
     for rnd in range(config.num_rounds):
-        prompt = build_prompt(config, agent_history, opp_history)
+        if rnd == 0:
+            prompt = build_prompt(config, agent_history, opp_history)
+        else:
+            # Rounds >= 2: the rules (round-1 prompt) and all previous
+            # rounds are already in the accumulated conversation — send
+            # only the env message. Training parity:
+            # game_interaction.generate_response builds the same message.
+            prompt = build_env_message(
+                config, prev_agent, prev_opp, round_idx=rnd + 1
+            )
         if pending_feedback:
             # Training parity: after an illegal move, verl's interaction
             # prepends this exact string to the next user message
@@ -145,6 +164,7 @@ def run_episode(
             # no payoff. Round counter advances. Matches training (nemo_env.py).
             parse_failures += 1
             pending_feedback = parse_failure_feedback(config)
+            prev_agent = prev_opp = None
             per_round.append(
                 {
                     "round": rnd + 1,
@@ -170,6 +190,7 @@ def run_episode(
 
         agent_history.append(agent_move)
         opp_history.append(opp_move)
+        prev_agent, prev_opp = agent_move, opp_move
 
         per_round.append(
             {

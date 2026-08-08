@@ -73,7 +73,6 @@ def test_apply_protocol_single_round():
     assert cfg["game"]["num_rounds"] == 1
     assert cfg["prompt"]["game_design"] == "hist"
     assert cfg["evaluation"]["opponents"] == ["random"]
-    assert cfg["evaluation"]["conversation"] is False
 
 
 def test_single_round_end_to_end_metrics(scripted):

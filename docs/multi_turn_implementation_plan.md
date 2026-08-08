@@ -220,8 +220,64 @@ before considering any filtering.
    `sdpo_pd_tft_mt.yaml` (leave the single-turn config untouched as the control).
 3. Fix the stale `game_interaction.py` docstrings.
 
-### Phase 1 — lean env messages (independent, ship first)
-As Q6. Small, self-contained, and de-risks the token budget for everything after.
+### Phase 1 — minimal env messages + conversation-only multi-round — DONE 2026-08-08
+Implemented and tested (83 tests green). Two additions beyond the original
+spec, decided during implementation:
+
+- **Stateless multi-round eval REMOVED** (user decision — only code that
+  makes sense stays): multi-round episodes are always conversations now.
+  The `evaluation.conversation` flag, the `--conversation` CLI override, and
+  the `multi_round_conversation` preset are gone; presets are `single_round`
+  (one-shot stateless, unchanged) and `multi_round` (conversation).
+  `build_policy` selects the chat-accumulating policy iff `num_rounds > 1`.
+  Pre-change stateless multi-round results are not reproducible from HEAD —
+  new clean results will be produced.
+- **`probe_b.play_episode` updated to the same protocol** (env messages for
+  rounds ≥ 2), keeping the probe training-exact.
+
+Original spec (as implemented):
+
+- **Flag**: `prompt.restate_rules_per_round: false | true` (bool, default `false`),
+  stored on `EpisodeConfig`, plumbed through dataset ground_truth (training) and
+  `build_eval_config` (eval). No "legacy_full" arm — the old full-reprompt env
+  message is not defensible and lives in git history only. Note: pre-change
+  transcript-mode eval results used the old messages; don't compare across the
+  protocol change.
+- **Guiding rule**: narrate history exactly when it is NOT in context, never
+  when it is. Concretely: the round-1 prompt (both arms, single-step AND
+  multi-turn `hist` design) keeps the fabricated-seed narration — mid-game
+  entry cannot be in the transcript, and the multi-turn plumbing already
+  supports it (`start_interaction` seeds histories + `fab_len`, opponent
+  conditions on the fab state). Round ≥ 2 env messages never restate history —
+  it is literally the preceding context.
+- **Round ≥ 2 env message, `false` (standard)**: outcome line + round clause
+  (only if `show_horizon`) + answer-format line. Outcome line:
+  `"A chose {label}: you got {n} points and A got {m} points."` — note any
+  outcome report necessarily encodes the full memory-1 state (payoffs identify
+  both moves), so this drops *redundancy*, not information; it is NOT a
+  shortcut fix. Format line kept every round on purpose: format drift is the
+  first multi-turn failure in 7–9B models (cheap recitation). Reasoning
+  configs use the `Action: <label>` closer; standard configs the
+  "choose either X or Y" closer.
+- **Round ≥ 2, `true` (rules-retention ablation for weaker models)**: same
+  message with the payoff block + closing question inserted.
+- **Illegal round**: `parse_failure_feedback` + the round-≥2 message with no
+  outcome line (state frozen, nothing to report).
+- **Files**: new `build_env_message(config, agent_action|None, opp_action|None,
+  round_idx)` in `game/prompts.py` (routes reasoning closer internally);
+  `EpisodeConfig` field; `training/game_interaction.py` legal + illegal
+  branches; `game/trajectory.run_episode` (track prev-round outcome, None
+  after illegal; lockstep same commit); `training/dataset.py`
+  `_sample_config_from_yaml` (config + state dict); `eval/config.py`
+  `build_eval_config`. Tests: new `tests/test_env_message.py` (builder
+  content, reasoning/standard closers, run_episode transcript round-2
+  message, illegal-freeze composition, both arms); existing tests stay green
+  (default `false` changes multi-turn env messages — `test_probe_episode`
+  asserts feedback composition, verify it).
+- Open follow-up for Phase 0/2: when creating `sdpo_pd_tft_mt.yaml`, redo
+  the `max_response_length` sizing comment — env messages are now ~30
+  tokens, not ~350 (worst case ≈ 5 traces × 512 + 4 env msgs × 30 ≈ 2680,
+  so the pool can shrink accordingly).
 
 ### Phase 2 — the split transform + unit tests (the core)
 `src/moralgym_verl/training/turn_split.py`:

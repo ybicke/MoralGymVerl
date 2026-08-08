@@ -13,7 +13,7 @@ import torch
 
 import moralgym_verl.eval.probe_b as prt
 from moralgym_verl.eval.config import build_eval_config
-from moralgym_verl.game.prompts import parse_failure_feedback
+from moralgym_verl.game.prompts import build_env_message, parse_failure_feedback
 
 CFG = {
     "seed": 42,
@@ -66,9 +66,12 @@ def test_probe_episode_reprompts_after_parse_failure(monkeypatch):
     assert [r["reprompted"] for r in records] == [False, True, False]
 
     # Round 2's user message carries the reprompt feedback, training-exact:
-    # feedback + blank line + the SAME prompt as round 1 (state frozen).
+    # feedback + blank line + the env message with no outcome line (state
+    # frozen, nothing to report).
     feedback = parse_failure_feedback(config)
-    assert student_user_msgs[1] == f"{feedback}\n\n{student_user_msgs[0]}"
+    assert student_user_msgs[1] == (
+        f"{feedback}\n\n{build_env_message(config, round_idx=2)}"
+    )
     # Round 3 is clean again: no feedback, history advanced.
     assert not student_user_msgs[2].startswith(feedback)
     assert student_user_msgs[2] != student_user_msgs[0]
