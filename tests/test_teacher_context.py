@@ -134,7 +134,7 @@ def test_custom_feedback_template():
     assert "Moral value to follow:\nbe nice" in wrapped
 
 
-# ------------------------------------------------- transcript mode helper
+# ---------------------------------------------- conversation mode helper
 
 def test_wrap_latest_user_wraps_only_last_user_turn():
     messages = [

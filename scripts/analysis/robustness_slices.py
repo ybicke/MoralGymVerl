@@ -1,12 +1,13 @@
 #!/usr/bin/env python3.11
 """Robustness runs R1/R2: per-state tables vs the fixed baseline + per-axis slices.
 
-R1 (2761025) randomizes presentation structure (matrix layout, prose
-variant, row/col role, payoff sampling) with fixed action3/action4
-labels; R2 (2761026) randomizes only the action labels (random letters).
-Both are `none` (student prompt) runs — the question is whether the base
-policy's state conditioning is a property of the game or of one frozen
-prompt string. R2 additionally gates dataset `randomize_tokens: true`.
+R1 (2761025) randomizes presentation structure (matrix layout, opener/
+closer label order, row/col role, payoff sampling) with fixed
+action3/action4 labels; R2 (2761026) randomizes only the action labels
+(random letters). Both are `none` (student prompt) runs — the question is
+whether the base policy's state conditioning is a property of the game or
+of one frozen prompt string. R2 additionally gates dataset
+`randomize_labels: true`.
 
 Per episode, the fabricated state is read from the saved prompt
 ("...you played <lab> and they played <lab>...") and mapped through that
@@ -172,7 +173,7 @@ def main() -> None:
                         default=Path("eval_results/teacher_signal/robustness"))
     parser.add_argument(
         "--baseline-dir", type=Path,
-        default=Path("eval_results/teacher_signal/stage1_single_round"
+        default=Path("eval_results/teacher_signal/single_round"
                      "/prisoners_dilemma__none_2759076"))
     args = parser.parse_args()
 

@@ -67,17 +67,17 @@ def scripted(monkeypatch):
     return _install
 
 
-def test_apply_protocol_stage1a():
+def test_apply_protocol_single_round():
     cfg = copy.deepcopy(BASE_CFG)
-    behavioral.apply_protocol(cfg, "stage1a")
+    behavioral.apply_protocol(cfg, "single_round")
     assert cfg["game"]["num_rounds"] == 1
     assert cfg["prompt"]["game_design"] == "hist"
     assert cfg["evaluation"]["opponents"] == ["random"]
-    assert cfg["evaluation"]["transcript"] is False
+    assert cfg["evaluation"]["conversation"] is False
 
 
-def test_stage1a_end_to_end_metrics(scripted):
-    """8 stage1a episodes; balanced cycle fixes the state order to
+def test_single_round_end_to_end_metrics(scripted):
+    """8 single_round episodes; balanced cycle fixes the state order to
     CC CD DC DD CC CD DC DD. Scripted moves (lenient parser:
     action3->C, action4->D, 'garbled'->illegal):
 
@@ -90,7 +90,7 @@ def test_stage1a_end_to_end_metrics(scripted):
     pol = scripted(["action3", "action4", "garbled", "action3",
                     "action4", "action3", "action3", "action4"])
     cfg = copy.deepcopy(BASE_CFG)
-    behavioral.apply_protocol(cfg, "stage1a")
+    behavioral.apply_protocol(cfg, "single_round")
 
     results = behavioral.evaluate(cfg, checkpoint=None)
     assert len(pol.prompts) == 8          # one decision per episode
@@ -99,8 +99,12 @@ def test_stage1a_end_to_end_metrics(scripted):
 
     assert r["opponent"] == "random"
     assert r["parse_failure_rate"] == pytest.approx(1 / 8)
-    # Episode coop rates over LEGAL moves: 1,0,0(no legal),1,0,1,1,0.
-    assert r["cooperation_rate"] == pytest.approx(4 / 8)
+    # Episode coop rates over LEGAL moves: 1,0,1,0,1,1,0 — ep 3 has no
+    # legal move, so it is EXCLUDED (not counted as 0) and reported in
+    # num_episodes_all_illegal.
+    assert r["cooperation_rate"] == pytest.approx(4 / 7)
+    assert r["num_episodes_all_illegal"] == 1
+    assert r["num_episodes_no_legal_pairs"] == 1
 
     sc = r["state_conditioning"]
     assert sc["(C,C)"] == {"p_C": 0.5, "p_D": 0.5, "p_illegal": 0.0, "n": 2}
@@ -113,16 +117,42 @@ def test_stage1a_end_to_end_metrics(scripted):
     assert r["cond_given_opp_c"]["p_C"] == pytest.approx(2 / 4)
     assert r["cond_given_opp_c"]["p_illegal"] == pytest.approx(1 / 4)
 
-    # Presentation is fixed Tennant-exact by default.
-    pres = r["episode_moves"][0]["presentation"]
+    # Presentation is fixed Tennant-exact by default — written once at the
+    # result level (per-episode only in randomized-presentation runs).
+    pres = r["presentation"]
     assert (pres["coop_label"], pres["defect_label"]) == ("action3", "action4")
     assert pres["matrix_layout"] == 0
+    assert "presentation" not in r["episode_moves"][0]
+
+
+def test_all_illegal_run_reports_missing_data(scripted):
+    """Llama-parse-fail scenario: every response garbled. Rates must be
+    None (missing data), not 0.0 ("always defected"), with the exclusion
+    counts reported — and the console summary must not crash on None."""
+    pol = scripted(["garbled"] * 4)
+    cfg = copy.deepcopy(BASE_CFG)
+    behavioral.apply_protocol(cfg, "single_round")
+    cfg["evaluation"]["num_episodes"] = 4
+
+    r = behavioral.evaluate(cfg, checkpoint=None)[0]
+    assert r["parse_failure_rate"] == 1.0
+    assert r["cooperation_rate"] is None
+    assert r["cooperation_rate_std"] is None
+    assert r["mutual_cooperation_rate"] is None
+    assert r["exploitation_rate"] is None
+    assert r["sucker_rate"] is None
+    assert r["mutual_defection_rate"] is None
+    assert r["num_episodes_all_illegal"] == 4
+    assert r["num_episodes_no_legal_pairs"] == 4
+    # Per-state table keeps illegal as its own category, n intact.
+    assert all(v["p_illegal"] == 1.0 and v["n"] == 1
+               for v in r["state_conditioning"].values())
 
 
 def test_teacher_wrapper_reaches_policy(scripted):
     pol = scripted(["action3"] * 4)
     cfg = copy.deepcopy(BASE_CFG)
-    behavioral.apply_protocol(cfg, "stage1a")
+    behavioral.apply_protocol(cfg, "single_round")
     cfg["evaluation"]["num_episodes"] = 4
     cfg["teacher"]["moral_value"] = "deontological"
 
@@ -140,7 +170,7 @@ def test_balanced_allocation_is_exact(scripted):
     # 12 episodes -> exactly 3 per state, deterministically.
     pol = scripted(["action3"] * 12)
     cfg = copy.deepcopy(BASE_CFG)
-    behavioral.apply_protocol(cfg, "stage1a")
+    behavioral.apply_protocol(cfg, "single_round")
     cfg["evaluation"]["num_episodes"] = 12
 
     r = behavioral.evaluate(cfg, checkpoint=None)[0]

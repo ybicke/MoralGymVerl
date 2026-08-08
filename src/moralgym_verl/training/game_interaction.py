@@ -128,6 +128,7 @@ class GameInteraction(BaseInteraction):
             show_horizon=state.get("show_horizon", False),
             minimal_parsing=state.get("minimal_parsing", False),
             reasoning=state.get("reasoning", False),
+            representation=state.get("representation", "matrix"),
         )
 
         agent_history = list(state.get("agent_history", []))

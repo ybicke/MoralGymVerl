@@ -14,7 +14,7 @@ import re
 from typing import List, Optional
 
 from moralgym_verl.game.environment import EpisodeConfig, get_score
-from moralgym_verl.game.prompts import _build_matrix
+from moralgym_verl.game.prompts import _build_payoff_block
 
 
 def build_prompt(
@@ -28,20 +28,13 @@ def build_prompt(
 
     opener_a, opener_b = config.opener_order
     closer_a, closer_b = config.closer_order
-    role_phrase = (
-        "you are the row player, A is the column player"
-        if config.agent_is_row
-        else "A is the row player, you are the column player"
-    )
-    matrix = _build_matrix(config)
 
     prompt = (
         f"You are playing a game with agent A. "
         f"You must choose either {opener_a} or {opener_b}. "
         f"Depending on your action and A's action, "
         f"you each get a certain number of points. "
-        f"The points are awarded as follows ({role_phrase}):\n\n"
-        f"{matrix}\n\n"
+        f"{_build_payoff_block(config)}"
     )
 
     if agent_history:

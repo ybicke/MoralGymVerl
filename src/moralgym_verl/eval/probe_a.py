@@ -14,8 +14,8 @@ comparable to behavioral cooperation rates; trust the deltas and JSDs,
 where the seam is identical on both sides. Forced token ids are recorded
 in metadata for audit.
 
-Writes logprob_a.json into --output-dir. Usage (container, 1 GPU):
-    python3 -m moralgym_verl.eval.probe_answer_token \
+Writes probe_a.json into --output-dir. Usage (container, 1 GPU):
+    python3 -m moralgym_verl.eval.probe_a \
         --config configs/eval/teacher_signal_9b.yaml \
         --moral-value deontological --game prisoners_dilemma \
         --output-dir <run_dir>
@@ -56,7 +56,9 @@ def answer_token_probe(model, tokenizer, config, wrapper) -> Dict:
         results[state] = {
             "logodds_student": lo_s,
             "logodds_teacher": lo_t,
-            "delta": lo_t - lo_s,
+            # Same quantity probe B calls answer_delta (teacher - student
+            # shift on the answer token) — one name across both probes.
+            "answer_delta": lo_t - lo_s,
             "p_coop_student": 1 / (1 + math.exp(-lo_s)),
             "p_coop_teacher": 1 / (1 + math.exp(-lo_t)),
             "jsd": two_way_jsd(lp_cs, lp_ds, lp_ct, lp_dt),
@@ -76,8 +78,12 @@ def main() -> None:
                              "(the probe compares against the plain prompt "
                              "internally).")
     parser.add_argument("--game", default=None, choices=sorted(FIXED_PAYOFFS))
+    parser.add_argument("--representation", default=None,
+                        choices=["matrix", "prose", "list"],
+                        help="Override prompt.representation (payoff block "
+                             "rendering) for the probed cell.")
     parser.add_argument("--output-dir", default="results",
-                        help="Run directory; writes logprob_a.json into it.")
+                        help="Run directory; writes probe_a.json into it.")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO,
@@ -89,14 +95,14 @@ def main() -> None:
     logger.info("Probe A (answer-token) over %d states ...", len(PROBE_STATES))
     probe_a = answer_token_probe(model, tokenizer, config, wrapper)
     for state, r in probe_a.items():
-        logger.info("  %s: p(C) %.2f -> %.2f  (delta logodds %+.2f, jsd %.4f)",
+        logger.info("  %s: p(C) %.2f -> %.2f  (answer_delta logodds %+.2f, jsd %.4f)",
                     state, r["p_coop_student"], r["p_coop_teacher"],
-                    r["delta"], r["jsd"])
+                    r["answer_delta"], r["jsd"])
 
     # Seam-caveat audit trail: the exact ids each label was forced as.
     metadata = {
         **metadata,
-        "probe": "logprob_a_answer_token",
+        "probe": "probe_a",
         "continuation_token_ids": {
             f" {label}": tokenizer(
                 f" {label}", add_special_tokens=False
@@ -106,9 +112,9 @@ def main() -> None:
     }
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    path_a = out_dir / "logprob_a.json"
+    path_a = out_dir / "probe_a.json"
     with open(path_a, "w") as f:
-        json.dump({"metadata": metadata, "answer_token_probe": probe_a},
+        json.dump({"metadata": metadata, "probe_a": probe_a},
                   f, indent=2)
     logger.info("Probe A results saved to %s", path_a)
 

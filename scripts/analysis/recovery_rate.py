@@ -5,7 +5,7 @@ Single-round state tables can't see dynamics — whether a defection
 spiral ends, whether forgiveness is farmable, whether cooperation decays
 against a saint. This reads the 5-round move sequences recorded in
 behavioral.json (`episode_moves`, strict parser live at runtime) for
-every transcript run under --eval-dir and prints, per condition (moral
+every conversation-mode run under --eval-dir and prints, per condition (moral
 value) x opponent:
 
   1. Per-round cooperation rate (recomputed from episode_moves; illegal
@@ -23,7 +23,7 @@ value) x opponent:
 
 Usage (login node):
   cd ~/MoralGymVerl && /usr/bin/python3.11 scripts/analysis/recovery_rate.py \
-      [--eval-dir eval_results/teacher_signal/stage1b_multiturn]
+      [--eval-dir eval_results/teacher_signal/multi_round]
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ def load_runs(eval_dir: Path) -> dict[str, dict]:
     for path in sorted(eval_dir.rglob("behavioral.json")):
         data = json.loads(path.read_text())
         meta = data["metadata"]
-        if not meta.get("transcript") and meta.get("num_rounds", 1) == 1:
+        if not meta.get("conversation") and meta.get("num_rounds", 1) == 1:
             continue
         stamp = meta.get("timestamp", "")
         value = meta.get("moral_value", "none")
@@ -146,8 +146,9 @@ def exploitation_tables(runs: dict[str, dict], num_rounds: int) -> None:
             episodes = block["episode_moves"]
             per_round = [per_round_rate(episodes, "C", r)
                          for r in range(num_rounds)]
+            sucker = block["sucker_rate"]
             rows.append([value] + per_round
-                        + [f"{block['sucker_rate']:.0%}"])
+                        + [f"{sucker:.0%}" if sucker is not None else "n/a"])
         _print_table(["moral value"]
                      + [f"r{r + 1}" for r in range(num_rounds)]
                      + ["overall sucker"], rows)
@@ -181,12 +182,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--eval-dir", type=Path,
-        default=Path("eval_results/teacher_signal/stage1b_multiturn"))
+        default=Path("eval_results/teacher_signal/multi_round"))
     args = parser.parse_args()
 
     runs = load_runs(args.eval_dir)
     if not runs:
-        raise SystemExit(f"No transcript runs under {args.eval_dir}")
+        raise SystemExit(f"No conversation-mode runs under {args.eval_dir}")
     num_rounds = max(len(ep["agent"]) for opps in runs.values()
                      for block in opps.values()
                      for ep in block["episode_moves"])

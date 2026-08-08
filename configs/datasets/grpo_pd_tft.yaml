@@ -25,9 +25,9 @@ prompt:
   hist_coop_bias: 0.5
   # tokens fixed at action1/action2 (abl4: layout/payoff/role randomization
   # carries the robustness; fixed labels are scaffold, not shortcut)
-  randomize_tokens: false
+  randomize_labels: false
   coop_label: action1
   defect_label: action2
   randomize_layout: true
-  randomize_prose: true
+  randomize_label_order: true
   randomize_role: true

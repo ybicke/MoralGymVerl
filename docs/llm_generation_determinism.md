@@ -107,7 +107,7 @@ at twice.
 | temperature | step 2 | volume dial: T=0 none (greedy), T=1 model's own distribution, higher = more |
 | seed (`torch.manual_seed`) | step 4 | none added/removed — makes the u-sequence repeatable |
 | numerics (kernels, rounding order, TF32, hardware) | step 1 | unwanted last-bit jitter in logits -> boundaries shift ~1e-6 |
-| `torch.use_deterministic_algorithms(True)` + `CUBLAS_WORKSPACE_CONFIG` | step 1 | removes jitter within one hardware+software stack (slower); no help across nodes/versions |
+| `torch.use_deterministic_algorithms(True)` + `CUBLAS_WORKSPACE_CONFIG` | step 1 | swaps torch-governed kernels for ordered ones (~30% slower); covers only torch's own ops — did NOT restore replay here (§5) |
 
 ## 3. Where the numerics jitter comes from
 
@@ -155,29 +155,80 @@ same dart falls on different sides -> different token.
 
 ## 5. Case study (MoralGymVerl, 2026-08)
 
-Two jobs, identical code/command/seed(42)/T=1.0, different nodes
-(nid007490 vs nid006136): prompts 200/200 byte-identical; only
-episodes 0–1 byte-equal; first flip at ep 2 token 99 — draw-count
-accounting proved both RNGs were in the identical state and drew the
-same u, yet different tokens came out => the distributions themselves
-differed => numerics, not seeding (H4 ruled out). Deterministic layers
-(probe A: teacher-forced answer-token logprobs, prefill path, no
-sampling) replay byte-exactly across jobs, nodes, AND code versions.
-Behavioral effect: none-(D,C) p_C 0.40 vs 0.46 (July: 0.66) — pooled
-0.51, n=150. Open: H1 (node-deterministic) vs H2 (per-job nondet.) vs
-H3 (env drift) — pinned-node rerun job 3000274 tests this; launcher
-now logs an env fingerprint (driver, torch/cuda/cudnn, TF32 flags).
+All runs: identical code, command, seed 42, T=1.0, 200 episodes of
+one-shot PD (`none` arm). Setup facts: prompts byte-identical 200/200
+in every pair; draw-count accounting proved the RNGs were in the
+identical state at the first flip and drew the same u, yet different
+tokens came out — so the *distributions* differed (numerics, not
+seeding). The experiment matrix:
 
-## 6. Practical protocol
+| pair (jobs) | varies | byte-equal | conclusion |
+|---|---|---|---|
+| 2991881 vs 2993459 | node, day | 2/200 | the original mystery |
+| 2991881 vs 3000274 | day (same node) | 4/200 | node pinning doesn't fix it |
+| 3000274 vs 3002338 | nothing (same node, same day) | 5/200 | per-job nondeterminism — not env drift |
+| 3005008 vs 3005009 | nothing + torch det flags ON | 0/200 | source is outside torch's determinism scope |
+
+The det pair had `use_deterministic_algorithms(True, warn_only)` +
+`CUBLAS_WORKSPACE_CONFIG=:4096:8` verified engaged and produced zero
+nondeterministic-op warnings — torch considered every governed op
+deterministic, and the runs still diverged. Remaining candidates,
+both outside the flag's reach: flash_attn custom kernels (torch.library
+ops; the model demonstrably runs them) and per-job
+allocator-address/workspace differences steering cuBLAS kernel
+selection. Cost of det mode: ~30% wall-clock, for nothing here.
+
+Two mechanism confirmations along the way:
+
+- **Branches:** the ep-2 flip is binary (" want" → 492-char vs "'re" →
+  530-char continuation), and runs from different nodes and days land
+  byte-exactly on one branch or the other — all runs share the seeded
+  u-stream, so after a flip each branch replays identically until the
+  next near-tie.
+- **Deterministic layers are exempt:** probe A (teacher-forced
+  answer-token logprobs, prefill, no sampling) replays byte-exactly
+  across jobs, nodes, and code versions.
+
+Science outcome: seven (D,C) p_C estimates — 0.66 (July), 0.40, 0.46,
+0.50, 0.56, 0.46, 0.44 — pool to ≈ 0.50 (n=350); July's 0.66 was a
+tail draw, exactly the single-run trap the protocol below prevents.
+
+## 6. Conclusion — and how it sits vs. the literature
+
+**On this stack (HF batch-1 generate, bf16, GH200), sampled generation
+is never bitwise reproducible: not with a fixed seed, not on a pinned
+node, not with torch's determinism flags.** Per-job floating-point
+jitter enters through kernels outside torch's control, and one
+near-tie flip per ~300 tokens is enough to fork the run. Only
+sampling-free computation replays exactly.
+
+Against the standard references:
+
+- **PyTorch docs — confirmed:** they promise nothing, and warn that
+  the determinism flags cover only torch's own ops. Our flash_attn
+  finding is a live instance of that gap.
+- **Thinking Machines ("Defeating Nondeterminism in LLM Inference") —
+  consistent, but a different channel:** their headline cause is batch
+  invariance (batch-size-dependent reduction orders in serving
+  stacks). At fixed batch-1 that mechanism is excluded — our case
+  documents the less-discussed per-job kernel/address variability.
+- **cuBLAS's run-to-run bitwise guarantee — not violated, but
+  insufficient:** it covers cuBLAS routines under fixed conditions,
+  not the whole generate path (custom attention kernels; selection
+  heuristics whose inputs differ per job).
+- **Known fixes exist** (batch-invariant kernels, SGLang deterministic
+  inference) if bytes are ever truly needed — but for measuring a
+  behavioral distribution they solve a non-problem; the statistical
+  protocol is the right tool, which is also what the literature
+  recommends.
+
+## 7. Practical protocol
 
 - **Sampled behavioral evals measure a distribution** (e.g. p_C);
   greedy/T=0 cannot — it collapses every identical prompt to one
   answer. Sampling "errors" ARE the measurement.
-- **Seeds do not guarantee bitwise replay** of sampled generation
-  across jobs/nodes — they fix the darts, not the board. Expect exact
-  reproducibility only for deterministic layers (teacher-forced
-  scoring) or, at best, within one pinned hardware+software stack with
-  determinism flags on.
+- **Seeds fix the darts, not the board:** use them for comparability
+  and forensics, never as a reproducibility guarantee.
 - **Statistics over bytes:** run k replicates with different seeds
   (42, 43, 44, ...), pool, report error bars. A single n=50 cell has
   SE ~0.07 at p=0.5 — run-to-run spread of that size is expected.

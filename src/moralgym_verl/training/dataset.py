@@ -58,7 +58,7 @@ def _sample_config_from_yaml(cfg: dict[str, Any]) -> tuple[EpisodeConfig, dict[s
         T, R, P, S = p["T"], p["R"], p["P"], p["S"]
 
     # Labels
-    if prompt_cfg.get("randomize_tokens", False):
+    if prompt_cfg.get("randomize_labels", False):
         coop_label, defect_label = sample_labels()
     else:
         coop_label = prompt_cfg.get("coop_label", "action1")
@@ -66,12 +66,12 @@ def _sample_config_from_yaml(cfg: dict[str, Any]) -> tuple[EpisodeConfig, dict[s
 
     # Presentation randomization
     randomize_layout = prompt_cfg.get("randomize_layout", False)
-    randomize_prose = prompt_cfg.get("randomize_prose", randomize_layout)
+    randomize_label_order = prompt_cfg.get("randomize_label_order", randomize_layout)
     randomize_role = prompt_cfg.get("randomize_role", randomize_layout)
     matrix_layout = random.randint(0, 3) if randomize_layout else 0
     opener_order, closer_order, agent_is_row = sample_prompt_randomization(
         coop_label, defect_label,
-        randomize_prose=randomize_prose,
+        randomize_label_order=randomize_label_order,
         randomize_role=randomize_role,
     )
 
@@ -89,6 +89,7 @@ def _sample_config_from_yaml(cfg: dict[str, Any]) -> tuple[EpisodeConfig, dict[s
         show_horizon=prompt_cfg.get("show_horizon", False),
         minimal_parsing=prompt_cfg.get("minimal_parsing", False),
         reasoning=prompt_cfg.get("reasoning", False),
+        representation=prompt_cfg.get("representation", "matrix"),
     )
 
     # Game state for reward_fn: same fields as NeMo-RL's extra_env_info
@@ -106,6 +107,7 @@ def _sample_config_from_yaml(cfg: dict[str, Any]) -> tuple[EpisodeConfig, dict[s
         "show_horizon": config.show_horizon,
         "minimal_parsing": config.minimal_parsing,
         "reasoning": config.reasoning,
+        "representation": config.representation,
         "lambda_val": float(reward_cfg.get("lambda", 0.0)),
         "intrinsic": reward_cfg.get("intrinsic", "none"),
         "intrinsic_timing": reward_cfg.get("intrinsic_timing", "backward"),

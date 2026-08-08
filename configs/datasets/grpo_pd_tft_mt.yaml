@@ -20,7 +20,7 @@ reward:
 prompt:
   game_design: hist
   hist_coop_bias: 0.75
-  randomize_tokens: true
+  randomize_labels: true
   randomize_layout: true
-  randomize_prose: true
+  randomize_label_order: true
   randomize_role: true

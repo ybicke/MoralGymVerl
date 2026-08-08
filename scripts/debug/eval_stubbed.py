@@ -17,7 +17,7 @@ directly in behavioral.py / trajectory.py / prompts_reasoning.py.
     PYTHONPATH=src /usr/bin/python3.11 scripts/debug/eval_stubbed.py [behavioral.py flags]
 
 Extra flags are forwarded to behavioral.main(), e.g.:
-    ... eval_stubbed.py --protocol stage1a --num-episodes 8
+    ... eval_stubbed.py --protocol single_round --num-episodes 8
     ... eval_stubbed.py --moral-value deontological --opponent tit_for_tat
 """
 

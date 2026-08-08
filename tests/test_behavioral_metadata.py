@@ -40,7 +40,7 @@ def test_minimal_config_never_raises_and_defaults():
     assert md["training_seed"] is None
     assert md["num_episodes"] == 20
     assert md["game_reward"] == "raw"
-    assert md["transcript"] is False
+    assert md["conversation"] is False
     assert md["state_design"] == "balanced"
     assert all(v == "fixed" for v in md["eval_presentation"].values())
     json.dumps(md)   # the block is written verbatim into behavioral.json

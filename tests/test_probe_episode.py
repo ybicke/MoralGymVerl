@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 import torch
 
-import moralgym_verl.eval.probe_reasoning_trace as prt
+import moralgym_verl.eval.probe_b as prt
 from moralgym_verl.eval.config import build_eval_config
 from moralgym_verl.game.prompts import parse_failure_feedback
 

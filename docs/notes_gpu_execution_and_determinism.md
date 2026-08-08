@@ -152,9 +152,19 @@ inputs — or something else in the execution environment — evidently
 differ across jobs/nodes even at fixed code. What still holds: within
 one job the computation is fixed, and deterministic layers (prefill
 teacher-forced scoring, probe A) replay byte-exactly across jobs,
-nodes and code versions. Whether a single *node* replays generation
-bit-exactly (H1) or not even that (H2: per-job nondeterminism; H3: env
-drift) is open — pinned-node run 3000274 tests it; see
+nodes and code versions.
+
+**Resolved 2026-08-05 (pinned-node experiments): H2 — per-job
+nondeterminism.** Same-node same-day flags-off pair: 5/200 byte-equal.
+Pair with torch.use_deterministic_algorithms(True) +
+CUBLAS_WORKSPACE_CONFIG=:4096:8: 0/200, with zero nondeterministic-op
+warnings — the jitter lives outside torch's determinism scope.
+Candidates consistent with all evidence: flash_attn custom kernels
+(torch.library ops the flag doesn't govern; the model demonstrably
+runs them) and per-job allocator-address/workspace differences feeding
+the cuBLAS selection heuristic (this section's mechanism, likewise
+untouched by the flag). Bitwise replay of sampled generation is
+unattainable on this stack; full account in
 `llm_generation_determinism.md` §5.
 
 ---

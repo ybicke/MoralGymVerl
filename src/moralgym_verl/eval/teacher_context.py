@@ -60,7 +60,7 @@ def wrap_latest_user(messages: list, wrapper) -> list:
     """Copy of the transcript with ONLY the last user message wrapped
     (wrapper: str -> str). Mirrors ray_trainer._build_teacher_message:
     plain student transcript, template on the final user turn. Used by
-    transcript mode as the 'latest' wrap position."""
+    conversation mode as the 'latest' wrap position."""
     if not messages or messages[-1].get("role") != "user":
         raise ValueError("transcript must end with a user message")
     wrapped = list(messages)
@@ -75,7 +75,7 @@ def wrap_first_user(messages: list, wrapper) -> list:
     episode's initial message); every later round lives in the response
     region, reused verbatim — the loss needs identical suffix tokens in
     both passes, so only the prefix can differ. Default wrap position for
-    transcript mode; wrap_latest_user is the persistent-context ablation."""
+    conversation mode; wrap_latest_user is the persistent-context ablation."""
     if not messages or messages[0].get("role") != "user":
         raise ValueError("transcript must start with a user message")
     wrapped = list(messages)

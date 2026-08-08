@@ -96,13 +96,14 @@ class EpisodeConfig:
 
     # v2 presentation axes — sampled once per episode alongside the fields
     # above (see moralgym_verl.game.prompts.sample_prompt_randomization). They
-    # close the prose-position shortcut empirically found in v1 (see
+    # close the sentence-position shortcut empirically found in v1 (see
     # docs/experimental/findings.md).
     #   opener_order / closer_order: order of the two labels in the opener
-    #       and closer sentences, independently shuffled when randomized.
-    #   agent_is_row: True → agent plays rows, prose says "you are the row
-    #       player". False → matrix transposed, prose flipped. Combined
-    #       with matrix_layout (0–3), covers all 8 D₄ symmetries.
+    #       and closer sentences, independently shuffled when the
+    #       label_order axis is randomized.
+    #   agent_is_row: True → agent plays rows, the opener says "you are the
+    #       row player". False → matrix transposed, phrasing flipped.
+    #       Combined with matrix_layout (0–3), covers all 8 D₄ symmetries.
     # Defaults = identity (Tennant-exact). Populated via
     # `sample_prompt_randomization` on the randomization paths.
     opener_order: Tuple[str, str] = ("", "")
@@ -131,6 +132,24 @@ class EpisodeConfig:
     # `Answer: <label>`, no "Do not explain"). Pair with max_new_tokens≥64
     # and stop_strings=null in YAML.
     reasoning: bool = False
+
+    # Payoff-representation variant for the middle block of the prompt
+    # (see prompts._build_payoff_block):
+    #   "matrix" (default) — markdown 2x2 payoff table (Tennant-exact).
+    #   "prose"  — the four outcomes as "If you choose X and A chooses Y,
+    #              you get p points and A gets q points." sentences in one
+    #              flowing paragraph (maximal representational distance
+    #              from the grid: outcomes must be bound from syntax).
+    #   "list"   — the same sentences as a bulleted list (keeps one visual
+    #              slot per outcome; intermediate between matrix and prose).
+    # The presentation axes are reinterpreted, not disabled: matrix_layout
+    # picks the sentence order (row-major traversal of the same layout,
+    # 4 orders — NOT all 24 permutations) and agent_is_row picks the
+    # choice-clause subject order. The payoff clause stays you-first in
+    # every variant, mirroring the matrix cells' fixed "(your_pts,
+    # opp_pts)" order. NOT related to the label_order presentation axis,
+    # which shuffles opener/closer label order.
+    representation: str = "matrix"
 
     @property
     def u_max(self) -> int:

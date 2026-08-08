@@ -53,8 +53,8 @@ evaluation:
   # Action line (smoke test 2750846) — the lenient parser fallback then
   # guesses from incomplete reasoning. 512 lets traces finish.
   max_new_tokens: 512
-  # Presentation axes left at Tennant-exact defaults (fixed tokens/layout/
-  # prose/role/payoffs) for comparability with existing base-model evals.
+  # Presentation axes left at Tennant-exact defaults (fixed labels/layout/
+  # label_order/role/payoffs) for comparability with existing base-model evals.
 
 # Rewards don't drive anything at eval; kept for metric parity with training.
 reward:
@@ -62,8 +62,8 @@ reward:
   lambda: 0.75
   game_reward: normalized
 
-probe:
-  # Probe B (eval/probe_reasoning_trace.py): reasoning traces sampled per
+probe_b:
+  # Probe B (eval/probe_b.py): reasoning traces sampled per
   # state for the trace-level distillation-pressure metric (--num-traces
   # overrides). 32 = the n>=32 floor for trace-level claims (n=8 results
   # don't survive resampling — see the retracted DC +3.98).
@@ -72,7 +72,7 @@ probe:
 teacher:
   # Swept via --moral-value; 'none' = plain student prompt (baseline anchor).
   moral_value: none
-  # Transcript mode only: where the moral value sits in the episode.
+  # Conversation mode only: where the moral value sits in the episode.
   #   first  (default) — episode's first user turn only. TRAINING-EXACT:
   #          multi-turn SDPO wraps raw_prompt (initial message); later
   #          rounds are shared response-region tokens and cannot carry

@@ -142,6 +142,7 @@ def _config_from_state(state: dict) -> EpisodeConfig:
         show_horizon=state.get("show_horizon", False),
         minimal_parsing=state.get("minimal_parsing", False),
         reasoning=state.get("reasoning", False),
+        representation=state.get("representation", "matrix"),
     )
 
 

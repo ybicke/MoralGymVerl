@@ -8,13 +8,13 @@ shift with the SAME reasoning held fixed (trace truncated at its final
 `Action:` marker via the parser's own find_action_marker).
 
 --states fabricated (default): one decision per PROBE_STATES prior round
--> logprob_b.json (+traces). --states episode: live multi-turn episodes,
+-> probe_b.json (+traces). --states episode: live multi-turn episodes,
 value wrapped ONLY into the first user message (training-exact for
 multi-turn SDPO); per-round deltas show signal decay
--> logprob_multiturn.json (+traces).
+-> probe_b_episode.json (+traces).
 
 Usage (container, 1 GPU):
-    python3 -m moralgym_verl.eval.probe_reasoning_trace \
+    python3 -m moralgym_verl.eval.probe_b \
         --config configs/eval/teacher_signal_9b.yaml \
         --moral-value deontological --game prisoners_dilemma \
         --states fabricated --output-dir <run_dir>
@@ -214,7 +214,7 @@ def score_rounds(
     model, tokenizer, config, rounds: List[Dict], alpha: float,
 ) -> List[Dict]:
     """Phase 2 — scoring: dual teacher-forced pass per stored round;
-    returns the per-round records written to logprob_multiturn."""
+    returns the per-round records written to probe_b_episode."""
     records: List[Dict] = []
     for r in rounds:
         teacher_ids = chat_prefix_messages(
@@ -252,6 +252,10 @@ def main() -> None:
                              "(the probe compares against the plain prompt "
                              "internally).")
     parser.add_argument("--game", default=None, choices=sorted(FIXED_PAYOFFS))
+    parser.add_argument("--representation", default=None,
+                        choices=["matrix", "prose", "list"],
+                        help="Override prompt.representation (payoff block "
+                             "rendering) for the probed cell.")
     parser.add_argument("--states", default="fabricated",
                         choices=["fabricated", "episode"],
                         help="fabricated: single decision per PROBE_STATES "
@@ -260,7 +264,7 @@ def main() -> None:
     parser.add_argument("--num-traces", type=int, default=None,
                         help="[fabricated] traces per state (default from "
                              "probe.num_traces, else 8).")
-    parser.add_argument("--episodes", type=int, default=8,
+    parser.add_argument("--num-episodes", type=int, default=8,
                         help="[episode] student episodes to generate and score")
     parser.add_argument("--opponent", default="tit_for_tat",
                         help="[episode] opponent for the probe episodes")
@@ -272,8 +276,8 @@ def main() -> None:
                              "for comparability runs. Teacher-forced deltas "
                              "themselves are temperature-independent.")
     parser.add_argument("--output-dir", default="results",
-                        help="Run directory; writes logprob_b.json (+traces) "
-                             "or logprob_multiturn.json (+traces) into it.")
+                        help="Run directory; writes probe_b.json (+traces) "
+                             "or probe_b_episode.json (+traces) into it.")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO,
@@ -300,7 +304,7 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if args.states == "fabricated":
-        probe_cfg = cfg.get("probe") or {}
+        probe_cfg = cfg.get("probe_b") or {}
         num_traces = (args.num_traces if args.num_traces is not None
                       else probe_cfg.get("num_traces", 8))
         trace_log: list = []
@@ -319,12 +323,12 @@ def main() -> None:
                         r["token_jsd"]["mean"],
                         r["answer_delta"]["mean"])
 
-        path_b = out_dir / "logprob_b.json"
+        path_b = out_dir / "probe_b.json"
         with open(path_b, "w") as f:
-            json.dump({"metadata": {**metadata, "probe": "logprob_b_trace",
+            json.dump({"metadata": {**metadata, "probe": "probe_b",
                                     "num_traces": num_traces},
-                       "trace_probe": probe_b}, f, indent=2)
-        traces_path = out_dir / "logprob_b.traces.jsonl"
+                       "probe_b": probe_b}, f, indent=2)
+        traces_path = out_dir / "probe_b.traces.jsonl"
         with open(traces_path, "w") as f:
             for rec in trace_log:
                 f.write(json.dumps(rec, ensure_ascii=False) + "\n")
@@ -334,13 +338,13 @@ def main() -> None:
 
     # --states episode: per-round signal decay over live episodes.
     logger.info("Probe B (episode states): %d episodes x %d rounds vs %s ...",
-                args.episodes, config.num_rounds, opponent)
+                args.num_episodes, config.num_rounds, opponent)
     # Phase separation across ALL episodes (training's rollout->trainer
     # split): every episode is played before any scoring pass runs.
     episode_rounds = [
         play_episode(model, tokenizer, config, wrapper,
                      max_new_tokens, temperature)
-        for _ in range(args.episodes)
+        for _ in range(args.num_episodes)
     ]
     all_records: List[Dict] = []
     for ep, rounds in enumerate(episode_rounds):
@@ -363,15 +367,16 @@ def main() -> None:
         logger.info("  round %d: token_delta %s  token_jsd %s  answer_delta %s",
                     rnd, td["mean"], tj["mean"], ad["mean"])
 
-    with open(out_dir / "logprob_multiturn.json", "w") as f:
+    with open(out_dir / "probe_b_episode.json", "w") as f:
         json.dump({
-            "metadata": {**metadata, "probe": "logprob_multiturn_decay",
-                         "opponent": opponent, "episodes": args.episodes,
+            "metadata": {**metadata, "probe": "probe_b_episode",
+                         "opponent": opponent,
+                         "num_episodes": args.num_episodes,
                          "num_rounds": config.num_rounds,
                          "wrap_position": "first"},
             "per_round": per_round,
         }, f, indent=2)
-    with open(out_dir / "logprob_multiturn.traces.jsonl", "w") as f:
+    with open(out_dir / "probe_b_episode.traces.jsonl", "w") as f:
         for r in all_records:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
     logger.info("Saved to %s", out_dir)

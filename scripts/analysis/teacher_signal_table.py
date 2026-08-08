@@ -2,8 +2,8 @@
 """Session 1 deliverable: teacher-signal tables per game and moral value.
 
 Reads eval_results/teacher_signal/*.json (behavioral runs from
-eval_teacher_signal.sh, probe JSONs from eval/probe_answer_token.py and
-eval/probe_reasoning_trace.py), keeps the
+eval_teacher_signal.sh, probe JSONs from eval/probe_a.py and
+eval/probe_b.py), keeps the
 newest run per (game, moral_value), and prints three markdown tables per
 game:
 
@@ -55,11 +55,11 @@ def load_latest(eval_dir: Path):
             data = json.load(f)
         meta = data.get("metadata", {})
         # Representation-robustness runs (any non-fixed presentation axis)
-        # and multi-turn transcript runs are listed separately, not mixed
+        # and multi-round conversation runs are listed separately, not mixed
         # into the standard single-round tables — point --eval-dir at
         # their stage subdirectory to tabulate them on their own.
         presentation = meta.get("eval_presentation") or {}
-        if any(v != "fixed" for v in presentation.values()) or meta.get("transcript"):
+        if any(v != "fixed" for v in presentation.values()) or meta.get("conversation"):
             randomized.append(str(path.relative_to(eval_dir)))
             continue
         key = (meta.get("game_type"), meta.get("moral_value", "none"))
@@ -67,9 +67,9 @@ def load_latest(eval_dir: Path):
         targets = []
         if "opponents" in data:
             targets.append(behavioral)
-        if data.get("answer_token_probe"):
+        if data.get("probe_a"):
             targets.append(probes_a)
-        if data.get("trace_probe"):
+        if data.get("probe_b"):
             targets.append(probes_b)
         for target in targets:
             if key not in target or stamp > target[key][0]:
@@ -149,9 +149,9 @@ def probe_tables(game, probes_a, probes_b) -> None:
     rows = []
     for mv in sorted(keys):
         a = (probes_a.get((game, mv)) or (None, None, {}))[2].get(
-            "answer_token_probe") or {}
+            "probe_a") or {}
         b = (probes_b.get((game, mv)) or (None, None, {}))[2].get(
-            "trace_probe") or {}
+            "probe_b") or {}
         row = [mv]
         for state in PROBE_STATES:
             entry = a.get(state)

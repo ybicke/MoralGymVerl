@@ -3,8 +3,8 @@
 Machinery, not an experiment: chat prefixes, teacher-forced logprobs,
 answer log-odds, JSDs, trace sampling, delta stats, and `probe_setup`
 (shared CLI/config/model setup keeping the probe entry points in
-lockstep). The experiments live in probe_answer_token.py (A) and
-probe_reasoning_trace.py (B).
+lockstep). The experiments live in probe_a.py (A) and
+probe_b.py (B).
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ PROBE_STATES: List[Tuple[str, List[str], List[str]]] = [
     ("DD", ["D"], ["D"]),   # mutual defection
 ]
 
-_PRESENTATION_AXES = ("tokens", "layout", "prose", "role", "payoffs")
+_PRESENTATION_AXES = ("labels", "layout", "label_order", "role", "payoffs")
 
 
 def force_fixed_presentation(cfg: Dict) -> List[str]:
@@ -214,6 +214,11 @@ def probe_setup(args, opponent: str = "tit_for_tat"):
     if args.game is not None:
         cfg["game"]["type"] = args.game
         cfg["game"]["payoffs"] = dict(FIXED_PAYOFFS[args.game])
+    # Representation is a prompt-block variant, not one of the five
+    # force_fixed_presentation axes: probes on a prose/list cell must
+    # render that cell's payoff block, so it passes through untouched.
+    if getattr(args, "representation", None):
+        cfg.setdefault("prompt", {})["representation"] = args.representation
 
     moral_text = get_moral_value(args.moral_value)
     if not moral_text:
@@ -248,6 +253,7 @@ def probe_setup(args, opponent: str = "tit_for_tat"):
         "base_model": cfg["policy"]["model_name"],
         "checkpoint": args.checkpoint,
         "game_type": cfg["game"]["type"],
+        "representation": cfg.get("prompt", {}).get("representation", "matrix"),
         "teacher_template_source": teacher_cfg.get("template_source"),
         "eval_seed": seed,
         "timestamp": datetime.now().isoformat(),

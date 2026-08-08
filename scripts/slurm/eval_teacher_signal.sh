@@ -20,15 +20,17 @@
 #   sbatch scripts/slurm/eval_teacher_signal.sh <game> <moral_value> [num_episodes]
 #   sbatch scripts/slurm/eval_teacher_signal.sh prisoners_dilemma deon_no_exploit
 #
-# Stage 1a sweep (single fabricated-history round, per-state policy):
+# single_round sweep (single fabricated-history round, per-state policy):
 #   for mv in none no_exploit_forgive deon_no_exploit consequentialist; do
 #     sbatch scripts/slurm/eval_teacher_signal.sh prisoners_dilemma $mv 200 \
-#         --num-rounds 1 --game-design hist --opponent random
+#         --protocol single_round
 #   done
-# Stage 1b (multi-turn dynamics, config defaults): drop the extra flags.
+# multi_round (multi-round dynamics, config defaults): drop the extra flags.
 #
 # Env toggles: EVAL_GROUP=<dir> (results subdir), RUN_PROBES=off,
-# RUN_MT_PROBE=on, PROBE_TEMPERATURE=<T> (probe-B trace sampling; config
+# RUN_PROBE_B_EPISODE=on, REPRESENTATION=matrix|prose|list (payoff-block
+# rendering, forwarded to behavioral + all probes; default matrix),
+# PROBE_TEMPERATURE=<T> (probe-B trace sampling; config
 # default 0.7 = training parity, pass 1.0 for July-comparable runs —
 # behavioral temperature is a separate --temperature forwarded arg).
 # =============================================================================
@@ -54,12 +56,12 @@ exec > "${LOG_BASE}/slurm/${RUN_NAME}.out" 2> "${LOG_BASE}/slurm/${RUN_NAME}.err
 
 CONFIG="configs/eval/teacher_signal_9b.yaml"
 # Results layout: eval_results/teacher_signal/<EVAL_GROUP>/<cell>/
-#   EVAL_GROUP names the experiment stage (stage1_single_round,
-#   stage1b_multiturn, robustness, smoke, ...; default: adhoc). Set at
+#   EVAL_GROUP names the experiment campaign (single_round, multi_round,
+#   robustness, smoke, ...; default: adhoc). Set at
 #   submit time:  EVAL_GROUP=robustness sbatch ...
 # One directory per run cell; filenames inside say what they contain:
 #   behavioral.json / behavioral.responses.jsonl
-#   logprob_a.json / logprob_b.json / logprob_b.traces.jsonl
+#   probe_a.json / probe_b.json / probe_b.traces.jsonl
 EVAL_GROUP="${EVAL_GROUP:-adhoc}"
 RUN_DIR="${PROJECT_ROOT}/eval_results/teacher_signal/${EVAL_GROUP}/${GAME}__${MORAL_VALUE}_${SLURM_JOB_ID}"
 OUTPUT="${RUN_DIR}/behavioral.json"
@@ -71,6 +73,7 @@ echo "Job ID:       ${SLURM_JOB_ID}"
 echo "Node:         ${SLURM_NODELIST}"
 echo "Game:         ${GAME}"
 echo "Moral value:  ${MORAL_VALUE}"
+echo "Representation: ${REPRESENTATION:-matrix (default)}"
 echo "Episodes:     ${NUM_EPISODES}"
 echo "Output:       ${OUTPUT}"
 echo "Started:      $(date)"
@@ -103,14 +106,15 @@ srun --environment=moralgym_verl \
         --game "${GAME}" \
         --moral-value "${MORAL_VALUE}" \
         --num-episodes "${NUM_EPISODES}" \
+        ${REPRESENTATION:+--representation "${REPRESENTATION}"} \
         --save-raw-responses \
         --output "${OUTPUT}" \
         "${@:4}"
 
 echo "Behavioral eval complete: $(date)"
 
-# Logprob probes (teacher-vs-student forward passes): probe A =
-# eval/probe_answer_token.py, probe B = eval/probe_reasoning_trace.py.
+# Probes (teacher-vs-student forward passes): probe A =
+# eval/probe_a.py, probe B = eval/probe_b.py.
 # Skipped for the plain baseline — they compare against the plain prompt
 # internally. Same job, same GPU, minutes. RUN_PROBES=off skips them
 # (e.g. robustness / multi-turn cells, where the single-round
@@ -118,40 +122,43 @@ echo "Behavioral eval complete: $(date)"
 if [ "${MORAL_VALUE}" != "none" ] && [ "${RUN_PROBES:-on}" != "off" ]; then
     srun --environment=moralgym_verl \
         --gpus-per-task=1 \
-        python3 -m moralgym_verl.eval.probe_answer_token \
+        python3 -m moralgym_verl.eval.probe_a \
             --config "${PROJECT_ROOT}/${CONFIG}" \
             --checkpoint base \
             --game "${GAME}" \
             --moral-value "${MORAL_VALUE}" \
+            ${REPRESENTATION:+--representation "${REPRESENTATION}"} \
             --output-dir "${RUN_DIR}"
     srun --environment=moralgym_verl \
         --gpus-per-task=1 \
-        python3 -m moralgym_verl.eval.probe_reasoning_trace \
+        python3 -m moralgym_verl.eval.probe_b \
             --config "${PROJECT_ROOT}/${CONFIG}" \
             --checkpoint base \
             --game "${GAME}" \
             --moral-value "${MORAL_VALUE}" \
             --states fabricated \
+            ${REPRESENTATION:+--representation "${REPRESENTATION}"} \
             ${PROBE_TEMPERATURE:+--temperature "${PROBE_TEMPERATURE}"} \
             --output-dir "${RUN_DIR}"
     echo "Probes complete: $(date)"
 fi
 
-# Multi-turn signal-decay probe (RUN_MT_PROBE=on): probe B over live
+# Probe B episode mode (RUN_PROBE_B_EPISODE=on): probe B over live
 # episodes — per-round teacher-vs-student deltas with the moral value at
 # episode start (training-exact). ~15 min.
-if [ "${MORAL_VALUE}" != "none" ] && [ "${RUN_MT_PROBE:-off}" = "on" ]; then
+if [ "${MORAL_VALUE}" != "none" ] && [ "${RUN_PROBE_B_EPISODE:-off}" = "on" ]; then
     srun --environment=moralgym_verl \
         --gpus-per-task=1 \
-        python3 -m moralgym_verl.eval.probe_reasoning_trace \
+        python3 -m moralgym_verl.eval.probe_b \
             --config "${PROJECT_ROOT}/${CONFIG}" \
             --checkpoint base \
             --game "${GAME}" \
             --moral-value "${MORAL_VALUE}" \
             --states episode \
+            ${REPRESENTATION:+--representation "${REPRESENTATION}"} \
             ${PROBE_TEMPERATURE:+--temperature "${PROBE_TEMPERATURE}"} \
             --output-dir "${RUN_DIR}"
-    echo "Multi-turn probe complete: $(date)"
+    echo "Probe B episode mode complete: $(date)"
 fi
 
 # Stage out the whole run directory to $STORE (tape-backed) for durability.

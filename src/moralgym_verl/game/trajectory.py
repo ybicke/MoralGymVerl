@@ -32,34 +32,39 @@ class TrajectoryResult:
     fab_opp: str | None = None
     parse_failures: int = 0
 
+    # Rate properties return None (not 0.0) when the episode has no legal
+    # decisions: an all-illegal episode carries no evidence about the
+    # policy, and 0.0 would read as "always defected" — aggregators must
+    # exclude None episodes rather than average them in.
+
     @property
-    def cooperation_rate(self) -> float:
+    def cooperation_rate(self) -> float | None:
         legal = [m for m in self.agent_moves if m in ("C", "D")]
         if not legal:
-            return 0.0
+            return None
         return legal.count("C") / len(legal)
 
     @property
-    def mutual_cooperation_rate(self) -> float:
-        legal_pairs = [
+    def legal_pairs(self) -> List[Tuple[str, str]]:
+        """(agent, opponent) move pairs for rounds where both are legal."""
+        return [
             (a, o) for a, o in zip(self.agent_moves, self.opponent_moves)
             if a in ("C", "D") and o in ("C", "D")
         ]
-        if not legal_pairs:
-            return 0.0
-        mc = sum(1 for a, o in legal_pairs if a == "C" and o == "C")
-        return mc / len(legal_pairs)
 
     @property
-    def exploitation_rate(self) -> float:
-        legal_pairs = [
-            (a, o) for a, o in zip(self.agent_moves, self.opponent_moves)
-            if a in ("C", "D") and o in ("C", "D")
-        ]
-        if not legal_pairs:
-            return 0.0
-        ex = sum(1 for a, o in legal_pairs if a == "D" and o == "C")
-        return ex / len(legal_pairs)
+    def mutual_cooperation_rate(self) -> float | None:
+        pairs = self.legal_pairs
+        if not pairs:
+            return None
+        return sum(1 for a, o in pairs if a == "C" and o == "C") / len(pairs)
+
+    @property
+    def exploitation_rate(self) -> float | None:
+        pairs = self.legal_pairs
+        if not pairs:
+            return None
+        return sum(1 for a, o in pairs if a == "D" and o == "C") / len(pairs)
 
 
 # Canonical order of the four fabricated (agent_prev, opp_prev) states.

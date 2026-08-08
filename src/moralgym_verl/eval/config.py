@@ -20,19 +20,22 @@ from moralgym_verl.game.environment import (
 )
 from moralgym_verl.game.prompts import sample_prompt_randomization
 
-# Named experiment protocols (--protocol): a stage's flag bundle in ONE
-# executable place. Applied before individual CLI overrides (explicit
+# Named experiment protocols (--protocol): a protocol's flag bundle in
+# ONE executable place. Applied before individual CLI overrides (explicit
 # flags still win); the chosen name is recorded in metadata.
+# (Old campaign-plan names, in pre-2026-08 results: stage1a = single_round,
+# stage1b = multi_round, stage1b_transcript = multi_round_conversation.)
 PROTOCOL_PRESETS: Dict[str, Dict] = {
     # Single fabricated-history round vs random: per-state policy table.
-    "stage1a": {"num_rounds": 1, "game_design": "hist",
-                "opponents": ["random"], "transcript": False},
-    # Multi-turn dynamics, stateless Markov-1 prompts (legacy protocol).
-    "stage1b": {"num_rounds": 5, "game_design": "nohist",
-                "transcript": False},
-    # Multi-turn with accumulating conversation (verl agent-loop parity).
-    "stage1b_transcript": {"num_rounds": 5, "game_design": "nohist",
-                           "transcript": True},
+    "single_round": {"num_rounds": 1, "game_design": "hist",
+                     "opponents": ["random"], "conversation": False},
+    # Multi-round dynamics; each round a fresh stateless Markov-1 prompt.
+    "multi_round": {"num_rounds": 5, "game_design": "nohist",
+                    "conversation": False},
+    # Multi-round with the full conversation accumulating in context
+    # (verl agent-loop training parity; toggles evaluation.conversation).
+    "multi_round_conversation": {"num_rounds": 5, "game_design": "nohist",
+                                 "conversation": True},
 }
 
 
@@ -49,7 +52,7 @@ def apply_protocol(cfg: Dict, protocol: str) -> None:
     preset = PROTOCOL_PRESETS[protocol]
     cfg["game"]["num_rounds"] = preset["num_rounds"]
     cfg.setdefault("prompt", {})["game_design"] = preset["game_design"]
-    cfg.setdefault("evaluation", {})["transcript"] = preset["transcript"]
+    cfg.setdefault("evaluation", {})["conversation"] = preset["conversation"]
     if "opponents" in preset:
         cfg["evaluation"]["opponents"] = preset["opponents"]
 
@@ -68,18 +71,18 @@ def build_eval_config(
     prompt_cfg = cfg["prompt"]
     eval_cfg = cfg.get("evaluation", {})
 
-    # Defaults are Tennant-exact (fixed tokens/layout/prose/role/payoffs);
-    # training-time randomization flags do NOT propagate to eval. Override
-    # per-config under `evaluation:` — tokens/layout/prose/role:
-    # fixed|randomize, payoffs: fixed|sample.
+    # Defaults are Tennant-exact (fixed labels/layout/label_order/role/
+    # payoffs); training-time randomization flags do NOT propagate to eval.
+    # Override per-config under `evaluation:` — labels/layout/label_order/
+    # role: fixed|randomize, payoffs: fixed|sample.
 
     randomize_layout = eval_cfg.get("layout", "fixed") == "randomize"
-    randomize_prose = eval_cfg.get("prose", "fixed") == "randomize"
+    randomize_label_order = eval_cfg.get("label_order", "fixed") == "randomize"
     randomize_role = eval_cfg.get("role", "fixed") == "randomize"
 
     r = rng if rng is not None else random
 
-    if eval_cfg.get("tokens", "fixed") == "randomize":
+    if eval_cfg.get("labels", "fixed") == "randomize":
         cl, dl = sample_labels(rng=rng)
     else:
         cl, dl = "action3", "action4"
@@ -94,7 +97,7 @@ def build_eval_config(
 
     opener_order, closer_order, agent_is_row = sample_prompt_randomization(
         cl, dl,
-        randomize_prose=randomize_prose,
+        randomize_label_order=randomize_label_order,
         randomize_role=randomize_role,
         rng=rng,
     )
@@ -113,4 +116,5 @@ def build_eval_config(
         show_horizon=prompt_cfg.get("show_horizon", False),
         minimal_parsing=prompt_cfg.get("minimal_parsing", False),
         reasoning=prompt_cfg.get("reasoning", False),
+        representation=prompt_cfg.get("representation", "matrix"),
     )

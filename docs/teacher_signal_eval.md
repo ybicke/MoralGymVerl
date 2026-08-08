@@ -102,7 +102,7 @@ nothing follows it).
   - `answer_delta` — the probe-A quantity, but conditioned on real
     reasoning ("does moral context flip the decision even with the
     reasoning held fixed?").
-  Per-trace records: `logprob_b.traces.jsonl`.
+  Per-trace records: `probe_b.traces.jsonl`.
 - **Why 8 (and why A and B differ in counts):** the ONLY randomness in
   either probe is *which traces get sampled* in B (temperature 1.0);
   every scoring pass is exact. A has no randomness → exact in one shot.
@@ -140,12 +140,12 @@ wording if this becomes interesting.)
 
 | step | where | what happens |
 |---|---|---|
-| prompt build | `game/prompts.py` + `prompts_reasoning.py` | render payoffs / history / closer; presentation axes (tokens, layout, prose order, role, payoffs) parameterized per episode and recorded in `episode_moves[].presentation` |
+| prompt build | `game/prompts.py` + `prompts_reasoning.py` | render payoffs / history / closer; presentation axes (labels, layout, label_order, role, payoffs) parameterized per episode and recorded in `episode_moves[].presentation` |
 | teacher wrap | `eval/teacher_context.py` | SDPO `reprompt_template` + value in `{feedback}`; pure string op |
 | state fabrication | `game/trajectory.py:95` | agent_prev, opp_prev each `random.choice(["C","D"])` per episode, written into the prompt as one history sentence |
 | episode | `game/trajectory.py:run_episode` | one decision (single-round) or 5 real rounds vs scripted bots (`game/players.py`); transcript mode accumulates the full conversation exactly like verl's agent loop |
 | parsing | `game/prompts_reasoning.py:77` | strict: final `Action: <label>` with required separator, else `illegal`; same parser as training |
-| aggregation | `eval/metrics.py` (`aggregate_rollout_metrics`) | all rates over legal moves, illegal reported separately; per state `p_C+p_D+p_illegal = 1`, so P(D\|state) = 1−P(C\|state) given a legal parse |
+| aggregation | `eval/metrics.py` (`aggregate_rollout_metrics`) | all rates over legal moves, illegal reported separately; per state `p_C+p_D+p_illegal = 1`, so P(D\|state) = 1−P(C\|state) given a legal parse; episodes with zero legal decisions are excluded from the episode-mean rates (counted in `num_episodes_all_illegal` / `num_episodes_no_legal_pairs`, rates `null` if every episode is excluded) — never averaged in as 0.0 |
 | probes | `eval/probe_answer_token.py` (A), `eval/probe_reasoning_trace.py` (B; `--states fabricated\|episode`), primitives in `eval/teacher_forcing.py` | formulas above; episode mode computes the probe-B pair per round with the value wrapped only into message 1 (training-exact `wrap_first`) |
 | offline analysis | `scripts/analysis/*.py` | commands in the index below; `robustness_slices.py` hard-fails unless its per-episode recomputation exactly matches the runtime `state_conditioning` (proves prompt↔episode alignment) |
 
@@ -244,8 +244,8 @@ sbatch scripts/slurm/eval_teacher_signal.sh prisoners_dilemma deontological 200 
     --num-rounds 1 --game-design hist --opponent random
 # Session-1 sweep as run: none / deontological / utilitarian
 # (single-round, 3 games); stage 1b added deontological+forgiveness.
-# Robustness cells: RUN_PROBES=off + --eval-{layout,prose,role} randomize
-# --eval-payoffs sample (R1/R3) or --eval-tokens randomize (R2);
+# Robustness cells: RUN_PROBES=off + --eval-{layout,label-order,role} randomize
+# --eval-payoffs sample (R1/R3) or --eval-labels randomize (R2);
 # pass --temperature 1.0 explicitly (config default is now 0.7).
 ```
 
@@ -253,8 +253,8 @@ Outputs: one directory per cell,
 `eval_results/teacher_signal/<stage>/<game>__<value>_<jobid>/` (stage =
 `EVAL_GROUP`: stage1_single_round, robustness, stage1b_multiturn, smoke)
 containing `behavioral.json`, `behavioral.responses.jsonl`,
-`logprob_a.json`, `logprob_b.json` + `.traces.jsonl`, and for multi-turn
-probe runs `logprob_multiturn.json` + `.traces.jsonl`; mirrored to
+`probe_a.json`, `probe_b.json` + `.traces.jsonl`, and for episode-mode
+probe runs `probe_b_episode.json` + `.traces.jsonl`; mirrored to
 `$STORE/eval_results/teacher_signal/`. Slurm logs:
 `~/logs_verl/slurm/teacher_signal_*`. Analysis commands: see the experiment
 index below.
@@ -354,7 +354,7 @@ Session-2 decision mapping: see the decision matrix above + memory note
 **Deferred analyses (designed, not implemented — revisit when needed):**
 - *Per-position token deltas*: `_continuation_logprob` already computes
   the per-token vector (summed before return); capture = log `tokens` +
-  `token_deltas` per trace in `logprob_b.traces.jsonl` (zero extra
+  `token_deltas` per trace in `probe_b.traces.jsonl` (zero extra
   forward passes), analyse via lexical aggregation / position curve /
   hotspots. Revisit when: (a) the utilitarian transfer question needs
   diagnosis, (b) debugging an SDPO run ("what is the loss rewriting?").

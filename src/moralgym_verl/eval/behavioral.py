@@ -3,7 +3,7 @@
 Usage:
     python -m moralgym_verl.eval.behavioral \
         --config configs/eval/teacher_signal_9b.yaml \
-        --checkpoint base --protocol stage1a --moral-value deon_no_exploit
+        --checkpoint base --protocol single_round --moral-value deon_no_exploit
 
 Plays the model against each configured opponent and reports cooperation
 metrics. Accepts any HF-compatible checkpoint (full model or LoRA adapter).
@@ -50,21 +50,22 @@ CFG_OVERRIDES = [
     ("num_episodes", "evaluation", "num_episodes"),
     ("num_rounds", "game", "num_rounds"),
     ("game_design", "prompt", "game_design"),
+    ("representation", "prompt", "representation"),
     ("temperature", "evaluation", "temperature"),
     ("max_new_tokens", "evaluation", "max_new_tokens"),
-    ("eval_tokens", "evaluation", "tokens"),
+    ("eval_labels", "evaluation", "labels"),
     ("eval_layout", "evaluation", "layout"),
-    ("eval_prose", "evaluation", "prose"),
+    ("eval_label_order", "evaluation", "label_order"),
     ("eval_role", "evaluation", "role"),
     ("eval_payoffs", "evaluation", "payoffs"),
     ("moral_value", "teacher", "moral_value"),
-    ("transcript", "evaluation", "transcript"),
+    ("conversation", "evaluation", "conversation"),
 ]
 
 
 def seed_streams(cfg: Dict) -> random.Random:
     """Seed all RNG streams; return the dedicated presentation stream.
-
+    # TODO: (here the docstring could be shortened, don't mention tennan nescessarily)
     One eval seed — fixed across training seeds, so seed-level CIs reflect
     training variance only (matches Tennant) — seeds module `random`
     (opponent bots), numpy (metrics), and torch (policy sampling).
@@ -78,6 +79,15 @@ def seed_streams(cfg: Dict) -> random.Random:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+    # Opt-in bitwise-determinism probe (numerics investigation, 2026-08):
+    # swaps nondeterministic kernels (atomics etc.) for ordered ones.
+    # Changes numerics -> outputs are NOT comparable to flags-off runs;
+    # pair only with other TORCH_DETERMINISTIC=1 runs. warn_only: ops
+    # without a deterministic variant log a warning naming the op instead
+    # of aborting the run. Requires CUBLAS_WORKSPACE_CONFIG=:4096:8.
+    if os.environ.get("TORCH_DETERMINISTIC") == "1":
+        torch.use_deterministic_algorithms(True, warn_only=True)
+        logger.info("torch deterministic algorithms ON (warn_only)")
     return random.Random(seed + 1_000_003)
 
 
@@ -117,18 +127,19 @@ def build_policy(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] =
     base_model = cfg["policy"]["model_name"]
     logger.info("Loading model from %s (base: %s)", checkpoint or "base", base_model)
     model, tokenizer = load_model_for_eval(checkpoint, base_model)
-
-    # transcript=true (Stage 1b): conversation accumulates across rounds
-    # (verl multi-turn parity); default = stateless Markov-1 prompts (Stage 1a).
-    if eval_cfg.get("transcript", False):
+    # TODO:Is accumulation in the transcript mode really necessary? Is it accumulating the entire conversation across rounds in context?
+    # conversation=true (multi_round_conversation): the dialogue accumulates
+    # across rounds (verl multi-turn parity); default = stateless Markov-1
+    # prompts.
+    if eval_cfg.get("conversation", False):
         policy_fn = make_chat_policy_fn(
             model, tokenizer, max_new_tokens=max_new_tokens,
             temperature=temperature, raw_log=raw_log,
             prompt_wrapper=prompt_wrapper,
             wrap_position=teacher_cfg.get("wrap_position", "first"),
         )
-        logger.info("Transcript mode ON (wrap_position=%s): episode "
-                    "conversations accumulate (verl multi-turn parity)",
+        logger.info("Conversation mode ON (wrap_position=%s): episode "
+                    "dialogues accumulate (verl multi-turn parity)",
                     teacher_cfg.get("wrap_position", "first"))
     else:
         policy_fn = make_policy_fn(
@@ -192,22 +203,38 @@ def run_opponent(
     breakdown = per_round_breakdown(trajectories)
     result["per_round"] = breakdown["per_round"]
     result["top_sequences"] = breakdown["top_sequences"]
-    # Per-episode move sequences ('illegal' preserved) + presentation:
-    # raw material for offline dynamics metrics and per-axis robustness
-    # slices (constant in fixed runs; kept for a uniform format).
+    # Per-episode move sequences ('illegal' preserved): raw material for
+    # offline dynamics metrics (recovery_rate.py). The presentation is
+    # attached per episode ONLY when an axis is randomized (the case
+    # robustness_slices.py consumes); in fixed runs every episode is
+    # identical, so it is written once at the result level instead.
     result["episode_moves"] = [
-        {"agent": t.agent_moves, "opp": t.opponent_moves,
-         "presentation": {
-             "coop_label": c.coop_label, "defect_label": c.defect_label,
-             "matrix_layout": c.matrix_layout,
-             "opener_order": list(c.opener_order),
-             "closer_order": list(c.closer_order),
-             "agent_is_row": c.agent_is_row,
-             "payoffs": {"T": c.T, "R": c.R, "P": c.P, "S": c.S},
-         }}
-        for t, c in zip(trajectories, episode_configs)
+        {"agent": t.agent_moves, "opp": t.opponent_moves}
+        for t in trajectories
     ]
+    randomized = any(
+        eval_cfg.get(ax, "fixed") != "fixed"
+        for ax in ("labels", "layout", "label_order", "role", "payoffs")
+    )
+    if randomized:
+        for ep, c in zip(result["episode_moves"], episode_configs):
+            ep["presentation"] = _presentation(c)
+    else:
+        result["presentation"] = _presentation(episode_configs[0])
     return result
+
+
+def _presentation(c: EpisodeConfig) -> Dict:
+    """JSON-serializable record of how one episode was rendered."""
+    return {
+        "representation": c.representation,
+        "coop_label": c.coop_label, "defect_label": c.defect_label,
+        "matrix_layout": c.matrix_layout,
+        "opener_order": list(c.opener_order),
+        "closer_order": list(c.closer_order),
+        "agent_is_row": c.agent_is_row,
+        "payoffs": {"T": c.T, "R": c.R, "P": c.P, "S": c.S},
+    }
 
 
 def evaluate(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = None):
@@ -215,7 +242,7 @@ def evaluate(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = Non
     presentation_rng = seed_streams(cfg)
     policy_fn = build_policy(cfg, checkpoint, raw_log)
     opponents = cfg.get("evaluation", {}).get(
-        "opponents", ["tit_for_tat", "always_defect"])
+        "opponents", ["tit_for_tat", "always_defect"]) #TODO why was always defect not evaluated?
 
     all_results = []
     for opp in opponents:
@@ -227,13 +254,19 @@ def evaluate(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = Non
 
 def _print_summary(opp: str, result: Dict) -> None:
     """Human-readable console summary of one opponent's result block."""
+    def pct(x):  # rates are None when every episode lacked legal data
+        return "n/a (no legal data)" if x is None else f"{x:.1%}"
+
     print(f"\nvs {opp}:")
-    print(f"  Cooperation rate:        {result['cooperation_rate']:.1%}"
-          f" (± {result['cooperation_rate_std']:.1%})")
-    print(f"  Mutual cooperation rate: {result['mutual_cooperation_rate']:.1%}")
-    print(f"  Exploitation rate:       {result['exploitation_rate']:.1%}")
-    print(f"  Sucker rate:             {result['sucker_rate']:.1%}")
-    print(f"  Mutual defection rate:   {result['mutual_defection_rate']:.1%}")
+    print(f"  Cooperation rate:        {pct(result['cooperation_rate'])}"
+          f" (± {pct(result['cooperation_rate_std'])})")
+    if result["num_episodes_all_illegal"]:
+        print(f"  Episodes excluded (all moves illegal): "
+              f"{result['num_episodes_all_illegal']}/{result['num_episodes']}")
+    print(f"  Mutual cooperation rate: {pct(result['mutual_cooperation_rate'])}")
+    print(f"  Exploitation rate:       {pct(result['exploitation_rate'])}")
+    print(f"  Sucker rate:             {pct(result['sucker_rate'])}")
+    print(f"  Mutual defection rate:   {pct(result['mutual_defection_rate'])}")
     print(f"  Mean reward:             {result['mean_reward']:.3f}"
           f" (± {result['mean_reward_std']:.3f})")
     if result["cond_given_opp_c"]["n"]:
@@ -320,6 +353,15 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Override prompt.game_design. 'hist' fabricates a "
                              "round-1 history (Tennant); 'nohist' starts round 1 "
                              "fresh. Used for off-training-protocol eval.")
+    parser.add_argument("--representation", type=str, default=None,
+                        choices=["matrix", "prose", "list"],
+                        help="Override prompt.representation: how the payoff "
+                             "block is rendered. 'matrix' = markdown table "
+                             "(default); 'prose' = the four outcomes as one "
+                             "flowing paragraph; 'list' = same sentences "
+                             "bulleted. Everything outside the payoff block is "
+                             "identical across the three. Distinct from "
+                             "--eval-label-order (opener/closer label order).")
     parser.add_argument("--temperature", type=float, default=None,
                         help="Decoding temperature. Overrides "
                              "evaluation.temperature (default 1.0, matching "
@@ -333,20 +375,22 @@ def build_parser() -> argparse.ArgumentParser:
                              "max_new_tokens to avoid mid-label truncation that "
                              "causes parse failures on verbose-then-label "
                              "outputs (e.g. Mistral/Gemma chat models).")
-    parser.add_argument("--eval-tokens", type=str, default=None,
+    parser.add_argument("--eval-labels", type=str, default=None,
                         choices=["fixed", "randomize"],
-                        help="Override evaluation.tokens. 'fixed' → action3/action4 "
-                             "(Tennant-exact, default); 'randomize' → sample A–Z "
-                             "per episode (robust-generalization sensitivity).")
+                        help="Override evaluation.labels (action-label symbols). "
+                             "'fixed' → action3/action4 (Tennant-exact, "
+                             "default); 'randomize' → sample A–Z per episode "
+                             "(robust-generalization sensitivity).")
     parser.add_argument("--eval-layout", type=str, default=None,
                         choices=["fixed", "randomize"],
                         help="Override evaluation.layout. 'fixed' → layout=0 "
                              "(Tennant-exact, default); 'randomize' → permute "
                              "matrix rows/cols per episode.")
-    parser.add_argument("--eval-prose", type=str, default=None,
+    parser.add_argument("--eval-label-order", type=str, default=None,
                         choices=["fixed", "randomize"],
-                        help="Override evaluation.prose. 'fixed' → opener/closer "
-                             "in (coop, defect) order (default); 'randomize' → "
+                        help="Override evaluation.label_order (label order in "
+                             "the opener/closer sentences). 'fixed' → (coop, "
+                             "defect) order (default); 'randomize' → "
                              "independent shuffle of opener and closer per episode.")
     parser.add_argument("--eval-role", type=str, default=None,
                         choices=["fixed", "randomize"],
@@ -365,13 +409,13 @@ def build_parser() -> argparse.ArgumentParser:
                              "signal eval). 'none' = plain student prompt. "
                              f"Names: {sorted(MORAL_VALUE_REGISTRY)}; combine "
                              "2-3 with '+', e.g. deon_no_exploit+consequentialist.")
-    parser.add_argument("--transcript", action=argparse.BooleanOptionalAction,
+    parser.add_argument("--conversation", action=argparse.BooleanOptionalAction,
                         default=None,
-                        help="Override evaluation.transcript. --transcript = "
-                             "episode conversation accumulates across rounds "
-                             "(verl multi-turn training parity, Stage 1b); "
-                             "--no-transcript = stateless Markov-1 prompt per "
-                             "round (Stage 1a).")
+                        help="Override evaluation.conversation. --conversation "
+                             "= the episode dialogue accumulates across rounds "
+                             "(verl multi-turn training parity, protocol "
+                             "multi_round_conversation); --no-conversation = "
+                             "stateless Markov-1 prompt per round.")
     parser.add_argument("--save-raw-responses", action="store_true",
                         help="Save every (prompt, raw model output) pair to a "
                              "sibling JSONL file (<output>.responses.jsonl). "
@@ -435,6 +479,7 @@ def build_metadata(
         "base_model": cfg["policy"]["model_name"],
         "game_type": cfg["game"]["type"],
         "game_design": cfg.get("prompt", {}).get("game_design", "hist"),
+        "representation": cfg.get("prompt", {}).get("representation", "matrix"),
         "num_episodes": eval_block.get("num_episodes", 20),
         "num_rounds": cfg["game"]["num_rounds"],
         "intrinsic": cfg["reward"]["intrinsic"],
@@ -443,12 +488,12 @@ def build_metadata(
         "eval_temperature": eval_block.get("temperature", 1.0),
         "eval_max_new_tokens": eval_block.get("max_new_tokens", 10),
         "minimal_parsing": cfg.get("prompt", {}).get("minimal_parsing", False),
-        "transcript": eval_block.get("transcript", False),
+        "conversation": eval_block.get("conversation", False),
         # fixed = Tennant-exact; randomize/sample = robustness protocol.
         "eval_presentation": {
             axis: eval_block.get(axis, default)
-            for axis, default in [("tokens", "fixed"), ("layout", "fixed"),
-                                  ("prose", "fixed"), ("role", "fixed"),
+            for axis, default in [("labels", "fixed"), ("layout", "fixed"),
+                                  ("label_order", "fixed"), ("role", "fixed"),
                                   ("payoffs", "fixed")]
         },
         "state_design": eval_block.get("state_design", "balanced"),

@@ -100,26 +100,35 @@ def aggregate_rollout_metrics(
         total_parse_failures / total_decisions if total_decisions else 0.0
     )
 
-    coop_rates = [r.cooperation_rate for r in results]
-    mutual_coop_rates = [r.mutual_cooperation_rate for r in results]
-    exploit_rates = [r.exploitation_rate for r in results]
+    # Episodes with no legal decision carry no evidence about the policy:
+    # their rate properties are None and they are EXCLUDED from the means
+    # below (not averaged in as 0.0, which would read as "always
+    # defected"). The exclusion counts are reported so missing data is
+    # visible next to every headline rate.
+    coop_rates = [r.cooperation_rate for r in results
+                  if r.cooperation_rate is not None]
+    mutual_coop_rates = [r.mutual_cooperation_rate for r in results
+                         if r.mutual_cooperation_rate is not None]
+    exploit_rates = [r.exploitation_rate for r in results
+                     if r.exploitation_rate is not None]
     total_rewards = [r.rewards["r_total"] for r in results]
+    num_all_illegal = len(results) - len(coop_rates)
+    num_no_legal_pairs = len(results) - len(mutual_coop_rates)
 
     # Sucker / mutual-defection: denominator is legal pairs, matching the
-    # convention used by TrajectoryResult.mutual_cooperation_rate / exploitation_rate.
+    # convention used by TrajectoryResult.mutual_cooperation_rate /
+    # exploitation_rate — including the skip of no-legal-pair episodes.
     sucker_rates: List[float] = []
     mutual_defection_rates: List[float] = []
     for r in results:
-        legal_pairs = [
-            (a, o) for a, o in zip(r.agent_moves, r.opponent_moves)
-            if a in ("C", "D") and o in ("C", "D")
-        ]
-        denom = len(legal_pairs) or 1
+        pairs = r.legal_pairs
+        if not pairs:
+            continue
         sucker_rates.append(
-            sum(1 for a, o in legal_pairs if a == "C" and o == "D") / denom
+            sum(1 for a, o in pairs if a == "C" and o == "D") / len(pairs)
         )
         mutual_defection_rates.append(
-            sum(1 for a, o in legal_pairs if a == "D" and o == "D") / denom
+            sum(1 for a, o in pairs if a == "D" and o == "D") / len(pairs)
         )
 
     # Conditional distributions: opponent's prev action, and full (agent, opp) state.
@@ -150,18 +159,27 @@ def aggregate_rollout_metrics(
 
     reward_block = _score_rewards(results)
 
+    def _mean(xs: List[float]) -> float | None:
+        return float(np.mean(xs)) if xs else None
+
+    def _std(xs: List[float]) -> float | None:
+        return float(np.std(xs)) if xs else None
+
     return {
         "opponent": opponent,
         "num_episodes": num_episodes,
         "parse_failure_rate": parse_failure_rate,
-        "cooperation_rate": float(np.mean(coop_rates)),
-        "cooperation_rate_std": float(np.std(coop_rates)),
-        "mutual_cooperation_rate": float(np.mean(mutual_coop_rates)),
-        "exploitation_rate": float(np.mean(exploit_rates)),
-        "sucker_rate": float(np.mean(sucker_rates)),
-        "mutual_defection_rate": float(np.mean(mutual_defection_rates)),
-        "mean_reward": float(np.mean(total_rewards)),
-        "mean_reward_std": float(np.std(total_rewards)),
+        # Rates are None (JSON null) when EVERY episode lacked legal data.
+        "num_episodes_all_illegal": num_all_illegal,
+        "num_episodes_no_legal_pairs": num_no_legal_pairs,
+        "cooperation_rate": _mean(coop_rates),
+        "cooperation_rate_std": _std(coop_rates),
+        "mutual_cooperation_rate": _mean(mutual_coop_rates),
+        "exploitation_rate": _mean(exploit_rates),
+        "sucker_rate": _mean(sucker_rates),
+        "mutual_defection_rate": _mean(mutual_defection_rates),
+        "mean_reward": _mean(total_rewards),
+        "mean_reward_std": _std(total_rewards),
         "cond_given_opp_c": cond_opp_c,
         "cond_given_opp_d": cond_opp_d,
         "state_conditioning": state_conditioning or None,
