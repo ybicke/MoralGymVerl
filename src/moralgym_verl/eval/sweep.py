@@ -11,10 +11,10 @@ Spec schema:
     eval_group: tier1              # results subdir (default: name)
     num_episodes: 100              # 3rd positional (default: launcher's 25)
     axes:                          # required; grid = cartesian product
-      game: [prisoners_dilemma]    # game + moral_value are mandatory axes
+      game: [prisoners_dilemma]    # game, moral_value, protocol are mandatory
       moral_value: [none, deontological]
+      protocol: [single_round]     # pins the experimental phase; see below
       representation: [matrix, prose]
-      protocol: [single_round, multi_round]
     env:                           # constant per-job env toggles
       RUN_PROBES: "on"
     extra_args: ["--temperature", "0.7"]   # constant forwarded flags
@@ -23,6 +23,12 @@ Axis-to-launcher mapping (see cell_submission):
     game, moral_value  -> positionals 1, 2
     representation     -> REPRESENTATION env (reaches behavioral AND probes)
     anything else      -> forwarded flag --<axis-with-dashes> <value>
+
+`protocol` is mandatory because it is what separates the experimental phases:
+its preset pins num_rounds / game_design / opponents at submit time, so a
+single-turn sweep cannot inherit the eval yaml's 5-round setting by omission.
+A sweep listing only `single_round` is single-turn end to end (probe B's
+episode mode additionally needs RUN_PROBE_B_EPISODE=on, off by default).
 """
 
 from __future__ import annotations
@@ -32,11 +38,19 @@ from typing import Dict, List, Tuple
 
 import yaml
 
+from moralgym_verl.eval.config import PROTOCOL_PRESETS
+
 LAUNCHER = "scripts/slurm/eval_teacher_signal.sh"
 MANIFEST_NAME = "sweep_manifest.json"
 # Axes consumed by mechanisms other than forwarded flags.
 _POSITIONAL_AXES = ("game", "moral_value")
 _ENV_AXES = {"representation": "REPRESENTATION"}
+# Axes every sweep must declare, even single-valued. game/moral_value are the
+# launcher's positionals; protocol is required so a sweep can never silently
+# inherit the eval yaml's turn structure — the configs are 5-round, so an
+# omitted protocol used to make every cell multi-round by accident. Declaring
+# it makes the experimental phase explicit and puts it in the manifest.
+_REQUIRED_AXES = _POSITIONAL_AXES + ("protocol",)
 
 
 def load_sweep(path: str) -> Dict:
@@ -45,7 +59,7 @@ def load_sweep(path: str) -> Dict:
     for field in ("name", "axes"):
         if field not in spec:
             raise ValueError(f"sweep spec missing required field: {field}")
-    for axis in _POSITIONAL_AXES:
+    for axis in _REQUIRED_AXES:
         if axis not in spec["axes"]:
             raise ValueError(f"sweep axes must include {axis} "
                              f"(single-valued list is fine)")
@@ -53,6 +67,10 @@ def load_sweep(path: str) -> Dict:
         if not isinstance(values, list) or not values:
             raise ValueError(f"axis {axis!r} must be a non-empty list, "
                              f"got {values!r}")
+    unknown = [p for p in spec["axes"]["protocol"] if p not in PROTOCOL_PRESETS]
+    if unknown:
+        raise ValueError(f"unknown protocol(s) {unknown} in sweep axes; "
+                         f"choose from {sorted(PROTOCOL_PRESETS)}")
     spec.setdefault("eval_group", spec["name"])
     return spec
 

@@ -37,6 +37,33 @@ DATASET_SEED="${DATASET_SEED:-42}"
 # run on the exact GRPO dataset for cross-stack/algorithm comparisons.
 DATASET_CONFIG="${DATASET_CONFIG:-${CONFIG_NAME}}"
 DATASET_DIR="${SCRATCH}/moralgym_verl_datasets/${RUN_NAME}"
+
+# Phase guard: turn structure is set in TWO files that must agree — the
+# dataset's game.num_rounds and the trainer's multi_turn.enable. Disagreement
+# fails silently: a 5-round dataset under a single-turn trainer generates one
+# turn against a prompt built for five (and the reward manager falls back to
+# parsing that one response), while a 1-round dataset under the agent loop
+# terminates after round 1. Easy to hit via DATASET_CONFIG.
+/usr/bin/python3.11 - "${REPO_ROOT}" "${DATASET_CONFIG}" "${CONFIG_NAME}" <<'PYEOF'
+import sys, yaml
+repo, ds_name, tr_name = sys.argv[1:4]
+ds = yaml.safe_load(open(f"{repo}/configs/datasets/{ds_name}.yaml"))
+tr = yaml.safe_load(open(f"{repo}/configs/verl/{tr_name}.yaml"))
+rounds = ds["game"]["num_rounds"]
+mt = (tr.get("actor_rollout_ref", {}).get("rollout", {})
+        .get("multi_turn", {}).get("enable", False))
+if (rounds > 1) != bool(mt):
+    sys.exit(
+        f"ERROR: turn-structure mismatch — dataset {ds_name}.yaml has "
+        f"num_rounds={rounds} but trainer {tr_name}.yaml has "
+        f"multi_turn.enable={mt}.\n"
+        f"  single-turn: num_rounds=1 + multi_turn.enable unset/false\n"
+        f"  multi-turn:  num_rounds>1 + multi_turn.enable=true "
+        f"(+ MoralGymRewardManager)"
+    )
+print(f"Phase check OK: num_rounds={rounds}, multi_turn.enable={bool(mt)}")
+PYEOF
+
 echo "Generating dataset from configs/datasets/${DATASET_CONFIG}.yaml (seed ${DATASET_SEED})"
 PYTHONPATH="${REPO_ROOT}/src" /usr/bin/python3.11 -m moralgym_verl.training.dataset \
     --config "${REPO_ROOT}/configs/datasets/${DATASET_CONFIG}.yaml" \

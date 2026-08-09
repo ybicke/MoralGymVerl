@@ -35,8 +35,29 @@ def test_load_sweep_validates(tmp_path):
 def test_load_sweep_defaults_group_to_name(tmp_path):
     path = tmp_path / "s.yaml"
     path.write_text(yaml.safe_dump(
-        {"name": "x", "axes": {"game": ["pd"], "moral_value": ["none"]}}))
+        {"name": "x", "axes": {"game": ["pd"], "moral_value": ["none"],
+                               "protocol": ["single_round"]}}))
     assert load_sweep(str(path))["eval_group"] == "x"
+
+
+def test_protocol_axis_is_mandatory(tmp_path):
+    """Phase separation: without a declared protocol the cells would inherit
+    the eval yaml's turn structure (the configs are 5-round), so a sweep meant
+    to be single-turn would silently be multi-round."""
+    path = tmp_path / "s.yaml"
+    path.write_text(yaml.safe_dump(
+        {"name": "x", "axes": {"game": ["pd"], "moral_value": ["none"]}}))
+    with pytest.raises(ValueError, match="protocol"):
+        load_sweep(str(path))
+
+
+def test_load_sweep_rejects_unknown_protocol(tmp_path):
+    path = tmp_path / "s.yaml"
+    path.write_text(yaml.safe_dump(
+        {"name": "x", "axes": {"game": ["pd"], "moral_value": ["none"],
+                               "protocol": ["multi_round_conversation"]}}))
+    with pytest.raises(ValueError, match="unknown protocol"):
+        load_sweep(str(path))
 
 
 def test_expand_cells_cartesian():
