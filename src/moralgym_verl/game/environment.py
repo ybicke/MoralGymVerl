@@ -151,10 +151,10 @@ class EpisodeConfig:
     # which shuffles opener/closer label order.
     representation: str = "matrix"
 
-    # Rounds >= 2 env messages in transcript-mode multi-turn rollouts
-    # (game_interaction / run_episode transcript mode; round 1 is always the
-    # full prompt, incl. fabricated-seed narration — narrate history exactly
-    # when it is NOT in context):
+    # Rounds >= 2 env messages in multi-round (conversation) episodes
+    # (game_interaction / run_episode; round 1 is always the full prompt,
+    # incl. fabricated-seed narration — narrate history exactly when it is
+    # NOT in context):
     #   False (default): outcome line + optional round clause + answer-format
     #         line — rules and history are already in the conversation.
     #   True: additionally re-insert the payoff block + closing question

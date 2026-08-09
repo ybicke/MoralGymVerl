@@ -269,20 +269,21 @@ def build_env_message(
     opp_action: Optional[str] = None,
     round_idx: Optional[int] = None,
 ) -> str:
-    """Per-round env message for transcript-mode multi-turn rollouts (rounds >= 2).
+    """Per-round env message for multi-round episodes (rounds >= 2).
 
-    Narrate history exactly when it is NOT in context: in transcript mode the
-    rules and every previous round are literally the preceding messages, so
-    the env message carries only the NEW information — A's move and the
-    payoffs — plus the answer-format line (kept every round on purpose:
-    format drift is the first multi-turn failure mode in small models). The
-    round-1 prompt (build_prompt) keeps the fabricated-seed narration.
+    Multi-round episodes are one accumulating conversation, so the rules and
+    every previous round are already the preceding messages. Narrate history
+    exactly when it is NOT in context: this message carries only the NEW
+    information — A's move and the payoffs — plus the answer-format line
+    (kept every round on purpose: format drift is the first multi-turn
+    failure mode in small models). The round-1 prompt (build_prompt) keeps
+    the fabricated-seed narration, which cannot be in context.
 
     With config.restate_rules_per_round the payoff block and the full closing
     question are re-inserted (rules-retention ablation for weaker models).
 
     Single source for training (game_interaction.generate_response) and eval
-    (trajectory.run_episode transcript mode) — the two must never drift.
+    (trajectory.run_episode, probe_b.play_episode) — they must never drift.
 
     Args:
         agent_action / opp_action: the just-completed round's moves. Pass

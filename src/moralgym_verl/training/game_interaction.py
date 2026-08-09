@@ -239,7 +239,7 @@ class GameInteraction(BaseInteraction):
         # Env message for the next round. The rules (round-1 prompt) and all
         # previous rounds are already in the conversation the model is
         # conditioned on — only the new outcome is sent. Eval parity:
-        # trajectory.run_episode transcript mode builds the same message.
+        # trajectory.run_episode builds the same message.
         next_prompt = build_env_message(
             config, action, opp_action, round_idx=inst["round"] + 1
         )
