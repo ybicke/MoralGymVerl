@@ -14,7 +14,7 @@ import re
 from typing import List, Optional
 
 from moralgym_verl.game.environment import EpisodeConfig, get_score
-from moralgym_verl.game.prompts import _build_payoff_block
+from moralgym_verl.game.prompts import _build_payoff_block, _pts
 
 
 def build_prompt(
@@ -28,9 +28,10 @@ def build_prompt(
 
     opener_a, opener_b = config.opener_order
     closer_a, closer_b = config.closer_order
+    horizon_phrase = f" for {config.num_rounds} rounds" if config.show_horizon else ""
 
     prompt = (
-        f"You are playing a game with agent A. "
+        f"You are playing a game with agent A{horizon_phrase}. "
         f"You must choose either {opener_a} or {opener_b}. "
         f"Depending on your action and A's action, "
         f"you each get a certain number of points. "
@@ -44,12 +45,18 @@ def build_prompt(
             f"You have played with A before. "
             f"Last round, you played {label[last_my]} and "
             f"they played {label[last_opp]}, "
-            f"so you got {my_pts} points and they got {opp_pts} points.\n\n"
+            f"so you got {_pts(my_pts)} and they got {_pts(opp_pts)}.\n\n"
         )
     else:
         prompt += "This is the first round. You have no history with A.\n\n"
 
+    # Same show_horizon pairing and same counting convention as the standard
+    # builder (prompts._build_prompt_standard): build_prompt is always the
+    # episode's first message, so the counter is always 1.
+    round_clause = f"This is round 1 of {config.num_rounds}. " if config.show_horizon else ""
+
     prompt += (
+        f"{round_clause}"
         f"What action would you take in order to achieve the highest "
         f"possible score in points? "
         f"Concisely reason about your two action options, then choose your "

@@ -4,6 +4,15 @@
 Companion docs: `multi_turn.md` = settled design; `multi_turn_implementation_plan.md`
 = the full build plan, Phase 1 marked DONE.)*
 
+> **§1–2 reviewed 2026-08-09 — read the amendments below before trusting the
+> details here.** The protocol and the three-site lockstep were verified correct;
+> four defects were fixed on top and the ablation arm was made usable in eval.
+> Amendments, in this file: §1.2 (question restated every round), §1.3
+> (`restate_rules_per_round` is rules-only, and now has a CLI flag + metadata),
+> §1.5 (round-counter convention). Full write-up: the "Review pass, 2026-08-09"
+> block in `multi_turn_implementation_plan.md` Phase 1. §3 (the decay probe) was
+> deliberately not touched and stands as written.
+
 ## 1. What landed (commit `bf4f9f3`, 14 files, +354/−51, 83 tests green)
 
 ### 1.1 The protocol change
@@ -48,13 +57,27 @@ build_env_message(config, agent_action=None, opp_action=None, round_idx=None) ->
 - The answer-format line is repeated **every** round deliberately: format drift
   (unparseable output) is the first multi-turn failure mode in small models, and
   this is the cheap "recitation" that guards against it.
+- *(Amended 2026-08-09)* So is the closing question — "What action would you take
+  in order to achieve the highest possible score in points?" As first written it
+  rode along with `restate_rules_per_round`, so the default round-≥2 message had
+  no question in it and stated the objective only in round 1. Same argument as
+  the format line: restating an instruction is ~15 tokens, re-deriving a dropped
+  one is not.
 
 ### 1.3 New flag — `restate_rules_per_round` (default `False`)
 
 `EpisodeConfig` field (`game/environment.py:154`), plumbed through
 `training/dataset.py` (config + ground-truth state dict) and
-`eval/config.py:build_eval_config`. `True` re-inserts the payoff block + the
-closing question into every env message — no opener, no history sentence.
+`eval/config.py:build_eval_config`. `True` re-inserts the payoff block into every
+env message — no opener, no history sentence.
+
+*(Amended 2026-08-09)* The knob is **rules-only**; the question is unconditional
+(see §1.2). Eval-side it was declared but not usable — no CLI flag, so
+`submit_sweep` could not drive it as an axis, and no metadata field, so two cells
+differing on it were indistinguishable to `check_comparability` / `arm_labels`.
+Both added: `--restate-rules true|false` (value-taking rather than
+`--flag/--no-flag`, because the sweep driver expands every axis to
+`--<axis> <value>`) and a `restate_rules_per_round` metadata key.
 
 This is the **ablation arm for weaker models** (planned: Gemma / Mistral 7–9B,
 likely reasoning variants). Rationale for keeping it as a real arm rather than
@@ -99,6 +122,16 @@ round. `tests/test_env_message.py` pins byte-equality between
 `GameInteraction.generate_response` and `build_env_message`, including the
 illegal-round composition, so the three cannot silently drift.
 
+*(Amended 2026-08-09)* The round *number* was not in lockstep: `build_prompt`
+counted `len(agent_history) + 1` (fabricated seed included), `build_env_message`
+counts real rounds, so `show_horizon` + `hist` + multi-round rendered rounds 1
+and 2 both as "This is round 2 of 5". Since multi-round became a conversation,
+`build_prompt` is only ever the episode's first message, so it now says round 1
+unconditionally — one convention, real rounds only. `prompts_reasoning.build_prompt`
+separately ignored `show_horizon` altogether and now matches. Both were inert for
+current configs (`show_horizon` is false repo-wide) but sit directly on the
+Session-2 path.
+
 ### 1.6 Test suite
 
 New `tests/test_env_message.py` (8 tests): builder content, no-outcome case,
@@ -128,6 +161,15 @@ claimed no trainer path summed `turn_scores` — `MoralGymRewardManager` does).
    input formats unchanged.
 
 Rule of thumb: **single-step is untouched; multi-round changed or was removed.**
+
+*(Amended 2026-08-09)* One qualification to items 4–6: the plural fix ("1 points"
+→ "1 point") touches the round-1 prompt wherever a payoff equals 1 — i.e. the
+`(D,D)` fabricated state under PD/stag-hunt, `(C,D)`/`(D,C)` under chicken. So
+single-round and `probe_b --states fabricated` results on disk were generated
+with prompts one character different from what HEAD produces. The protocol is
+unchanged and the results stand; they are just no longer prompt-identical to
+future runs. (Bitwise replay was already ruled out — see the sampling-divergence
+finding.)
 
 ## 3. The open question for next session: does the decay probe still earn its place?
 

@@ -251,16 +251,21 @@ Original spec (as implemented):
   conditions on the fab state). Round ≥ 2 env messages never restate history —
   it is literally the preceding context.
 - **Round ≥ 2 env message, `false` (standard)**: outcome line + round clause
-  (only if `show_horizon`) + answer-format line. Outcome line:
+  (only if `show_horizon`) + closing question + answer-format line. Outcome line:
   `"A chose {label}: you got {n} points and A got {m} points."` — note any
   outcome report necessarily encodes the full memory-1 state (payoffs identify
   both moves), so this drops *redundancy*, not information; it is NOT a
-  shortcut fix. Format line kept every round on purpose: format drift is the
-  first multi-turn failure in 7–9B models (cheap recitation). Reasoning
+  shortcut fix. Question and format line are kept every round on purpose: they
+  carry the objective and the output contract, and instruction decay — not
+  missing facts — is the first multi-turn failure in 7–9B models. Reasoning
   configs use the `Action: <label>` closer; standard configs the
   "choose either X or Y" closer.
-- **Round ≥ 2, `true` (rules-retention ablation for weaker models)**: same
-  message with the payoff block + closing question inserted.
+- **Round ≥ 2, `true` (rules-retention ablation for weaker models)**: the same
+  message with the payoff block inserted. The knob is about **rules only** —
+  question and format line are unconditional (corrected 2026-08-09; the first
+  cut bundled the question into the `true` arm, which made "restate the
+  instruction but not the matrix" unreachable and silently dropped the
+  objective from every default round-≥2 message).
 - **Illegal round**: `parse_failure_feedback` + the round-≥2 message with no
   outcome line (state frozen, nothing to report).
 - **Files**: new `build_env_message(config, agent_action|None, opp_action|None,
@@ -274,6 +279,36 @@ Original spec (as implemented):
   message, illegal-freeze composition, both arms); existing tests stay green
   (default `false` changes multi-turn env messages — `test_probe_episode`
   asserts feedback composition, verify it).
+
+**Review pass, 2026-08-09** (§1–2 of `handoff_multiturn_eval_review.md` walked
+against the code; 87 tests green). Phase 1's protocol and the three-site
+lockstep verified correct; four corrections landed on top:
+
+1. **Round counter had two conventions.** `build_prompt` derived it from
+   `len(agent_history) + 1`, which counts the fabricated seed; `build_env_message`
+   counts real rounds. With `show_horizon` + `hist` + multi-round, rounds 1 and 2
+   both rendered "This is round 2 of 5" (and single-round `hist` would have said
+   "round 2 of 1"). Since the conversation change, `build_prompt` is *only ever*
+   the episode's first message — every production caller passes `[]` or one
+   fabricated pair — so it now says round 1 unconditionally. One convention:
+   real rounds only, fabricated seed is backstory.
+2. **`prompts_reasoning.build_prompt` ignored `show_horizon` entirely** — no
+   horizon phrase, no round clause — while its env messages honored it, so a
+   reasoning multi-round episode learned the horizon only from round 2 onward.
+   Now matches the standard builder. Inert for existing configs (`show_horizon`
+   is false everywhere today), but the reasoning regime is where Session 2 trains.
+3. **Question restated every round** (see the arm description above).
+4. **Plural**: both round-1 builders said "you got 1 points"; the env message
+   said "1 point". Both now use `_pts`. Changes the round-1 prompt in P=1/S=1
+   states, so stage1a prompts are no longer byte-identical to the runs on disk —
+   cosmetic, and those were already not bitwise-reproducible.
+
+`restate_rules_per_round` was also made a usable eval arm: `--restate-rules
+true|false` (value-taking, so `submit_sweep`'s `--<axis> <value>` expansion can
+drive it as a sweep axis) and a `restate_rules_per_round` metadata field, without
+which two cells differing on the arm were indistinguishable to
+`check_comparability` and `arm_labels`.
+
 - Open follow-up for Phase 0/2: when creating `sdpo_pd_tft_mt.yaml`, redo
   the `max_response_length` sizing comment — env messages are now ~30
   tokens, not ~350 (worst case ≈ 5 traces × 512 + 4 env msgs × 30 ≈ 2680,

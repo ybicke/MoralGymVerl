@@ -52,6 +52,7 @@ CFG_OVERRIDES = [
     ("num_rounds", "game", "num_rounds"),
     ("game_design", "prompt", "game_design"),
     ("representation", "prompt", "representation"),
+    ("restate_rules", "prompt", "restate_rules_per_round"),
     ("temperature", "evaluation", "temperature"),
     ("max_new_tokens", "evaluation", "max_new_tokens"),
     ("eval_labels", "evaluation", "labels"),
@@ -61,6 +62,22 @@ CFG_OVERRIDES = [
     ("eval_payoffs", "evaluation", "payoffs"),
     ("moral_value", "teacher", "moral_value"),
 ]
+
+
+def _bool_arg(value: str) -> bool:
+    """Parser for value-taking boolean flags (`--flag true`).
+
+    Not argparse.BooleanOptionalAction: submit_sweep emits every axis as
+    `--<axis> <value>` (eval/sweep.py), so a boolean arm is only sweepable
+    if the flag takes a value. Accepts YAML 1.1's boolean spellings too,
+    since a sweep yaml's `[false, true]` reaches us stringified.
+    """
+    text = str(value).strip().lower()
+    if text in ("true", "1", "on", "yes"):
+        return True
+    if text in ("false", "0", "off", "no"):
+        return False
+    raise argparse.ArgumentTypeError(f"expected true or false, got {value!r}")
 
 
 def seed_streams(cfg: Dict) -> random.Random:
@@ -361,6 +378,15 @@ def build_parser() -> argparse.ArgumentParser:
                              "bulleted. Everything outside the payoff block is "
                              "identical across the three. Distinct from "
                              "--eval-label-order (opener/closer label order).")
+    parser.add_argument("--restate-rules", type=_bool_arg, default=None,
+                        metavar="true|false",
+                        help="Override prompt.restate_rules_per_round "
+                             "(multi-round only): true = rounds >= 2 re-insert "
+                             "the payoff block, false (default) = outcome + "
+                             "question + answer format only. The "
+                             "rules-retention ablation for weaker models. "
+                             "Value-taking rather than --flag/--no-flag so it "
+                             "works as a sweep axis.")
     parser.add_argument("--temperature", type=float, default=None,
                         help="Decoding temperature. Overrides "
                              "evaluation.temperature (default 1.0, matching "
@@ -482,6 +508,10 @@ def build_metadata(
         "minimal_parsing": cfg.get("prompt", {}).get("minimal_parsing", False),
         "reasoning": cfg.get("prompt", {}).get("reasoning", False),
         "show_horizon": cfg.get("prompt", {}).get("show_horizon", False),
+        # Multi-round rules-retention arm; inert at num_rounds=1 (no round >= 2),
+        # but recorded unconditionally so cells stay distinguishable.
+        "restate_rules_per_round": cfg.get("prompt", {}).get(
+            "restate_rules_per_round", False),
         # fixed = Tennant-exact; randomize/sample = robustness protocol.
         "eval_presentation": {
             axis: eval_block.get(axis, default)

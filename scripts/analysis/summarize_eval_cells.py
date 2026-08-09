@@ -58,8 +58,7 @@ DEFAULT_AXES_KEYS = {"game_type", "moral_value", "representation", "protocol"}
 PER_RUN_KEYS = {"timestamp", "slurm_job_id", "run_name", "experiment_name",
                 "checkpoint", "training_seed", "config", "git_commit"}
 # Set by the protocol preset itself — vary WITH protocol, not besides it.
-PROTOCOL_DERIVED = {"num_rounds", "game_design", "conversation",
-                    "num_episodes"}
+PROTOCOL_DERIVED = {"num_rounds", "game_design", "num_episodes"}
 
 
 def check_comparability(run_dirs: List[Path]) -> bool:
@@ -188,12 +187,12 @@ def summarize_behavioral(run_dirs: List[Path], labels: Dict[Path, str]) -> None:
         # Protocol identity: 'custom' just means the run was launched via
         # explicit flags, so print the resolved settings that actually
         # define the stage (1 round+hist = single_round; 5 rounds+nohist =
-        # multi_round, +conversation = multi_round_conversation).
+        # multi_round, which is always a conversation).
         print(f"\n{labels[run_dir]}  "
               f"(episodes/opp={meta['num_episodes']}, T={meta['eval_temperature']}, "
               f"protocol={meta['protocol']}: {meta['num_rounds']}rd "
               f"{meta['game_design']}"
-              f"{' conversation' if meta.get('conversation') else ''})")
+              f"{' restate_rules' if meta.get('restate_rules_per_round') else ''})")
         for block in data["opponents"]:
             cond_c, cond_d = block["cond_given_opp_c"], block["cond_given_opp_d"]
             coop = block["cooperation_rate"]

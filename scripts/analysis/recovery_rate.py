@@ -5,7 +5,7 @@ Single-round state tables can't see dynamics — whether a defection
 spiral ends, whether forgiveness is farmable, whether cooperation decays
 against a saint. This reads the 5-round move sequences recorded in
 behavioral.json (`episode_moves`, strict parser live at runtime) for
-every conversation-mode run under --eval-dir and prints, per condition (moral
+every multi-round run under --eval-dir and prints, per condition (moral
 value) x opponent:
 
   1. Per-round cooperation rate (recomputed from episode_moves; illegal
@@ -41,7 +41,14 @@ def load_runs(eval_dir: Path) -> dict[str, dict]:
     for path in sorted(eval_dir.rglob("behavioral.json")):
         data = json.loads(path.read_text())
         meta = data["metadata"]
-        if not meta.get("conversation") and meta.get("num_rounds", 1) == 1:
+        if meta.get("num_rounds", 1) == 1:
+            continue
+        # Any run carrying the (since-removed) 'conversation' key predates
+        # 2026-08-08, so it is either the deleted stateless multi-round
+        # protocol or the old transcript mode whose round->=2 context was the
+        # full prompt. Neither is comparable to today's env-message runs.
+        if "conversation" in meta:
+            print(f"skipping pre-conversation multi-round run: {path}")
             continue
         stamp = meta.get("timestamp", "")
         value = meta.get("moral_value", "none")

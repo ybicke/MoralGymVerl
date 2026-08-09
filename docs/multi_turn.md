@@ -58,10 +58,14 @@ eval/training mismatch. Three consequences beyond wasted tokens:
    every later env message restates the full task *without* the value in the most
    recent (most attended) position. Part of the measured decay-to-round-2 may be caused
    by the restatement displacing the wrapped message, not by distance alone.
-3. **Keep the parse anchor.** The answer-format instruction ("choose either action3 or
-   action4. Your answer:") should stay per-turn — dropping it risks parse-failure
-   inflation on small models. That repetition is deliberate; the rules/summary
-   repetition is accidental code reuse.
+3. **Keep the instruction anchors.** The closing question ("What action would you take
+   in order to achieve the highest possible score in points?") and the answer-format
+   instruction ("choose either action3 or action4. Your answer:") stay per-turn — the
+   first carries the objective, the second the output contract, and dropping either
+   trades a ~15-token restatement for instruction decay / parse-failure inflation on
+   small models. That repetition is deliberate; the rules/summary repetition is
+   accidental code reuse. Only the payoff block is optional, behind
+   `restate_rules_per_round`.
 
 **Cheap empirical check before any code change:** if the shortcut hypothesis holds,
 existing transcript cells should behave near-identically to matched stateless
@@ -69,7 +73,7 @@ existing transcript cells should behave near-identically to matched stateless
 runs offline (no GPU needed).
 
 **Fix shape:** `build_env_message(...)` (opponent move, payoffs, round counter if
-`show_horizon`, answer format) for rounds ≥2 in transcript mode; round 1 keeps the full
+`show_horizon`, question, answer format) for rounds ≥2; round 1 keeps the full
 `build_prompt`. Must land in BOTH `run_episode`/eval and `game_interaction.py` in
 lockstep, plus a lean parse-failure reprompt. Comparability caveat: post-change results
 are not comparable to existing stage1b_transcript cells — re-run baselines.

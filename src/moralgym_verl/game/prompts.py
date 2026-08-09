@@ -231,23 +231,24 @@ def _build_prompt_standard(
     if agent_history:
         last_my, last_opp = agent_history[-1], opp_history[-1]
         my_pts, opp_pts = get_score(last_my, last_opp, T, R, P, S)
-        prompt += ( 
+        prompt += (
             f"You have played with A before. "
             f"Last round, you played {label[last_my]} and "
             f"they played {label[last_opp]}, "
-            f"so you got {my_pts} points and they got {opp_pts} points.\n\n"
+            f"so you got {_pts(my_pts)} and they got {_pts(opp_pts)}.\n\n"
         )
     else:
         prompt += "This is the first round. You have no history with A.\n\n"
 
-    # Round counter is paired with show_horizon. Counts real rounds; if the
-    # caller seeded fabricated history (game_design='hist'), the counter will
-    # be off by the fab length — fine for nohist (the common multi-turn case)
-    # but mix with hist only if you've audited the count.
+    # Round counter is paired with show_horizon. Always round 1: since the
+    # multi-round protocol became a conversation, build_prompt is only ever
+    # the FIRST message of an episode (rounds >= 2 go through
+    # build_env_message) — any history it receives is the fabricated seed,
+    # which is backstory, not a played round. One counting convention across
+    # both builders: real rounds only, fabricated seed excluded.
     round_clause = ""
     if config.show_horizon:
-        current_round = len(agent_history) + 1
-        round_clause = f"This is round {current_round} of {config.num_rounds}. "
+        round_clause = f"This is round 1 of {config.num_rounds}. "
 
     # Trailing colon dropped under minimal_parsing (Gemma 2-token gen budget
     # workaround; see legacy notes).
@@ -274,13 +275,18 @@ def build_env_message(
     Multi-round episodes are one accumulating conversation, so the rules and
     every previous round are already the preceding messages. Narrate history
     exactly when it is NOT in context: this message carries only the NEW
-    information — A's move and the payoffs — plus the answer-format line
-    (kept every round on purpose: format drift is the first multi-turn
-    failure mode in small models). The round-1 prompt (build_prompt) keeps
-    the fabricated-seed narration, which cannot be in context.
+    information — A's move and the payoffs. The round-1 prompt (build_prompt)
+    keeps the fabricated-seed narration, which cannot be in context.
 
-    With config.restate_rules_per_round the payoff block and the full closing
-    question are re-inserted (rules-retention ablation for weaker models).
+    The closing question and the answer-format line ARE repeated every round,
+    deliberately: they carry the objective ("highest possible score") and the
+    output contract, and instruction decay — not missing facts — is the first
+    multi-turn failure mode in small models. Restating an instruction is cheap
+    (~15 tokens); re-deriving a dropped one is not.
+
+    config.restate_rules_per_round adds the payoff block on top (rules-retention
+    ablation for weaker models). The knob is about RULES only — question and
+    format line are unconditional.
 
     Single source for training (game_interaction.generate_response) and eval
     (trajectory.run_episode, probe_b.play_episode) — they must never drift.
@@ -324,18 +330,22 @@ def build_env_message(
             f"Your answer{answer_suffix}"
         )
 
-    if config.restate_rules_per_round:
-        # Payoff block + the round-1 closing question, verbatim — but no
-        # opener and no history sentence.
-        question = (
-            "What action would you take in order to achieve the highest "
-            "possible score in points? "
-        ) + format_line
-        head = f"{outcome}\n\n" if outcome else ""
-        clause = f"{round_clause} " if round_clause else ""
-        return head + _build_payoff_block(config) + clause + question
+    question = (
+        "What action would you take in order to achieve the highest "
+        "possible score in points?"
+    )
 
-    return " ".join(p for p in (outcome, round_clause, format_line) if p)
+    if config.restate_rules_per_round:
+        # Payoff block re-inserted verbatim — but no opener and no history
+        # sentence (both are in the conversation). Block-formatted like the
+        # round-1 prompt, whose layout it borrows.
+        head = f"{outcome}\n\n" if outcome else ""
+        tail = " ".join(p for p in (round_clause, question, format_line) if p)
+        return head + _build_payoff_block(config) + tail
+
+    return " ".join(
+        p for p in (outcome, round_clause, question, format_line) if p
+    )
 
 
 def parse_action_minimal(response: str, config: EpisodeConfig) -> Optional[str]:
