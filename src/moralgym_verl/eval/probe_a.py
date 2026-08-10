@@ -31,6 +31,7 @@ import math
 from pathlib import Path
 from typing import Dict
 
+from moralgym_verl.eval.config import PROTOCOL_PRESETS
 from moralgym_verl.eval.teacher_forcing import (
     PROBE_STATES, answer_logodds, chat_prefix, probe_setup, two_way_jsd,
 )
@@ -78,6 +79,17 @@ def main() -> None:
                              "(the probe compares against the plain prompt "
                              "internally).")
     parser.add_argument("--game", default=None, choices=sorted(FIXED_PAYOFFS))
+    parser.add_argument("--model", default=None,
+                        help="Override policy.model_name (as behavioral.py) "
+                             "so the probe describes the cell's weights.")
+    parser.add_argument("--protocol", default=None,
+                        choices=sorted(PROTOCOL_PRESETS),
+                        help="Cell's protocol preset (as behavioral.py). The "
+                             "fabricated states make this probe a "
+                             "single-decision instrument either way, but "
+                             "applying the preset keeps its prompt built from "
+                             "the same turn structure as the cell rather than "
+                             "from the eval yaml's default.")
     parser.add_argument("--representation", default=None,
                         choices=["matrix", "prose", "list"],
                         help="Override prompt.representation (payoff block "

@@ -31,7 +31,8 @@ import numpy as np
 import torch
 
 from moralgym_verl.eval.config import (
-    PROTOCOL_PRESETS, apply_protocol, build_eval_config, git_provenance,
+    PRESENTATION_AXES, PRESENTATION_PRESETS, PROTOCOL_PRESETS,
+    apply_presentation, apply_protocol, build_eval_config, git_provenance,
     load_config,
 )
 from moralgym_verl.eval.generation import make_chat_policy_fn, make_policy_fn
@@ -48,6 +49,7 @@ logger = logging.getLogger(__name__)
 # Applied uniformly in apply_overrides(); flags with multi-key effects
 # (--game, --opponent) stay explicit there.
 CFG_OVERRIDES = [
+    ("model", "policy", "model_name"),
     ("num_episodes", "evaluation", "num_episodes"),
     ("num_rounds", "game", "num_rounds"),
     ("game_design", "prompt", "game_design"),
@@ -340,6 +342,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--checkpoint", type=str, required=True,
                         help="LoRA adapter or full-model checkpoint path, or "
                              "'base' for the untuned base model")
+    parser.add_argument("--model", type=str, default=None,
+                        help="Override policy.model_name (HF id or local "
+                             "path). Lets one eval config screen several base "
+                             "models as a sweep axis instead of duplicating "
+                             "the yaml per model. The probes take the same "
+                             "flag, so a cell's behavioral and probe results "
+                             "always describe the same weights.")
     parser.add_argument("--output", type=str, default=None,
                         help="Output JSON path (overrides config output_dir)")
     parser.add_argument("--num-episodes", type=int, default=None,
@@ -400,6 +409,21 @@ def build_parser() -> argparse.ArgumentParser:
                              "max_new_tokens to avoid mid-label truncation that "
                              "causes parse failures on verbose-then-label "
                              "outputs (e.g. Mistral/Gemma chat models).")
+    parser.add_argument("--presentation", type=str, default=None,
+                        metavar="SPEC",
+                        help="Which presentation axes to randomize. A preset "
+                             f"({', '.join(sorted(PRESENTATION_PRESETS))}) or "
+                             "a '+'-joined list of axes "
+                             f"({', '.join(sorted(PRESENTATION_AXES))}), e.g. "
+                             "'labels+role'. surface_randomization covers the "
+                             "four axes that re-render an IDENTICAL game; "
+                             "full_randomization adds payoff resampling, "
+                             "which changes the game's magnitudes. Writes "
+                             "every axis explicitly, so the spec fully "
+                             "determines the presentation block. Applied "
+                             "before the individual --eval-* flags, which "
+                             "still win. Probes are unaffected — they always "
+                             "run fixed presentation by design.")
     parser.add_argument("--eval-labels", type=str, default=None,
                         choices=["fixed", "randomize"],
                         help="Override evaluation.labels (action-label symbols). "
@@ -450,6 +474,11 @@ def apply_overrides(cfg: Dict, args: argparse.Namespace) -> None:
     """
     if args.protocol is not None:
         apply_protocol(cfg, args.protocol)
+
+    # Presentation spec before the individual --eval-* flags below, so an
+    # explicit flag still wins (same precedence rule as protocol).
+    if args.presentation is not None:
+        apply_presentation(cfg, args.presentation)
 
     # --game / --opponent let one config evaluate any (game, opponent) cell.
     # Needed for cross-game / cross-opponent sweeps driven by eval_plan.sh.
@@ -512,6 +541,10 @@ def build_metadata(
         # but recorded unconditionally so cells stay distinguishable.
         "restate_rules_per_round": cfg.get("prompt", {}).get(
             "restate_rules_per_round", False),
+        # The --presentation spec as given (None when the config's own
+        # evaluation block governs). eval_presentation below is the
+        # RESOLVED state and stays the authority; this records the intent.
+        "presentation_spec": args.presentation,
         # fixed = Tennant-exact; randomize/sample = robustness protocol.
         "eval_presentation": {
             axis: eval_block.get(axis, default)

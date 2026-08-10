@@ -71,3 +71,37 @@ def test_spaced_label_is_illegal():
 def test_empty_and_garbage_are_illegal():
     assert parse("") is None
     assert parse("I refuse to play this game.") is None
+
+
+# --- randomized labels parse identically to fixed ones -------------------
+# The presentation-robustness sweep compares a fixed-label arm against a
+# randomized-label arm, so any difference in PARSEABILITY between the two
+# would show up as a behavioral gap that is really a parser artifact.
+# (This is why sample_labels emits 'action<LETTER>' rather than a bare
+# letter: under bare labels "Action: L" parsed while "Action: 3" did not,
+# so the randomized arm tolerated abbreviations the fixed arm rejected.)
+
+_LABEL_ARMS = [("action3", "action4"), ("actionL", "actionF")]
+
+_RESPONSE_SHAPES = [
+    ("plain",            "Reasoning here.\nAction: {c}",                  "C"),
+    ("markdown",         "Blah.\n**Action:** {d}",                        "D"),
+    ("dash separator",   "Blah.\nAction - {c}",                           "C"),
+    ("trailing punct",   "Blah.\nAction: {c}.",                           "C"),
+    ("prose then line",  "I could pick {d}, but no.\nAction: {c}",        "C"),
+    ("prose only",       "I will choose {c} because it is fair.",         None),
+    ("abbreviated",      "Blah.\nAction: {abbrev}",                       None),
+]
+
+
+@pytest.mark.parametrize("coop,defect", _LABEL_ARMS)
+@pytest.mark.parametrize("shape,template,expected", _RESPONSE_SHAPES)
+def test_parse_is_label_agnostic(coop, defect, shape, template, expected):
+    config = EpisodeConfig(
+        game_type="prisoners_dilemma", T=4, R=3, P=1, S=0,
+        opponent="random", num_rounds=1,
+        coop_label=coop, defect_label=defect,
+    )
+    response = template.format(c=coop, d=defect,
+                               abbrev=coop.replace("action", ""))
+    assert parse_action_structured(response, config) == expected, shape

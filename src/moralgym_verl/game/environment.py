@@ -69,13 +69,21 @@ def sample_payoffs(
 
 
 def sample_labels(rng: Optional[random.Random] = None) -> Tuple[str, str]:
-    """Sample two distinct uppercase letters as randomized action labels.
-    'A' is excluded — the prompt names the opponent 'agent A', so a label
-    of 'A' would collide with the opponent's identifier.
+    """Sample two distinct randomized action labels, 'action<LETTER>'.
+
+    The 'action' prefix is deliberate. The fixed (Tennant-exact) labels are
+    action3/action4, so bare letters would change the label's FORM as well
+    as its identity — a fixed-vs-randomized gap would then confound "the
+    model tracks a specific symbol" with "the model is thrown by a
+    different symbol format". Keeping the prefix varies identity alone.
+
+    Letters rather than digits: the prompt is full of numbers (payoffs,
+    points awarded), and a digit label risks being read as a quantity.
+    'A' is excluded — the prompt names the opponent 'agent A'.
     """
     r = rng if rng is not None else random
     pair = r.sample("BCDEFGHIJKLMNOPQRSTUVWXYZ", 2)
-    return pair[0], pair[1]
+    return f"action{pair[0]}", f"action{pair[1]}"
 
 
 @dataclass

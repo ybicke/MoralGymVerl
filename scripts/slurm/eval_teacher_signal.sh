@@ -28,8 +28,15 @@
 # multi_round (multi-round dynamics, config defaults): drop the extra flags.
 #
 # Env toggles: EVAL_GROUP=<dir> (results subdir), RUN_PROBES=off,
-# RUN_PROBE_B_EPISODE=on, REPRESENTATION=matrix|prose|list (payoff-block
+# RUN_PROBE_B_EPISODE=on, MODEL=<hf id> (overrides the config's
+# policy.model_name), PROTOCOL=single_round|multi_round (preset applied to
+# behavioral AND the probes), REPRESENTATION=matrix|prose|list (payoff-block
 # rendering, forwarded to behavioral + all probes; default matrix),
+#
+# MODEL/PROTOCOL/REPRESENTATION travel by env rather than as trailing flags
+# because trailing flags ("${@:4}") reach behavioral only. Anything that
+# defines what the cell IS must also reach the probes, or one cell reports
+# behavioral and probe numbers for two different settings.
 # PROBE_TEMPERATURE=<T> (probe-B trace sampling; config
 # default 0.7 = training parity, pass 1.0 for July-comparable runs —
 # behavioral temperature is a separate --temperature forwarded arg).
@@ -63,6 +70,15 @@ CONFIG="${CONFIG:-configs/eval/teacher_signal_9b.yaml}"
 #   behavioral.json / behavioral.responses.jsonl
 #   probe_a.json / probe_b.json / probe_b.traces.jsonl
 EVAL_GROUP="${EVAL_GROUP:-adhoc}"
+
+# Phase guard. The episode mode of probe B is the multi-round teacher-decay
+# probe; under a single-round preset it has no curve to measure. Fail at job
+# start rather than emit a one-round 'decay' file into a single-turn group.
+if [ "${PROTOCOL:-}" = "single_round" ] && [ "${RUN_PROBE_B_EPISODE:-off}" = "on" ]; then
+    echo "ERROR: PROTOCOL=single_round with RUN_PROBE_B_EPISODE=on — the" >&2
+    echo "       episode probe is multi-round only. Unset one of them." >&2
+    exit 1
+fi
 RUN_DIR="${PROJECT_ROOT}/eval_results/teacher_signal/${EVAL_GROUP}/${GAME}__${MORAL_VALUE}_${SLURM_JOB_ID}"
 OUTPUT="${RUN_DIR}/behavioral.json"
 mkdir -p "${RUN_DIR}"
@@ -73,6 +89,8 @@ echo "Job ID:       ${SLURM_JOB_ID}"
 echo "Node:         ${SLURM_NODELIST}"
 echo "Game:         ${GAME}"
 echo "Moral value:  ${MORAL_VALUE}"
+echo "Model:        ${MODEL:-from config}"
+echo "Protocol:     ${PROTOCOL:-from config}"
 echo "Representation: ${REPRESENTATION:-matrix (default)}"
 echo "Episodes:     ${NUM_EPISODES}"
 echo "Output:       ${OUTPUT}"
@@ -106,6 +124,8 @@ srun --environment=moralgym_verl \
         --game "${GAME}" \
         --moral-value "${MORAL_VALUE}" \
         --num-episodes "${NUM_EPISODES}" \
+        ${MODEL:+--model "${MODEL}"} \
+        ${PROTOCOL:+--protocol "${PROTOCOL}"} \
         ${REPRESENTATION:+--representation "${REPRESENTATION}"} \
         --save-raw-responses \
         --output "${OUTPUT}" \
@@ -127,6 +147,8 @@ if [ "${MORAL_VALUE}" != "none" ] && [ "${RUN_PROBES:-on}" != "off" ]; then
             --checkpoint base \
             --game "${GAME}" \
             --moral-value "${MORAL_VALUE}" \
+            ${MODEL:+--model "${MODEL}"} \
+            ${PROTOCOL:+--protocol "${PROTOCOL}"} \
             ${REPRESENTATION:+--representation "${REPRESENTATION}"} \
             --output-dir "${RUN_DIR}"
     srun --environment=moralgym_verl \
@@ -137,6 +159,8 @@ if [ "${MORAL_VALUE}" != "none" ] && [ "${RUN_PROBES:-on}" != "off" ]; then
             --game "${GAME}" \
             --moral-value "${MORAL_VALUE}" \
             --states fabricated \
+            ${MODEL:+--model "${MODEL}"} \
+            ${PROTOCOL:+--protocol "${PROTOCOL}"} \
             ${REPRESENTATION:+--representation "${REPRESENTATION}"} \
             ${PROBE_TEMPERATURE:+--temperature "${PROBE_TEMPERATURE}"} \
             --output-dir "${RUN_DIR}"
@@ -155,6 +179,8 @@ if [ "${MORAL_VALUE}" != "none" ] && [ "${RUN_PROBE_B_EPISODE:-off}" = "on" ]; t
             --game "${GAME}" \
             --moral-value "${MORAL_VALUE}" \
             --states episode \
+            ${MODEL:+--model "${MODEL}"} \
+            ${PROTOCOL:+--protocol "${PROTOCOL}"} \
             ${REPRESENTATION:+--representation "${REPRESENTATION}"} \
             ${PROBE_TEMPERATURE:+--temperature "${PROBE_TEMPERATURE}"} \
             --output-dir "${RUN_DIR}"

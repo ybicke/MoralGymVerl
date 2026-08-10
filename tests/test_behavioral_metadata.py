@@ -79,3 +79,64 @@ def test_apply_overrides_table_and_game():
     assert cfg["teacher"]["moral_value"] == "consequentialist"
     # Flags left at None must not touch the config.
     assert "temperature" not in cfg["evaluation"]
+
+
+def test_model_override_reaches_config_and_metadata():
+    """--model lets one eval yaml screen several base models as a sweep
+    axis; the recorded base_model/experiment_name must follow the override,
+    not the yaml, or a two-model group is unattributable after the fact."""
+    cfg = copy.deepcopy(MINIMAL_CFG)
+    args = _args("--model", "Qwen/Qwen2.5-7B-Instruct")
+    behavioral.apply_overrides(cfg, args)
+    assert cfg["policy"]["model_name"] == "Qwen/Qwen2.5-7B-Instruct"
+    md = behavioral.build_metadata(cfg, args, None)
+    assert md["base_model"] == "Qwen/Qwen2.5-7B-Instruct"
+    assert md["experiment_name"] == "base_qwen2.5_7b_instruct"
+
+
+def test_no_model_flag_leaves_the_config_model():
+    cfg = copy.deepcopy(MINIMAL_CFG)
+    behavioral.apply_overrides(cfg, _args())
+    assert cfg["policy"]["model_name"] == "google/gemma-2-9b-it"
+
+
+def test_presentation_spec_writes_every_axis_explicitly():
+    """A spec must fully determine the presentation block: unnamed axes are
+    written 'fixed', never left to whatever the loaded config declared."""
+    cfg = copy.deepcopy(MINIMAL_CFG)
+    cfg["evaluation"] = {"labels": "randomize", "payoffs": "sample"}
+    behavioral.apply_overrides(cfg, _args("--presentation", "role+layout"))
+    assert cfg["evaluation"] == {
+        "labels": "fixed", "layout": "randomize", "label_order": "fixed",
+        "role": "randomize", "payoffs": "fixed",
+    }
+
+
+def test_presentation_all_and_fixed():
+    cfg = copy.deepcopy(MINIMAL_CFG)
+    behavioral.apply_overrides(cfg, _args("--presentation", "full_randomization"))
+    assert cfg["evaluation"]["payoffs"] == "sample"        # not "randomize"
+    assert cfg["evaluation"]["role"] == "randomize"
+    cfg2 = copy.deepcopy(MINIMAL_CFG)
+    behavioral.apply_overrides(cfg2, _args("--presentation", "fixed_representation"))
+    assert set(cfg2["evaluation"].values()) == {"fixed"}
+
+
+def test_explicit_eval_flag_overrides_the_presentation_spec():
+    """Precedence mirrors protocol: preset first, explicit flag wins."""
+    cfg = copy.deepcopy(MINIMAL_CFG)
+    behavioral.apply_overrides(
+        cfg, _args("--presentation", "full_randomization", "--eval-role", "fixed"))
+    assert cfg["evaluation"]["role"] == "fixed"
+    assert cfg["evaluation"]["labels"] == "randomize"
+
+
+def test_presentation_spec_recorded_in_metadata():
+    cfg = copy.deepcopy(MINIMAL_CFG)
+    args = _args("--presentation", "labels+payoffs")
+    behavioral.apply_overrides(cfg, args)
+    md = behavioral.build_metadata(cfg, args, None)
+    assert md["presentation_spec"] == "labels+payoffs"
+    assert md["eval_presentation"]["labels"] == "randomize"
+    assert md["eval_presentation"]["payoffs"] == "sample"
+    assert md["eval_presentation"]["role"] == "fixed"

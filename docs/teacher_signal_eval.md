@@ -84,18 +84,19 @@ nothing follows it).
   0.90 → 0.999, and the probe sees it. SDPO's loss consumes exactly
   these probabilities, not choices.
 
-## Probe B: reasoning-trace scoring (`eval/probe_reasoning_trace.py`)
+## Probe B: reasoning-trace scoring (`eval/probe_b.py`)
 
 - **What it tells us:** the SDPO training signal itself, pre-training —
   the teacher−student probability gap on student-sampled tokens, which
   is literally what the loss consumes (`dp_actor.py:833`).
-- **How:** per state, **8 reasoning traces are generated from the
+- **How:** per state, **n reasoning traces are generated from the
   student prompt only** (mirrors SDPO: rollouts always come from the
-  student). Each trace is then teacher-forced under BOTH prompts (the
-  same 2 prompt conditions as probe A), and after cutting the trace at
-  its final `Action:`, both labels are scored under both prompts (the
-  same 2 labels as probe A). Per state: 8 generations + 16
-  trace-scorings + up to 32 short label-scorings.
+  student; n = `probe_b.num_traces`, 32 in the 9B config). Each trace is
+  then teacher-forced under BOTH prompts (the same 2 prompt conditions
+  as probe A), and after cutting the trace at its final `Action:`, both
+  labels are scored under both prompts (the same 2 labels as probe A).
+  Per state: n generations + 2n trace-scorings + up to 4n short
+  label-scorings.
 - **Measures:** per state, mean±std over traces of
   - `token_delta` — per-token logprob gap over the whole trace =
     distillation pressure on the reasoning itself;
@@ -103,25 +104,40 @@ nothing follows it).
     reasoning ("does moral context flip the decision even with the
     reasoning held fixed?").
   Per-trace records: `probe_b.traces.jsonl`.
-- **Why 8 (and why A and B differ in counts):** the ONLY randomness in
-  either probe is *which traces get sampled* in B (temperature 1.0);
-  every scoring pass is exact. A has no randomness → exact in one shot.
-  B must average over the trace distribution → 8 draws is a measurement
-  budget (std-error ≈ std/√8), configurable via `probe.num_traces`. It
-  is NOT the SDPO group size (G=16) — no formal link, though setting 16
-  would make B "one training group's worth of teacher signal". Aligning
-  A's and B's pass counts would either waste compute (re-running a
-  deterministic calculation) or conflate two meanings of "n".
-- **Paired across wordings:** the student prompt contains no moral value
-  and the seed is fixed → every moral-value job samples the *identical*
-  8 traces per state. Cross-wording comparisons are paired; trace noise
-  cancels.
+- **Why the trace budget (and why A and B differ in counts):** the ONLY
+  randomness in either probe is *which traces get sampled* in B (at the
+  configured temperature, 0.7 default since 2026-07); every scoring pass
+  is exact. A has no randomness → exact in one shot. B must average over
+  the trace distribution → the draw count is a measurement budget
+  (std-error ≈ std/√n), configurable via `probe_b.num_traces` (32 in the
+  9B config — the floor for trace-level claims; n=8 results did not
+  survive resampling). It is NOT the SDPO group size (G=16) — no formal
+  link. Aligning A's and B's pass counts would either waste compute
+  (re-running a deterministic calculation) or conflate two meanings of "n".
+- **NOT trace-paired across wordings:** the student prompt contains no
+  moral value and the seed is fixed, but a fixed seed does NOT reproduce
+  identical traces across jobs — per-job GPU nondeterminism (job 2993459,
+  confirmed 2026-08-05: neither node-pinning nor torch deterministic
+  flags restore bitwise replay). Cross-wording comparisons therefore
+  carry independent trace noise in addition to scoring differences; treat
+  them as unpaired. True pairing is recoverable offline by re-scoring one
+  job's persisted `probe_b.traces.jsonl` under the other wording's
+  prompts, without resampling.
+- **Re-tokenization seam (response side):** scoring teacher-forces the
+  *decoded trace text*, re-encoded with `add_special_tokens=False` — not
+  the rollout's actual token ids — and stops at the last sampled token,
+  excluding the end-of-turn token that training's response region
+  includes. Both effects are identical under the student and teacher
+  prefix, so `token_delta`/`token_jsd`/`answer_delta` are consistent;
+  absolute per-token logprobs are not exactly "what training would score".
+  (Mirrors the prompt-side seam caveat in `teacher_forcing.
+  continuation_logprob`.)
 
 ## How A and B relate (the at-a-glance comparison)
 
 | | Probe A | Probe B |
 |---|---|---|
-| generation | none | 8 traces/state, student prompt only |
+| generation | none | n traces/state (32 in the 9B config), student prompt only |
 | 2 prompt conditions | yes (scoring) | yes (scoring) |
 | 2 labels scored | yes, directly after prompt | yes, after each trace's `Action:` |
 | randomness | none → exact, once | trace sampling → mean±std |

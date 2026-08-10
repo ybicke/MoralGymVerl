@@ -53,12 +53,16 @@ def discover_run_dirs(paths: List[Path]) -> List[Path]:
     return run_dirs
 
 
-DEFAULT_AXES_KEYS = {"game_type", "moral_value", "representation", "protocol"}
+DEFAULT_AXES_KEYS = {"game_type", "moral_value", "representation", "protocol",
+                     "base_model"}
 # Metadata that legitimately differs per run (provenance, not settings).
 PER_RUN_KEYS = {"timestamp", "slurm_job_id", "run_name", "experiment_name",
                 "checkpoint", "training_seed", "config", "git_commit"}
 # Set by the protocol preset itself — vary WITH protocol, not besides it.
 PROTOCOL_DERIVED = {"num_rounds", "game_design", "num_episodes"}
+# Likewise: the --presentation spec is the intent, eval_presentation the
+# resolved state. Declaring the axis declares both as varying together.
+PRESENTATION_DERIVED = {"presentation_spec"}
 
 
 def check_comparability(run_dirs: List[Path]) -> bool:
@@ -74,7 +78,12 @@ def check_comparability(run_dirs: List[Path]) -> bool:
     if manifest.exists():
         with open(manifest) as f:
             declared = json.load(f)["sweep"]["axes"]
-        rename = {"game": "game_type", "temperature": "eval_temperature"}
+        rename = {"game": "game_type", "temperature": "eval_temperature",
+                  "model": "base_model",
+                  # The --presentation spec resolves into the
+                  # eval_presentation dict; declaring the axis declares
+                  # that dict as varying (same as the eval_* axes below).
+                  "presentation": "eval_presentation"}
         # Presentation axes (--eval-labels etc.) all land in the
         # eval_presentation metadata dict — declaring any of them as a
         # sweep axis declares that dict as varying.
@@ -85,6 +94,8 @@ def check_comparability(run_dirs: List[Path]) -> bool:
     excluded = PER_RUN_KEYS | axis_keys
     if "protocol" in axis_keys:
         excluded |= PROTOCOL_DERIVED
+    if "eval_presentation" in axis_keys:
+        excluded |= PRESENTATION_DERIVED
 
     by_key: Dict[str, Dict[str, List[str]]] = {}
     for run_dir in run_dirs:
@@ -114,15 +125,22 @@ def arm_name(run_dir: Path) -> str:
     return name
 
 
-_AXIS_FIELDS = ("game_type", "moral_value", "representation", "protocol")
+_AXIS_FIELDS = ("base_model", "game_type", "moral_value", "representation",
+                "protocol")
 _PRESENTATION_AXES = ("labels", "layout", "label_order", "role", "payoffs")
 
 
 def _label_parts(meta: Dict) -> List[str]:
-    """Candidate label components: the four axis fields plus the five
+    """Candidate label components: the five axis fields plus the five
     presentation settings (rendered 'axis=value' since bare values like
-    'randomize' would be ambiguous across axes)."""
+    'randomize' would be ambiguous across axes).
+
+    base_model is shortened to the repo id ('google/gemma-2-9b-it' ->
+    'gemma-2-9b-it'): the org prefix is constant within a family and only
+    widens every column.
+    """
     parts = [str(meta.get(f)) for f in _AXIS_FIELDS]
+    parts[0] = parts[0].rsplit("/", 1)[-1]
     presentation = meta.get("eval_presentation") or {}
     parts += [f"{ax}={presentation.get(ax, 'fixed')}"
               for ax in _PRESENTATION_AXES]
@@ -256,7 +274,11 @@ def summarize_probe_b(run_dirs: List[Path], labels: Dict[Path, str]) -> None:
             cells = {}
             for state in STATES:
                 m = summary[state][metric]
-                cell = f"{m['mean']:+.3f}±{m['std']:.3f}"
+                # mean is None when no trace in the state yielded the metric
+                # (all empty, or no Action: marker for answer_delta) — real
+                # for parse-fragile models; the counts live in probe_b.json.
+                cell = (f"{m['mean']:+.3f}±{m['std']:.3f}"
+                        if m["mean"] is not None else "n/a (n=0)")
                 if metric == "answer_delta":
                     cell += " ({}/{})".format(*splits[state])
                 cells[state] = cell

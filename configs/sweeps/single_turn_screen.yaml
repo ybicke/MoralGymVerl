@@ -1,0 +1,112 @@
+# Single-turn screen — moral wording x game x payoff representation.
+#
+# Design rationale: a moral wording's effect is NOT game-independent. The
+# same sentence that induces reciprocity in PD (where defection is
+# tempting, T>R) may be inert in stag_hunt (where cooperation is already
+# payoff-optimal, R>T) and may mean something different again in chicken
+# (where mutual defection is the worst outcome, P<S). Screening the
+# wordings on PD alone and generalising afterwards would hide exactly that
+# interaction, so game is a full axis here rather than a follow-up block.
+#
+# gemma-2-9b-it only: it carries every canonical baseline (behavioral MVP,
+# probe B n=32), so these cells are comparable to prior results. A second
+# model is a separate question — Qwen2.5-7B-Instruct is cached and verified
+# to parse at 0% failure under this prompt, so it can be added later as a
+# `model` axis without any code change.
+#
+# Phase cleanliness (three independent guards):
+#   1. protocol: [single_round] pins num_rounds=1, game_design=hist,
+#      opponents=[random] at submit time, overriding the 5-round eval yaml.
+#   2. model/protocol/representation travel by ENV, so the probes run on the
+#      same weights, phase and payoff rendering as behavioral. Trailing
+#      flags reach behavioral only.
+#   3. RUN_PROBE_B_EPISODE off; load_sweep REFUSES it under single_round.
+#
+# Submit:
+#   /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/sweeps/single_turn_screen.yaml --dry-run
+#
+# 3 x 2 x 6 = 36 cells, one single-GPU job each; probes on the 30 cells
+# whose moral_value is not 'none'. Results in
+# eval_results/teacher_signal/single_turn_screen/ + sweep_manifest.json.
+name: single_turn_screen
+eval_group: single_turn_screen
+# 400 = 100 decisions per fabricated state (must stay divisible by 4: the
+# balanced design cycles FAB_STATES, and the offline slice reconstruction
+# assumes it divides evenly). At n=100 the SEM on a per-state P(C) is
+# ~5pp at p=0.5 and ~3pp at p=0.9, roughly halving 200's error bars —
+# enough to call the ~10pp wording differences the earlier screen could
+# only suggest. Cost: ~55 min behavioral + ~23 min probes per cell,
+# comfortably inside the launcher's 3h wall limit (600 would also fit;
+# 800+ needs #SBATCH --time raised).
+num_episodes: 400
+
+axes:
+  # All three supported games. Payoffs come from FIXED_PAYOFFS per game,
+  # not from the eval yaml: PD T4 R3 P1 S0 (defection tempting),
+  # stag_hunt T3 R4 P1 S0 (cooperation already optimal — the designed null
+  # for "did the value add moral signal or just niceness"), chicken
+  # T4 R2 P0 S1 (mutual defection worst).
+  game: [prisoners_dilemma, stag_hunt, chicken]
+
+  # Tabular vs natural language. 'list' is deliberately excluded: it emits
+  # the SAME four outcome sentences as prose, differing only in bulleting,
+  # so it adds a cell without adding a contrast. prose is also the
+  # GovSim-format red-flag check.
+  representation: [matrix, prose]
+
+  # Three ethical FAMILIES, one composite, one privileged prior, one anchor.
+  # All wordings were scope-generalized 2026-08-10 (see moral_values.py):
+  # nothing here presupposes a single identified counterparty, so the same
+  # text applies unchanged in an N-player commons. Deliberately NOT
+  # comparable to pre-2026-08-10 results — this is a fresh baseline.
+  #
+  # none          — plain student prompt; baseline anchor, probes skipped.
+  # deontological — rule-based. Duty not to exploit, "regardless of what
+  #                 you stand to gain" (the marker separating it from
+  #                 consequentialism). Keeps the operationalizer sentence:
+  #                 the 2026-08 wording screen put the stripped variant
+  #                 ~10pp lower on P(C|opp prev C) and more farmable.
+  # utilitarian   — outcome-based. The contrast arm that makes the others
+  #                 interpretable: predicted to produce UNCONDITIONAL
+  #                 cooperation, separating "induced reciprocity" from
+  #                 "induced niceness".
+  # virtue        — character-based, completing the three major families.
+  #                 The NON-privileged transfer arm: without it you cannot
+  #                 tell "this principle transfers" from "any internalized
+  #                 principle transfers". Watch for weak binding — probe
+  #                 A/B answer_delta near zero across states means the
+  #                 wording never reaches the decision.
+  # universalization — the PRIVILEGED-PRIOR arm: GovSim's own prompt-time
+  #                 intervention. Training it and evaluating with GovSim's
+  #                 universalization switched OFF tests internalization
+  #                 against a known ceiling (the model cannot lean on a
+  #                 prompt that is absent at eval).
+  # deontological+repair — not a family, a demonstration: how far an added
+  #                 clause steers behaviour relative to the base wording.
+  #                 Targets DC, where deon alone is directionless (probe B
+  #                 answer_delta +0.00, 17/15 mode split — the teacher
+  #                 moderates rather than directs). Adopt iff DC turns
+  #                 directional WITHOUT inflating the CD signal, which
+  #                 would train the farmable cooperate-after-being-suckered
+  #                 direction. NOTE repair is the only SELF-directed entry,
+  #                 and single-turn history is fabricated rather than
+  #                 chosen — expect this arm's DC effect to understate its
+  #                 multi-turn counterpart.
+  moral_value:
+    - none
+    - deontological
+    - utilitarian
+    - virtue
+    - universalization
+    - deontological+repair
+
+  protocol: [single_round]
+
+env:
+  RUN_PROBES: "on"
+  # The multi-round decay probe is not part of this phase.
+  RUN_PROBE_B_EPISODE: "off"
+
+# Training-rollout parity (sdpo_pd_tft rollout.temperature), not Tennant's 1.0.
+extra_args: ["--temperature", "0.7"]

@@ -31,6 +31,7 @@ from typing import Dict, List, Optional, Tuple
 
 import torch
 
+from moralgym_verl.eval.config import PROTOCOL_PRESETS
 from moralgym_verl.eval.teacher_context import (
     load_distillation_alpha, wrap_first_user,
 )
@@ -264,6 +265,16 @@ def main() -> None:
                              "(the probe compares against the plain prompt "
                              "internally).")
     parser.add_argument("--game", default=None, choices=sorted(FIXED_PAYOFFS))
+    parser.add_argument("--model", default=None,
+                        help="Override policy.model_name (as behavioral.py) "
+                             "so the probe describes the cell's weights.")
+    parser.add_argument("--protocol", default=None,
+                        choices=sorted(PROTOCOL_PRESETS),
+                        help="Cell's protocol preset (as behavioral.py). "
+                             "--states fabricated is single-decision "
+                             "regardless; --states episode reads num_rounds "
+                             "from it, so the decay probe only makes sense "
+                             "under a multi-round preset.")
     parser.add_argument("--representation", default=None,
                         choices=["matrix", "prose", "list"],
                         help="Override prompt.representation (payoff block "
@@ -301,6 +312,15 @@ def main() -> None:
     if not cfg.get("prompt", {}).get("reasoning", False):
         raise SystemExit("Probe B needs prompt.reasoning: true (it scores "
                          "reasoning traces).")
+    # The decay probe measures how the teacher signal fades ACROSS rounds; at
+    # num_rounds=1 there is no curve to measure, only round 1 relabelled.
+    # Refuse rather than emit a one-point 'decay' result that reads like data.
+    if args.states == "episode" and config.num_rounds < 2:
+        raise SystemExit(
+            f"--states episode is the multi-round decay probe but num_rounds="
+            f"{config.num_rounds} (protocol={args.protocol or 'from config'}). "
+            f"Use a multi-round protocol, or --states fabricated."
+        )
 
     eval_cfg = cfg.get("evaluation", {})
     max_new_tokens = eval_cfg.get("max_new_tokens", 512)

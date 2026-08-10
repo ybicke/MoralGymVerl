@@ -86,5 +86,82 @@ def test_cell_submission_mapping():
     assert env["RUN_PROBES"] == "on"
     assert env["REPRESENTATION"] == "prose"      # env axis, reaches probes
     assert "--representation" not in argv
-    assert argv[argv.index("--protocol") + 1] == "single_round"
     assert argv[-2:] == ["--temperature", "0.7"]
+
+
+def test_cell_defining_axes_travel_by_env_not_flags():
+    """Trailing flags reach behavioral only (the launcher passes "${@:4}" to
+    it alone), so any axis that defines what the cell IS must go by env or
+    the probes silently keep the eval yaml's value."""
+    spec = {**SPEC, "axes": {**SPEC["axes"],
+                             "model": ["google/gemma-2-9b-it"]}}
+    env, argv = cell_submission(spec, expand_cells(spec)[0])
+    assert env["MODEL"] == "google/gemma-2-9b-it"
+    assert env["PROTOCOL"] == "single_round"
+    assert env["REPRESENTATION"] == "matrix"
+    for flag in ("--model", "--protocol", "--representation"):
+        assert flag not in argv
+
+
+def test_model_axis_expands_the_grid():
+    spec = {**SPEC, "axes": {**SPEC["axes"],
+                             "model": ["google/gemma-2-9b-it",
+                                       "Qwen/Qwen2.5-7B-Instruct"]}}
+    cells = expand_cells(spec)
+    assert len(cells) == 1 * 2 * 2 * 1 * 2
+    assert len({(c["model"], c["moral_value"], c["representation"])
+                for c in cells}) == 8
+
+
+def test_episode_probe_rejected_in_a_single_round_sweep(tmp_path):
+    """The episode probe measures per-round teacher decay; at num_rounds=1
+    there is no curve, so a one-point 'decay' file must never be produced."""
+    path = tmp_path / "s.yaml"
+    path.write_text(yaml.safe_dump(
+        {"name": "x", "axes": {"game": ["pd"], "moral_value": ["none"],
+                               "protocol": ["single_round"]},
+         "env": {"RUN_PROBE_B_EPISODE": "on"}}))
+    with pytest.raises(ValueError, match="single-round"):
+        load_sweep(str(path))
+
+
+def test_episode_probe_allowed_under_multi_round(tmp_path):
+    path = tmp_path / "s.yaml"
+    path.write_text(yaml.safe_dump(
+        {"name": "x", "axes": {"game": ["pd"], "moral_value": ["none"],
+                               "protocol": ["multi_round"]},
+         "env": {"RUN_PROBE_B_EPISODE": "on"}}))
+    assert load_sweep(str(path))["axes"]["protocol"] == ["multi_round"]
+
+
+def test_presentation_spec_validated_at_submit(tmp_path):
+    """As a forwarded flag a typo would only surface once the cell is on a
+    GPU; load_sweep catches it while the sweep is still on the login node."""
+    path = tmp_path / "s.yaml"
+    path.write_text(yaml.safe_dump(
+        {"name": "x", "axes": {"game": ["pd"], "moral_value": ["none"],
+                               "protocol": ["single_round"],
+                               "presentation": ["fixed_representation", "lables+role"]}}))
+    with pytest.raises(ValueError, match="unknown presentation spec"):
+        load_sweep(str(path))
+
+
+def test_presentation_spec_accepts_composites_and_keywords(tmp_path):
+    path = tmp_path / "s.yaml"
+    path.write_text(yaml.safe_dump(
+        {"name": "x", "axes": {"game": ["pd"], "moral_value": ["none"],
+                               "protocol": ["single_round"],
+                               "presentation": ["fixed_representation",
+                                                "surface_randomization",
+                                                "labels+layout+role"]}}))
+    assert len(load_sweep(str(path))["axes"]["presentation"]) == 3
+
+
+def test_presentation_is_a_forwarded_flag_not_env():
+    """Probes force fixed presentation by design, so this axis must NOT
+    travel by env — behavioral-only is the correct reach."""
+    spec = {**SPEC, "axes": {**SPEC["axes"],
+                             "presentation": ["surface_randomization"]}}
+    env, argv = cell_submission(spec, expand_cells(spec)[0])
+    assert "PRESENTATION" not in env
+    assert argv[argv.index("--presentation") + 1] == "surface_randomization"

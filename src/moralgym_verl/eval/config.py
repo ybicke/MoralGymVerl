@@ -13,7 +13,7 @@ from __future__ import annotations
 import random
 import subprocess
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 import yaml
 
@@ -59,6 +59,74 @@ PROTOCOL_PRESETS: Dict[str, Dict] = {
     # (verl agent-loop training parity), rounds >= 2 get env messages.
     "multi_round": {"num_rounds": 5, "game_design": "nohist"},
 }
+
+
+# Presentation randomization (--presentation): the five surface axes and
+# the value each takes when randomized. Unlike PROTOCOL_PRESETS these are
+# COMPOSABLE rather than named bundles — a fixed set of presets would need
+# one name per subset (2^5). The spec is '+'-separated, mirroring the
+# moral-value composite convention: 'labels+layout', 'all', 'fixed'.
+#
+# Note payoffs is 'sample' where the others are 'randomize' — it draws a
+# new (T,R,P,S) tuple satisfying the game's ordering, not a permutation of
+# a fixed one.
+PRESENTATION_AXES: Dict[str, str] = {
+    "labels": "randomize",       # action-label symbols (action3/4 -> A-Z)
+    "layout": "randomize",       # geometric permutation of the 2x2 grid
+    "label_order": "randomize",  # label order in opener/closer sentences
+    "role": "randomize",         # agent_is_row coin flip (transposes)
+    "payoffs": "sample",         # resample T,R,P,S per episode
+}
+
+# Named specs, for the cases worth naming. The distinction that matters is
+# SURFACE vs CONTENT: the first four axes re-render an identical game (a
+# behavioral change under them means the model is reading position or
+# symbol, not payoff structure), whereas 'payoffs' resamples the game
+# itself — same ordering, different magnitudes. That is generalization
+# across payoff instances, a different claim, and it does not pair with
+# the fixed arm the way the surface axes do (different numbers = genuinely
+# different decisions, not the same decision re-rendered).
+PRESENTATION_PRESETS: Dict[str, Tuple[str, ...]] = {
+    "fixed_representation": (),
+    "surface_randomization": ("labels", "layout", "label_order", "role"),
+    "full_randomization": tuple(PRESENTATION_AXES),
+}
+
+
+def resolve_presentation(spec: str) -> set:
+    """Which axes a spec randomizes. A PRESENTATION_PRESETS name, or a
+    '+'-separated list of axis names ('labels+role'). Raises ValueError on
+    an unknown name — shared by the CLI and by submit-time sweep
+    validation, so a typo fails identically in both places."""
+    parts = [p.strip() for p in str(spec).split("+") if p.strip()]
+    if len(parts) == 1 and parts[0] in PRESENTATION_PRESETS:
+        return set(PRESENTATION_PRESETS[parts[0]])
+    unknown = [p for p in parts if p not in PRESENTATION_AXES]
+    if unknown:
+        raise ValueError(
+            f"unknown presentation spec {spec!r}: {unknown} is neither a "
+            f"preset {sorted(PRESENTATION_PRESETS)} nor an axis "
+            f"{sorted(PRESENTATION_AXES)} (axes join with '+')"
+        )
+    return set(parts)
+
+
+def apply_presentation(cfg: Dict, spec: str) -> None:
+    """Apply a presentation-randomization spec to cfg in place.
+
+    Every axis is written explicitly (not just the named ones) so the spec
+    fully determines the presentation block — a cell can never inherit a
+    randomized axis from the config it happens to load.
+
+    Called after apply_protocol and before the individual --eval-* flags,
+    so an explicit flag still overrides the spec (same precedence rule as
+    protocol).
+    """
+    chosen = resolve_presentation(spec)
+
+    evaluation = cfg.setdefault("evaluation", {})
+    for axis, randomized_value in PRESENTATION_AXES.items():
+        evaluation[axis] = randomized_value if axis in chosen else "fixed"
 
 
 def load_config(path: str) -> Dict:

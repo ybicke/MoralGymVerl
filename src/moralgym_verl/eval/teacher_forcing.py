@@ -18,7 +18,7 @@ from typing import Dict, List, Optional, Tuple
 import torch
 
 from moralgym_verl.eval.config import (
-    build_eval_config, git_provenance, load_config,
+    apply_protocol, build_eval_config, git_provenance, load_config,
 )
 from moralgym_verl.eval.generation import render_chat_inputs
 from moralgym_verl.eval.model_loading import load_model_for_eval
@@ -213,6 +213,15 @@ def probe_setup(args, opponent: str = "tit_for_tat"):
     metadata) — metadata holds the provenance fields shared by all probe
     outputs."""
     cfg = load_config(args.config)
+    # Model and turn structure are cell properties, not config properties:
+    # a sweep cell's probes must describe the same weights and the same
+    # phase as its behavioral run. Without these two lines the probes fall
+    # back to whatever the eval yaml declares (a 5-round multi-round config),
+    # so a single-turn cell would carry probes built for a different phase.
+    if getattr(args, "model", None):
+        cfg["policy"]["model_name"] = args.model
+    if getattr(args, "protocol", None):
+        apply_protocol(cfg, args.protocol)
     if args.game is not None:
         cfg["game"]["type"] = args.game
         cfg["game"]["payoffs"] = dict(FIXED_PAYOFFS[args.game])
@@ -254,6 +263,10 @@ def probe_setup(args, opponent: str = "tit_for_tat"):
         "moral_value": args.moral_value,
         "base_model": cfg["policy"]["model_name"],
         "checkpoint": args.checkpoint,
+        # Phase provenance, mirroring behavioral.build_metadata: which preset
+        # the cell declared and the turn structure it resolved to.
+        "protocol": getattr(args, "protocol", None) or "custom",
+        "num_rounds": cfg["game"]["num_rounds"],
         "game_type": cfg["game"]["type"],
         "representation": cfg.get("prompt", {}).get("representation", "matrix"),
         "teacher_template_source": teacher_cfg.get("template_source"),

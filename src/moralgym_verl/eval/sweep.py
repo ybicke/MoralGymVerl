@@ -15,14 +15,22 @@ Spec schema:
       moral_value: [none, deontological]
       protocol: [single_round]     # pins the experimental phase; see below
       representation: [matrix, prose]
+      model: [google/gemma-2-9b-it]          # HF id; base-model screening
     env:                           # constant per-job env toggles
       RUN_PROBES: "on"
     extra_args: ["--temperature", "0.7"]   # constant forwarded flags
 
 Axis-to-launcher mapping (see cell_submission):
     game, moral_value  -> positionals 1, 2
-    representation     -> REPRESENTATION env (reaches behavioral AND probes)
+    representation     -> REPRESENTATION env  \
+    model              -> MODEL env            } env, because these must
+    protocol           -> PROTOCOL env        /  reach the probes too
     anything else      -> forwarded flag --<axis-with-dashes> <value>
+
+Forwarded flags reach `behavioral` ONLY (the launcher passes "${@:4}" to it
+alone). An axis that must also apply to probe_a/probe_b therefore has to go
+through _ENV_AXES — otherwise the probes silently keep the eval yaml's value
+and the cell mixes two settings. model and protocol are exactly that case.
 
 `protocol` is mandatory because it is what separates the experimental phases:
 its preset pins num_rounds / game_design / opponents at submit time, so a
@@ -38,13 +46,18 @@ from typing import Dict, List, Tuple
 
 import yaml
 
-from moralgym_verl.eval.config import PROTOCOL_PRESETS
+from moralgym_verl.eval.config import PROTOCOL_PRESETS, resolve_presentation
 
 LAUNCHER = "scripts/slurm/eval_teacher_signal.sh"
 MANIFEST_NAME = "sweep_manifest.json"
 # Axes consumed by mechanisms other than forwarded flags.
 _POSITIONAL_AXES = ("game", "moral_value")
-_ENV_AXES = {"representation": "REPRESENTATION"}
+# Axes that must reach the probes as well as behavioral: forwarded flags go
+# to behavioral only, so anything that defines what the cell IS (which model,
+# which turn structure, how the payoff block is rendered) travels by env.
+_ENV_AXES = {"representation": "REPRESENTATION",
+             "model": "MODEL",
+             "protocol": "PROTOCOL"}
 # Axes every sweep must declare, even single-valued. game/moral_value are the
 # launcher's positionals; protocol is required so a sweep can never silently
 # inherit the eval yaml's turn structure — the configs are 5-round, so an
@@ -71,6 +84,25 @@ def load_sweep(path: str) -> Dict:
     if unknown:
         raise ValueError(f"unknown protocol(s) {unknown} in sweep axes; "
                          f"choose from {sorted(PROTOCOL_PRESETS)}")
+    # Validate presentation specs at SUBMIT time: as a forwarded flag a
+    # typo ('lables+role') would only surface once the cell is on a GPU.
+    for pres in spec["axes"].get("presentation", []):
+        resolve_presentation(pres)   # raises on an unknown preset/axis
+
+    # The episode mode of probe B is the multi-round teacher-decay probe. A
+    # sweep that turns it on while any cell is single-round would run an
+    # instrument with no curve to measure. Caught here so --dry-run reports
+    # it, rather than at job start once the cells are already queued.
+    env = spec.get("env") or {}
+    if str(env.get("RUN_PROBE_B_EPISODE", "off")).lower() == "on":
+        single = [p for p in spec["axes"]["protocol"]
+                  if PROTOCOL_PRESETS[p]["num_rounds"] < 2]
+        if single:
+            raise ValueError(
+                f"env RUN_PROBE_B_EPISODE=on but protocol(s) {single} are "
+                f"single-round; the episode probe measures per-round decay "
+                f"and needs a multi-round protocol"
+            )
     spec.setdefault("eval_group", spec["name"])
     return spec
 
