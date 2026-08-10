@@ -49,7 +49,12 @@ import yaml
 from moralgym_verl.eval.config import PROTOCOL_PRESETS, resolve_presentation
 
 LAUNCHER = "scripts/slurm/eval_teacher_signal.sh"
+PACK_LAUNCHER = "scripts/slurm/eval_pack.sh"
 MANIFEST_NAME = "sweep_manifest.json"
+# Cells per packed job. 4 = one per GPU on a GH200 node. Clariden is
+# OverSubscribe=EXCLUSIVE, so a 1-GPU job is billed for all 4 GPUs; packing
+# cuts billed node-hours (and the fairshare hit that follows them) ~4x.
+PACK_SIZE = 4
 # Axes consumed by mechanisms other than forwarded flags.
 _POSITIONAL_AXES = ("game", "moral_value")
 # Axes that must reach the probes as well as behavioral: forwarded flags go
@@ -148,3 +153,59 @@ def cell_submission(spec: Dict, cell: Dict) -> Tuple[Dict[str, str], List[str]]:
         env["CONFIG"] = str(spec["config"])
     argv += [str(a) for a in (spec.get("extra_args") or [])]
     return env, argv
+
+
+def run_dir_stem(cell: Dict) -> str:
+    """Directory name for one cell, minus the `_<jobid>` suffix.
+
+    THE single implementation of cell naming. Under packing, four cells
+    share one SLURM_JOB_ID, so the job id alone no longer separates them —
+    the stem must. Cells are a cartesian product, so the axis tuple is
+    unique by construction and therefore so is the stem.
+
+    `<game>__<moral_value>__<other axes, yaml order>`; the launcher appends
+    `_<jobid>` and never derives a name itself (two implementations that
+    can disagree would mean two cells writing one directory).
+    """
+    rest = [str(v) for axis, v in cell.items() if axis not in _POSITIONAL_AXES]
+    stem = f"{cell['game']}__{cell['moral_value']}"
+    return f"{stem}__{'__'.join(rest)}" if rest else stem
+
+
+def pack_batches(spec: Dict, cells: List[Dict],
+                 pack_size: int = PACK_SIZE) -> List[List[Dict]]:
+    """Group cells into per-node batches, heaviest first.
+
+    A batch holds the node until its SLOWEST cell finishes, so mixing a
+    ~85min probe cell with a ~60min probe-less one wastes the difference on
+    an idle GPU. Sorting by whether the cell runs probes clusters like with
+    like; the only ragged batch is then at the boundary.
+    """
+    def has_probes(cell: Dict) -> bool:
+        env = spec.get("env") or {}
+        return (cell["moral_value"] != "none"
+                and str(env.get("RUN_PROBES", "on")) != "off")
+
+    ordered = sorted(cells, key=lambda c: not has_probes(c))
+    return [ordered[i:i + pack_size]
+            for i in range(0, len(ordered), pack_size)]
+
+
+def batch_payload(spec: Dict, batch: List[Dict]) -> Dict:
+    """The batch.json eval_pack.sh consumes: per cell, the resolved run-dir
+    stem plus the same env/args the single-cell launcher would have used."""
+    payload = []
+    for cell in batch:
+        env, argv = cell_submission(spec, cell)
+        # argv = [sbatch, launcher, game, moral_value, num_episodes, *args]
+        payload.append({
+            "eval_group": str(spec["eval_group"]),
+            "run_dir_stem": run_dir_stem(cell),
+            "game": str(cell["game"]),
+            "moral_value": str(cell["moral_value"]),
+            "num_episodes": int(spec.get("num_episodes", 25)),
+            "env": {k: v for k, v in env.items() if k != "EVAL_GROUP"},
+            "args": argv[5:],
+            "axes": {k: str(v) for k, v in cell.items()},
+        })
+    return {"cells": payload}

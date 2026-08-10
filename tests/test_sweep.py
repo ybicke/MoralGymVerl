@@ -4,7 +4,8 @@ import pytest
 import yaml
 
 from moralgym_verl.eval.sweep import (
-    cell_submission, expand_cells, load_sweep,
+    batch_payload, cell_submission, expand_cells, load_sweep, pack_batches,
+    run_dir_stem,
 )
 
 SPEC = {
@@ -165,3 +166,69 @@ def test_presentation_is_a_forwarded_flag_not_env():
     env, argv = cell_submission(spec, expand_cells(spec)[0])
     assert "PRESENTATION" not in env
     assert argv[argv.index("--presentation") + 1] == "surface_randomization"
+
+
+# --- packing: 4 cells per node ------------------------------------------
+# Clariden is OverSubscribe=EXCLUSIVE, so a 1-GPU job is billed for all 4
+# GPUs of the node. Packing exists to stop paying 4x (and taking the
+# matching fairshare hit) for GPUs that sit idle.
+
+def test_run_dir_stem_is_unique_per_cell():
+    """Under packing four cells share one SLURM_JOB_ID, so the stem — not
+    the job id — is what keeps them in separate directories. Cells are a
+    cartesian product, so every stem must differ."""
+    spec = {**SPEC, "axes": {**SPEC["axes"],
+                             "presentation": ["fixed_representation",
+                                              "surface_randomization"]}}
+    cells = expand_cells(spec)
+    stems = [run_dir_stem(c) for c in cells]
+    assert len(set(stems)) == len(cells)
+
+
+def test_run_dir_stem_separates_cells_sharing_game_and_value():
+    """The exact collision packing would otherwise cause: same game and
+    moral value, different representation."""
+    a = {"game": "pd", "moral_value": "deontological", "representation": "matrix",
+         "protocol": "single_round"}
+    b = {**a, "representation": "prose"}
+    assert run_dir_stem(a) != run_dir_stem(b)
+
+
+def test_pack_batches_cover_every_cell_exactly_once():
+    spec = {**SPEC, "axes": {**SPEC["axes"],
+                             "moral_value": ["none", "deontological",
+                                             "utilitarian", "virtue"]}}
+    cells = expand_cells(spec)
+    batches = pack_batches(spec, cells, pack_size=4)
+    flat = [c for b in batches for c in b]
+    assert len(flat) == len(cells)
+    assert {run_dir_stem(c) for c in flat} == {run_dir_stem(c) for c in cells}
+    assert all(len(b) <= 4 for b in batches)
+
+
+def test_pack_batches_group_probe_cells_together():
+    """A batch holds the node until its slowest cell ends, so probe cells
+    (~85min) must not be mixed with probe-less ones (~60min) except at the
+    single ragged boundary."""
+    spec = {**SPEC, "axes": {**SPEC["axes"],
+                             "moral_value": ["none", "deontological",
+                                             "utilitarian", "virtue"]}}
+    batches = pack_batches(spec, expand_cells(spec), pack_size=4)
+    mixed = [b for b in batches
+             if len({c["moral_value"] == "none" for c in b}) > 1]
+    assert len(mixed) <= 1
+
+
+def test_batch_payload_carries_resolved_names_and_env():
+    spec = {**SPEC, "axes": {**SPEC["axes"], "model": ["google/gemma-2-9b-it"]}}
+    batch = pack_batches(spec, expand_cells(spec), pack_size=4)[0]
+    payload = batch_payload(spec, batch)["cells"]
+    assert len(payload) == len(batch)
+    for entry in payload:
+        # The launcher must never re-derive the name; it is resolved here.
+        assert entry["run_dir_stem"]
+        assert entry["eval_group"] == "unit_group"
+        assert entry["env"]["MODEL"] == "google/gemma-2-9b-it"
+        assert entry["env"]["PROTOCOL"] == "single_round"
+        assert "EVAL_GROUP" not in entry["env"]      # carried per-cell instead
+        assert entry["args"][-2:] == ["--temperature", "0.7"]
