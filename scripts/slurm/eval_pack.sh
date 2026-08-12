@@ -81,12 +81,17 @@ for i, c in enumerate(cells):
     run_dir = f"{root}/eval_results/teacher_signal/{c['eval_group']}/{c['run_dir_stem']}_$SLURM_JOB_ID"
     env = c.get("env", {})
     args = [str(a) for a in c.get("args", [])]
+    # A sweep's `config:` key travels in the cell env (sweep.cell_submission).
+    # The job-level CONFIG is only the fallback: the packed submit path does
+    # not export env, so reading it alone would silently run the default
+    # config for every cell.
+    cell_config = env.get("CONFIG", config)
 
     def flag(name, key):
         return f'--{name} {shlex.quote(env[key])}' if env.get(key) else ''
 
     common = " ".join(filter(None, [
-        f'--config {shlex.quote(root)}/{shlex.quote(config)}',
+        f'--config {shlex.quote(root)}/{shlex.quote(cell_config)}',
         '--checkpoint base',
         f'--game {shlex.quote(c["game"])}',
         f'--moral-value {shlex.quote(c["moral_value"])}',
