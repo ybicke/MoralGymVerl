@@ -120,6 +120,7 @@ def build_policy(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] =
     eval_cfg = cfg.get("evaluation", {})
     temperature = eval_cfg.get("temperature", 1.0)
     max_new_tokens = eval_cfg.get("max_new_tokens", 10)
+    enable_thinking = cfg.get("prompt", {}).get("enable_thinking")
 
     teacher_cfg = cfg.get("teacher") or {}
     moral_value_name = teacher_cfg.get("moral_value", "none")
@@ -155,6 +156,7 @@ def build_policy(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] =
             temperature=temperature, raw_log=raw_log,
             prompt_wrapper=prompt_wrapper,
             wrap_position=teacher_cfg.get("wrap_position", "first"),
+            enable_thinking=enable_thinking,
         )
         logger.info("Multi-round: conversation policy (wrap_position=%s), "
                     "episode dialogues accumulate (verl multi-turn parity)",
@@ -164,6 +166,7 @@ def build_policy(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] =
             model, tokenizer, max_new_tokens=max_new_tokens,
             temperature=temperature, raw_log=raw_log,
             prompt_wrapper=prompt_wrapper,
+            enable_thinking=enable_thinking,
         )
     logger.info("Decoding: %s, max_new_tokens=%d",
                 "greedy" if not (temperature and temperature > 0)

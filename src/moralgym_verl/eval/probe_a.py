@@ -48,8 +48,10 @@ def answer_token_probe(model, tokenizer, config, wrapper) -> Dict:
     results = {}
     for state, hist_a, hist_o in PROBE_STATES:
         game_prompt = build_prompt(cfg, hist_a, hist_o)
-        student_ids = chat_prefix(tokenizer, game_prompt, model.device)
-        teacher_ids = chat_prefix(tokenizer, wrapper(game_prompt), model.device)
+        student_ids = chat_prefix(tokenizer, game_prompt, model.device,
+                                  cfg.enable_thinking)
+        teacher_ids = chat_prefix(tokenizer, wrapper(game_prompt), model.device,
+                                  cfg.enable_thinking)
         lo_s, lp_cs, lp_ds = answer_logodds(
             model, tokenizer, student_ids, cfg.coop_label, cfg.defect_label)
         lo_t, lp_ct, lp_dt = answer_logodds(

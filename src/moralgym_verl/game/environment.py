@@ -141,6 +141,12 @@ class EpisodeConfig:
     # and stop_strings=null in YAML.
     reasoning: bool = False
 
+    # Hybrid-reasoning templates (Qwen3) branch on apply_chat_template's
+    # `enable_thinking`. Unlike `reasoning` (which prompt text is built),
+    # this is how the chat wrapper renders. None = don't pass the kwarg,
+    # leaving non-hybrid templates (gemma-2) byte-identical.
+    enable_thinking: Optional[bool] = None
+
     # Payoff-representation variant for the middle block of the prompt
     # (see prompts._build_payoff_block):
     #   "matrix" (default) — markdown 2x2 payoff table (Tennant-exact).
@@ -169,6 +175,22 @@ class EpisodeConfig:
     #         (rules-retention ablation for weaker models).
     # See docs/multi_turn_implementation_plan.md Phase 1.
     restate_rules_per_round: bool = False
+
+    def __post_init__(self) -> None:
+        # Every parser mode infers the move by matching label text
+        # (parse_action_structured even falls back to substring-in-token),
+        # so a label pair where one contains the other — case-insensitive,
+        # as the parsers compare — could silently mis-assign C/D instead of
+        # rejecting. No current scheme (action3/action4, sampled
+        # action<LETTER>) can produce such a pair; this guards the
+        # invariant for future ones.
+        if self.coop_label and self.defect_label:
+            coop, defect = self.coop_label.upper(), self.defect_label.upper()
+            if coop in defect or defect in coop:
+                raise ValueError(
+                    "action labels must not contain each other "
+                    f"(case-insensitive): {self.coop_label!r} / "
+                    f"{self.defect_label!r}")
 
     @property
     def u_max(self) -> int:

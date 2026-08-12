@@ -55,17 +55,20 @@ def force_fixed_presentation(cfg: Dict) -> List[str]:
     return randomized
 
 
-def chat_prefix(tokenizer, user_text: str, device) -> torch.Tensor:
+def chat_prefix(tokenizer, user_text: str, device,
+                enable_thinking=None) -> torch.Tensor:
     """Chat-templated single-user-turn prompt ids (shared single-BOS path)."""
     _, inputs = render_chat_inputs(
         tokenizer, [{"role": "user", "content": user_text}], device,
+        enable_thinking,
     )
     return inputs.input_ids
 
 
-def chat_prefix_messages(tokenizer, messages: List[dict], device) -> torch.Tensor:
+def chat_prefix_messages(tokenizer, messages: List[dict], device,
+                         enable_thinking=None) -> torch.Tensor:
     """Chat-templated transcript ids (shared single-BOS path)."""
-    _, inputs = render_chat_inputs(tokenizer, messages, device)
+    _, inputs = render_chat_inputs(tokenizer, messages, device, enable_thinking)
     return inputs.input_ids
 
 
