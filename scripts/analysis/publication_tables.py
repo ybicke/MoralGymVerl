@@ -1,8 +1,7 @@
 """Publication-ready tables (booktabs LaTeX + Markdown) for the
 single-turn teacher-signal screen.
 
-Builds seven tables from eval cells (see summarize_eval_cells.py for the
-raw cross-arm dumps this condenses):
+Builds seven tables from eval cells:
 
     state_cooperation   P(C | agent_prev, opp_prev) per game x value x
                         representation, with the opponent-conditioning
@@ -24,15 +23,24 @@ raw cross-arm dumps this condenses):
 Cells are classified by metadata, so passing the screen group and the
 robustness group together produces all seven; duplicate (game, value,
 representation, presentation) cells keep the first occurrence. Each
-group is assumed comparability-checked already (summarize_eval_cells).
+group is assumed comparability-checked already.
 
-Outputs land in <first path>/tables/ (override with --out): one .tex per
-table plus README.md, the rendered Markdown version with a provenance
-header. README.md is the git-tracked analysis doc (the eval_results
-gitignore un-ignores exactly that name); the .tex files stay data.
-For hand-written interpretation, copy README.md to a per-experiment
-analysis doc (e.g. single_turn_screen.md) and annotate the copy —
-README.md itself is regenerated wholesale.
+Outputs land in <first path>/analysis/ (override with --out):
+results_<model>.md (the rendered tables with a provenance header) plus
+one .tex per table under analysis/tex/. The group layout is then
+
+    <group>/cells/<cell>/         machine-readable per-cell JSON
+    <group>/analysis/             everything human-readable
+    <group>/sweep_manifest.json   what was launched
+
+The doc is named after the model so one experiment folder can hold
+several models' results side by side, and both it and the .tex sources
+describe only the experiment and the statistics: no model's findings
+appear in another model's captions.
+
+results_<model>.md is regenerated wholesale. For hand-written
+interpretation, copy it to analysis.md in the same folder and annotate
+the copy; the gitignore tracks both names and nothing else here.
 
 Login-node friendly (stdlib only, no torch):
     /usr/bin/python3.11 scripts/analysis/publication_tables.py \
@@ -51,12 +59,13 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parents[2] / "src"))
-from summarize_eval_cells import (  # noqa: E402
-    _episode_decisions,
-    _facet_extractors,
-    _mode_splits,
+from eval_cells import (  # noqa: E402
+    check_comparability,
     discover_run_dirs,
+    episode_decisions,
+    facet_extractors,
     load_json,
+    mode_splits,
 )
 from moralgym_verl.game.environment import FIXED_PAYOFFS  # noqa: E402
 from moralgym_verl.game.moral_values import get_moral_value  # noqa: E402
@@ -252,9 +261,25 @@ def to_markdown(t: Table) -> str:
 CellKey = Tuple[str, str, str, str]  # (game, value, representation, mode)
 
 
-def collect_cells(paths: List[Path]) -> Dict[CellKey, Path]:
+def collect_cells(paths: List[Path], strict: bool = True) -> Dict[CellKey, Path]:
     """First occurrence wins: the robustness group re-runs the screen's
-    fixed PD cells, and the screen (listed first) is the canonical one."""
+    fixed PD cells, and the screen (listed first) is the canonical one.
+
+    Each group is comparability-checked on its own first: a cell that
+    differs in a setting the sweep never declared as an axis (a different
+    token budget, temperature, model) would otherwise be averaged into a
+    table as if it belonged there. Checked per path, since two groups may
+    legitimately differ on an axis neither declares.
+    """
+    dirty = [p for p in paths if not check_comparability(discover_run_dirs([p]))]
+    if dirty:
+        msg = ("cells differ in settings their sweep never declared as an "
+               f"axis (see WARNINGs above): {', '.join(p.name for p in dirty)}")
+        if strict:
+            raise SystemExit(f"ERROR: {msg}\nPass --allow-mixed to build the "
+                             f"tables anyway.")
+        print(f"WARNING: {msg} -- building anyway (--allow-mixed).")
+
     cells: Dict[CellKey, Path] = {}
     for run_dir in discover_run_dirs(paths):
         meta = (load_json(run_dir, "behavioral.json") or {}).get("metadata")
@@ -410,7 +435,7 @@ def probe_b_table(cells: Dict[CellKey, Path],
                          if run_dir else None)
                 if probe is None:
                     continue
-                splits = _mode_splits(run_dir)
+                splits = mode_splits(run_dir)
                 per_state = {}
                 for state in PROBE_STATES:
                     s = probe["probe_b"][state]["answer_delta"]
@@ -685,13 +710,13 @@ def _slice_level_stats(
     episodes = [ep for block in data["opponents"]
                 for ep in block.get("episode_moves", [])
                 if "presentation" in ep]
-    facets = _facet_extractors([ep["presentation"] for ep in episodes])
+    facets = facet_extractors([ep["presentation"] for ep in episodes])
     stats = {}
     for facet, fn in facets.items():
         by_level: Dict[str, List[Dict]] = {}
         for i, ep in enumerate(episodes):
             by_level.setdefault(fn(ep["presentation"]), []).extend(
-                _episode_decisions(ep, i, data["metadata"]))
+                episode_decisions(ep, i, data["metadata"]))
         for level, decisions in by_level.items():
             legal = [d for d in decisions if d["move"] in ("C", "D")]
             cond = {prev: [d["move"] == "C" for d in legal
@@ -766,6 +791,13 @@ def slices_tables(cells: Dict[CellKey, Path]) -> List[Table]:
     ]
 
 
+def model_slug(cells: Dict[CellKey, Path]) -> str:
+    """Filename-safe model id, e.g. 'Qwen/Qwen3-8B' -> 'qwen3-8b'. Names
+    the output doc so one experiment folder can hold results for more
+    than one model without them overwriting each other."""
+    return shared_meta(cells)["base_model"].rsplit("/", 1)[-1].lower()
+
+
 def readme_header(cells: Dict[CellKey, Path], paths: List[Path]) -> str:
     meta = shared_meta(cells)
     dates = sorted({(load_json(d, "behavioral.json")["metadata"]
@@ -791,8 +823,8 @@ def readme_header(cells: Dict[CellKey, Path], paths: List[Path]) -> str:
         f"subscript naming what it measures: {plain(D_OPP)} = "
         "opponent-conditioning gap, "
         f"{plain(D_SURF)} = its change under surface randomization. "
-        "Rendered from the same cell data as the LaTeX sources in this "
-        "directory by `scripts/analysis/publication_tables.py`.",
+        "Rendered from the same cell data as the LaTeX sources in "
+        "`tex/` by `scripts/analysis/publication_tables.py`.",
         "", "",
     ])
 
@@ -857,9 +889,13 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=None,
                         help="Output directory (default: "
                              "<first path>/tables).")
+    parser.add_argument("--allow-mixed", action="store_true",
+                        help="build tables even when a group's cells differ "
+                             "in an undeclared setting (warn instead of "
+                             "refusing).")
     args = parser.parse_args()
 
-    cells = collect_cells(args.paths)
+    cells = collect_cells(args.paths, strict=not args.allow_mixed)
     builders: List[Callable[[Dict[CellKey, Path]],
                             Union[Table, List[Table], None]]] = [
         state_cooperation_table, probe_b_table, probe_b_token_tables,
@@ -872,16 +908,20 @@ def main() -> None:
         if built is not None:
             tables.extend(built if isinstance(built, list) else [built])
 
-    out_dir = args.out or (args.paths[0] / "tables")
-    out_dir.mkdir(parents=True, exist_ok=True)
+    # Default: <group>/analysis/, alongside the cells/ it was computed
+    # from. Everything human-readable lives here; cells/ stays machine
+    # output and the group root keeps only manifest and batch payloads.
+    out_dir = args.out or (args.paths[0] / "analysis")
+    tex_dir = out_dir / "tex"
+    tex_dir.mkdir(parents=True, exist_ok=True)
     markdown = [readme_header(cells, args.paths),
                 moral_values_section()]
     for table in tables:
-        tex_path = out_dir / f"{table.key.replace('-', '_')}.tex"
+        tex_path = tex_dir / f"{table.key.replace('-', '_')}.tex"
         tex_path.write_text(to_latex(table))
         markdown.append(to_markdown(table))
         print(f"saved -> {tex_path}")
-    md_path = out_dir / "README.md"
+    md_path = out_dir / f"results_{model_slug(cells)}.md"
     md_path.write_text("\n".join(markdown))
     print(f"saved -> {md_path}\n")
     print("\n".join(markdown[1:]), end="")

@@ -56,12 +56,16 @@ def main() -> None:
     batches = pack_batches(spec, cells, args.pack_size)
     print(f"sweep {spec['name']}: {len(cells)} cells in {len(batches)} packed "
           f"jobs ({args.pack_size}/node) -> {group_dir}")
-    group_dir.mkdir(parents=True, exist_ok=True)
+    # Per-node work orders, not results: kept out of the group root so it
+    # holds only cells/, analysis/ and the manifest. One file per packed
+    # sbatch job = the 4 cells that share a node.
+    batch_dir = group_dir / "packed_node_batches"
+    batch_dir.mkdir(parents=True, exist_ok=True)
 
     records = []
     for b_idx, batch in enumerate(batches):
         payload = batch_payload(spec, batch)
-        batch_path = group_dir / f"batch_{b_idx:03d}.json"
+        batch_path = batch_dir / f"batch_{b_idx:03d}.json"
         desc = [" ".join(f"{k}={v}" for k, v in c.items()) for c in batch]
         if args.dry_run:
             print(f"  [dry] sbatch {PACK_LAUNCHER} {batch_path.name}"

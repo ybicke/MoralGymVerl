@@ -10,7 +10,7 @@
 #   /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
 #       configs/sweeps/single_turn_screen_qwen3.yaml --dry-run
 name: single_turn_screen_qwen3
-eval_group: single_turn_screen_qwen3
+eval_group: single_turn_screen_qwen3-8b
 config: configs/eval/teacher_signal_qwen3_8b.yaml
 
 num_episodes: 400

@@ -78,7 +78,9 @@ batch_path, workdir, root, config = sys.argv[1:5]
 cells = json.load(open(batch_path))["cells"]
 
 for i, c in enumerate(cells):
-    run_dir = f"{root}/eval_results/teacher_signal/{c['eval_group']}/{c['run_dir_stem']}_$SLURM_JOB_ID"
+    # cells/ keeps the machine-readable results in one place, so the group
+    # root holds only the manifest, the batch payloads and analysis/.
+    run_dir = f"{root}/eval_results/teacher_signal/{c['eval_group']}/cells/{c['run_dir_stem']}_$SLURM_JOB_ID"
     env = c.get("env", {})
     args = [str(a) for a in c.get("args", [])]
     # A sweep's `config:` key travels in the cell env (sweep.cell_submission).
