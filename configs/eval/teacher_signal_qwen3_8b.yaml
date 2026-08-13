@@ -38,14 +38,17 @@ evaluation:
   num_episodes: 25
   opponents: [tit_for_tat, noisy_tft, always_defect, always_cooperate]
   temperature: 0.7
-  # Raised from gemma's 512. Same smoke test: thinking-off traces ran to
-  # max 499 tokens (deontological; 391 for 'none') — 13 tokens of headroom
-  # under 512, and the moral wording is what lengthens them, so the longer
-  # arms (deontological+repair, universalization) will run longer still.
-  # An overrun is silent: no Action line -> illegal (-6), which reads as a
-  # behavioral result rather than a truncation artifact. Mean is ~330, so
-  # the extra budget costs little; it only caps the tail.
-  max_new_tokens: 768
+  # Raised from gemma's 512: Qwen3 reasons ~2.5x longer under the same
+  # "Concisely reason" prompt (mean 1495 vs 599 chars, run 3070132+).
+  # 768 still bound the tail — 13/11600 responses ran past it and lost
+  # their Action line (all 2700+ chars, i.e. truncations not format
+  # misses), concentrated in the verbose arms. The observed max (3101
+  # chars) IS the old cap, so the true tail is censored and unknown —
+  # hence generous headroom rather than a snug fit. max_new_tokens is a
+  # bound, not a target: ~99.7% of responses stop at EOS near 380 tokens
+  # and are unaffected. Only non-terminating runaways run to the cap, so
+  # the cost is ~0.3% of samples generating longer before being stopped.
+  max_new_tokens: 2048
 
 # Rewards don't drive anything at eval; kept for metric parity with training.
 reward:

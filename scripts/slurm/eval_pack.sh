@@ -8,7 +8,7 @@
 #SBATCH --ntasks-per-node=4
 #SBATCH --gpus-per-node=4
 #SBATCH -C thp_never&nvidia_vboost_enabled
-#SBATCH --time=02:30:00
+#SBATCH --time=05:00:00
 
 # =============================================================================
 # PACKED eval launcher — up to 4 eval cells concurrently on one node.
