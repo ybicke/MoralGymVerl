@@ -1,4 +1,7 @@
-# Single-turn screen: results tables
+# Single-turn screen: results tables — analysis
+
+Hand-annotated copy of the generated `results_gemma-2-9b-it.md` (snapshot 2026-08-19).
+
 
 gemma-2-9b-it (base), protocol `single_round` (fabricated history, balanced states), T = 0.7, 400 episodes/cell (100 per state), vs. random opponent. Groups: single_turn_screen_gemma-2-9b-it, pd_presentation_robustness, pd_randomization_ablation, generosity_arm_gemma-2-9b-it (66 cells, runs 2026-08-10 / 2026-08-13).
 
@@ -56,6 +59,14 @@ Defection strictly dominates (T > R and P > S): cooperating means overriding the
 | Virtue | 56 \| 76 | **46** \| **61** | **95** \| 72 | 78 \| 71 | +14 \| +8 |
 | Universalization | 44 \| 54 | 38 \| 50 | 89 \| 77 | 70 \| **75** | +12 \| +3 |
 
+> **Which moral principle produces cooperative behaviour? Three readings:**
+>
+> - **Naive cooperator (highest level): virtue.** Lifts every state (pooled 69|70) and best escapes mutual defection (P(C|D<sub><small>A</small></sub>D<sub><small>O</small></sub>) 78|71) — but it also keeps cooperating while being exploited (P(C|C<sub><small>A</small></sub>D<sub><small>O</small></sub>) 46|61), so a persistent defector can farm it. Universalization: same unconditional shape, one notch lower (60|64).
+> - **Reciprocator: deontological + repair.** Largest conditioning gap (Δ<sub><small>opp</small></sub> +65|+68): ceiling after mutual cooperation (91|95), floor after mutual defection (32|6), and the repair clause works in its named state — after defecting on a cooperator it returns to cooperation (P(C|D<sub><small>A</small></sub>C<sub><small>O</small></sub>) 91|85). Weakness for a commons: the low D<sub><small>A</small></sub>D<sub><small>O</small></sub> means it stays locked into a spiral.
+> - **Balanced (PGG target: sustain C<sub><small>A</small></sub>C<sub><small>O</small></sub>, resist C<sub><small>A</small></sub>D<sub><small>O</small></sub>, repair D<sub><small>A</small></sub>C<sub><small>O</small></sub>, escape D<sub><small>A</small></sub>D<sub><small>O</small></sub>): generosity, on paper only.** Matrix profile fits (94, 33, 94, 44), but the D<sub><small>A</small></sub>D<sub><small>O</small></sub> lift over repair (+12) is under the ≈14-point noise bar and level with the artifact baseline (38); in prose D<sub><small>A</small></sub>D<sub><small>O</small></sub> stays floored at 6 — the escape clause doesn't change prompted behaviour. It does move the training signal: probe B's D<sub><small>A</small></sub>D<sub><small>O</small></sub> prose shift doubles (+1.74 → +3.02), so it may still act through training.
+> - **Failure: utilitarian.** Cooperates mainly after its *own* defection (90|44, 82|48) and barely after its own cooperation (11|11) — the baseline's own-move-switch heuristic, not a welfare principle; Δ<sub><small>opp</small></sub> ≈ 0.
+> - **Caveats.** Matrix levels inherit the baseline artifact (prose is the cleaner column); <≈14 points is noise; history is fabricated single-turn, so "escapes D<sub><small>A</small></sub>D<sub><small>O</small></sub>" = response to a stated prior round, not repeated-play dynamics.
+
 **Stag Hunt**
 
 Trust/coordination game, two equilibria: mutual cooperation (joint best) vs mutual defection (safe). Payoffs 3/4/1/0 (T/R/P/S); vs the random opponent: indifferent (E[C] = 2, E[D] = 2).
@@ -70,6 +81,15 @@ Trust/coordination game, two equilibria: mutual cooperation (joint best) vs mutu
 | Virtue | 26 \| 47 | 21 \| **48** | 66 \| 47 | 39 \| 36 | +16 \| +5 |
 | Universalization | 30 \| 24 | 17 \| 31 | 60 \| 68 | 65 \| 53 | +4 \| +4 |
 
+> **Three readings (Stag Hunt):**
+>
+> - **First fact: the matrix baseline is the switch artifact at full strength, not reciprocity.** 96|70 cooperation after its own defection vs. 13|4 after its own cooperation — loading on the agent's own move, barely on the opponent's (Δ<sub><small>opp</small></sub> +18|−3); prose sits at the usual floor (pooled 15.5). Beware reading D<sub><small>A</small></sub>C<sub><small>O</small></sub> in isolation: the baseline's 96 is switching, not restraint toward a cooperator — deontological's 61 there is not a regression.
+> - **Naive cooperator (only level-lifter): utilitarian.** Pooled 70|56, the game's welfare winner — but with an inverted profile: it cooperates most after being exploited (P(C|C<sub><small>A</small></sub>D<sub><small>O</small></sub>) 72 matrix) and least after mutual cooperation (41), and its D-state corner (99/68) is the untouched switch artifact.
+> - **Reciprocator: the deon family — restructuring, not lifting.** Mean stays at baseline (46–50) while Δ<sub><small>opp</small></sub> goes +18 → +57…+74; generosity is sharpest (+66|+74), again by trimming the exploited state (C<sub><small>A</small></sub>D<sub><small>O</small></sub> 16|21), with D<sub><small>A</small></sub>D<sub><small>O</small></sub> floored (18|2, far below the baseline's 70|31). Deepened lock-in, same as qwen.
+> - **Balanced (PGG target: sustain C<sub><small>A</small></sub>C<sub><small>O</small></sub>, resist C<sub><small>A</small></sub>D<sub><small>O</small></sub>, repair D<sub><small>A</small></sub>C<sub><small>O</small></sub>, escape D<sub><small>A</small></sub>D<sub><small>O</small></sub>): nobody.** The deon family fails escape (D<sub><small>A</small></sub>D<sub><small>O</small></sub> ≤ 22); utilitarian and the baseline fail resist and ride the artifact; virtue (pooled 38|44, the flattest profile — with T < R there is no temptation to push against) and universalization (at baseline, Δ<sub><small>opp</small></sub> ≈ +4) fail sustain (C<sub><small>A</small></sub>C<sub><small>O</small></sub> 26–47). No principle meets the four criteria in either representation.
+> - **Caveats.** Matrix levels are artifact-dominated — prose is the only readable column for levels; probe B pushes D-ward at the history-free state for every principle in SH (unexplained — hold SH conclusions more loosely than PD); <≈14 points is noise; single-turn fabricated history.
+> - **Side note — model choice (hypothesis).** The recurring gemma pattern — artifact-driven baseline, clause-level principles failing to bind in prompted behavior (repair in the screen, generosity's escape clause here and in PD), probe-B signal present at the target states while behavior does not move — reads as weak in-context adoption, not as a property of the principles. Qwen3-8B (same size class, newer generation) binds the clauses and holds a clean baseline. If prompted adoption predicts teacher quality for SDPO, a newer/stronger base model may be the better fine-tuning substrate, with gemma kept as the lower-capability comparison point.
+
 **Chicken**
 
 Anti-coordination game: the best reply is the opposite of the opponent's expected move; mutual defection is the worst joint outcome. Payoffs 4/2/0/1 (T/R/P/S); vs the random opponent: defect (E[C] = 1.5, E[D] = 2).
@@ -83,6 +103,16 @@ Anti-coordination game: the best reply is the opposite of the opponent's expecte
 | Utilitarian | 5 \| 16 | 8 \| 16 | 23 \| 59 | 32 \| 25 | -6 \| +17 |
 | Virtue | 73 \| 83 | 59 \| 56 | 93 \| 74 | **98** \| 90 | +4 \| +6 |
 | Universalization | 85 \| 70 | **72** \| **69** | 94 \| 87 | 96 \| **95** | +6 \| -3 |
+
+> **Three readings (Chicken):**
+>
+> - **First fact: unlike qwen, the baseline does not play chicken's anti-coordination.** Δ<sub><small>opp</small></sub> −7|−3 is noise; the profile (2|9, 10|2, 58|18, 64|31) is the own-move-switch pattern again, not equilibrium play — no textbook recall to overwrite here.
+> - **Naive cooperator: universalization and virtue.** Near-ceiling and unconditional (pooled 87|80 and 81|76), walking out of mutual defection at 96|95 and 98|90 — but also cooperating at 69–72 while being exploited: the farmable profile, sharpest form in the screen.
+> - **Reciprocator: the deon family — and chicken is the one game where it keeps both level and shape on gemma.** Pooled ~72 with Δ<sub><small>opp</small></sub> +25 to +48; generosity is sharpest (+48|+40) with the best repair state (P(C|D<sub><small>A</small></sub>C<sub><small>O</small></sub>) 95|88).
+> - **Balanced (PGG target): nominal fit by the deon family in prose — discount it.** Generosity prose 96·54·88·49 and deontological prose 99·61·79·67 hit all four criteria (D<sub><small>A</small></sub>D<sub><small>O</small></sub> intermediate, above the clean prose baseline's 31). But chicken's payoffs legitimize exactly this shape (yielding pays S = 1 > P = 0), and the profile did not transfer to PD/SH prose — read it as the game meeting the principle halfway, not as escape learned from the principle. In matrix, D<sub><small>A</small></sub>D<sub><small>O</small></sub> comparisons are tainted by the artifact baseline (64).
+> - **Failure: utilitarian.** Pooled 17|29, in matrix *below* the no-value baseline (34) — it has a welfare-consistent reason (defecting on a cooperator is joint-better, 2R < T + S) but it is the wrong reply against an unobserved random opponent (E[joint|C] = 4.5 > E[joint|D] = 2.5).
+> - **Side note — chicken as training ground contradicts the PGG target.** Its payoffs reward yielding to a defector (S > P: sucker persistence) and exploiting a cooperator (T > R): anti-aligned on *resist* and *sustain*, aligned only on *escape* (0/0). Use it as the exploitability/collapse-escape eval discriminator; train on PD/SH.
+> - **Caveats.** Matrix D-states carry the baseline artifact; matrix probe shifts collapse to ≈0 without cooperative history while prose stays strongly coop-ward — another reason prose is the readable column; <≈14 points is noise; single-turn fabricated history.
 
 
 ### Table 2 — probe_b: answer shift (teacher − student)

@@ -40,7 +40,7 @@ describe only the experiment and the statistics: no model's findings
 appear in another model's captions.
 
 results_<model>.md is regenerated wholesale. For hand-written
-interpretation, copy it to analysis.md in the same folder and annotate
+interpretation, copy it to analysis_<model>.md in the same folder and annotate
 the copy; the gitignore tracks both names and nothing else here.
 
 Login-node friendly (stdlib only, no torch):
@@ -729,7 +729,7 @@ def moral_values_section() -> str:
     lines = [
         "### Moral value prompts",
         "",
-        "Teacher texts of the sweep's arms, verbatim from "
+        "Teacher texts of the sweep's moral principles, verbatim from "
         "`src/moralgym_verl/game/moral_values.py` (the exact string "
         "prepended to the prompt at eval time). `none` adds no text; "
         "`+`-composites join their parts as separate paragraphs, and "
