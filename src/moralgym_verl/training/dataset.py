@@ -116,6 +116,12 @@ def _sample_config_from_yaml(cfg: dict[str, Any]) -> tuple[EpisodeConfig, dict[s
         "game_reward": reward_cfg.get("game_reward", "raw"),
         "illegal_penalty": float(reward_cfg.get("illegal_penalty", -6)),
         "shaping": reward_cfg.get("shaping", {}) or {},
+        # SDPO teacher context: "critique" (outcome critique built by
+        # reward_fn) or "principle" (the verbatim moral-principle text from
+        # moral_values.py named by teacher.moral_value — the wording the
+        # single-turn screen validated).
+        "feedback_mode": cfg.get("teacher", {}).get("feedback", "critique"),
+        "moral_value": cfg.get("teacher", {}).get("moral_value", "none"),
     }
 
     return config, state
