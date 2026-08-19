@@ -1,7 +1,7 @@
 """Publication-ready tables (booktabs LaTeX + Markdown) for the
 single-turn teacher-signal screen.
 
-Builds seven tables from eval cells:
+Builds the results tables from eval cells:
 
     state_cooperation   P(C | agent_prev, opp_prev) per game x value x
                         representation, with the opponent-conditioning
@@ -13,15 +13,16 @@ Builds seven tables from eval cells:
                         definition sits above its numbers (2c is SDPO's
                         step-0 per-token loss; unsigned, so it sizes the
                         signal where 2 gives its direction)
-    robustness          fixed vs surface-randomized presentation:
-                        cooperation level and conditioning gap, plus 3b
-                        re-cut by state with the own-move gap D_SELF
-    slices              per-facet slices within randomized cells
-                        (positional-shortcut baseline), split into 4a
-                        (cooperation level) and 4b (conditioning gap)
+    robustness          Table 3: cooperation by state under re-rendered
+                        presentation, one panel per value — fixed and
+                        all-four-surface endpoints
+                        (pd_presentation_robustness) plus the per-axis
+                        arms and payoff content control
+                        (pd_randomization_ablation) when those groups
+                        are passed
 
-Cells are classified by metadata, so passing the screen group and the
-robustness group together produces all seven; duplicate (game, value,
+Cells are classified by metadata, so passing the screen, robustness and
+ablation groups together produces all of them; duplicate (game, value,
 representation, presentation) cells keep the first occurrence. Each
 group is assumed comparability-checked already.
 
@@ -44,8 +45,9 @@ the copy; the gitignore tracks both names and nothing else here.
 
 Login-node friendly (stdlib only, no torch):
     /usr/bin/python3.11 scripts/analysis/publication_tables.py \
-        eval_results/teacher_signal/single_turn_screen \
-        eval_results/teacher_signal/pd_presentation_robustness
+        eval_results/teacher_signal/single_turn_screen_gemma-2-9b-it \
+        eval_results/teacher_signal/pd_presentation_robustness \
+        eval_results/teacher_signal/pd_randomization_ablation
 """
 
 from __future__ import annotations
@@ -62,8 +64,6 @@ sys.path.insert(0, str(Path(__file__).parents[2] / "src"))
 from eval_cells import (  # noqa: E402
     check_comparability,
     discover_run_dirs,
-    episode_decisions,
-    facet_extractors,
     load_json,
     mode_splits,
 )
@@ -76,6 +76,7 @@ GAMES = (("prisoners_dilemma", "Prisoner's Dilemma"),
 VALUES = (("none", "None (base)"),
           ("deontological", "Deontological"),
           ("deontological+repair", "Deontological + repair"),
+          ("deontological+repair+generosity", "Deontological + repair + generosity"),
           ("utilitarian", "Utilitarian"),
           ("virtue", "Virtue"),
           ("universalization", "Universalization"))
@@ -92,7 +93,6 @@ MISSING = "--"
 # splitting the two opponent-defected states.)
 D_OPP = "$\\Delta_{opp}$"
 D_SURF = "$\\Delta_{surf}$"
-D_SELF = "$\\Delta_{self}$"
 
 
 def game_note(game: str) -> str:
@@ -104,10 +104,9 @@ def game_note(game: str) -> str:
     ev_c, ev_d = (p["R"] + p["S"]) / 2, (p["T"] + p["P"]) / 2
     best = ("defect" if ev_d > ev_c else "cooperate" if ev_c > ev_d
             else "indifferent")
-    return (f"{GAME_NOTES[game]} Payoffs T = {p['T']}, R = {p['R']}, "
-            f"P = {p['P']}, S = {p['S']}. Against the random opponent "
-            f"used here, E[C] = {ev_c:g} and E[D] = {ev_d:g}, so the "
-            f"best reply is to {best}.")
+    return (f"{GAME_NOTES[game]} Payoffs {p['T']}/{p['R']}/{p['P']}/"
+            f"{p['S']} (T/R/P/S); vs the random opponent: {best} "
+            f"(E[C] = {ev_c:g}, E[D] = {ev_d:g}).")
 
 
 def state_label(s: str) -> str:
@@ -204,7 +203,10 @@ _MD_SUBS = (
     ("$\\mid$", "|"),
     ("$_A$", "<sub><small>A</small></sub>"),
     ("$_O$", "<sub><small>O</small></sub>"),
+    ("$_S$", "<sub><small>S</small></sub>"),
+    ("$_T$", "<sub><small>T</small></sub>"),
     ("$-$", "−"), ("$\\to$", "→"), ("$\\pm$", "±"), ("$T=", "T = "),
+    ("\\ell", "ℓ"),
     ("\\times", "×"), ("$", ""),
     ("`", "'"), ("s.e.\\", "s.e."), ("\\leq", "≤"), ("opp.\\", "opp."),
     ("vs.\\", "vs."), (" -- ", " — "), ("\\ ", " "), ("\\Delta", "Δ"),
@@ -260,6 +262,23 @@ def to_markdown(t: Table) -> str:
 
 CellKey = Tuple[str, str, str, str]  # (game, value, representation, mode)
 
+# presentation_spec -> mode. The endpoints keep their historical mode
+# names ("fixed"/"randomized", what Tables 3-4 look up); an ablation
+# cell's mode is its axis name. Cells from before presentation_spec
+# existed (the screen) fall back to the resolved eval_presentation dict.
+SPEC_MODES = {"fixed_representation": "fixed",
+              "surface_randomization": "randomized"}
+
+
+def cell_mode(meta: Dict) -> str:
+    spec = meta.get("presentation_spec")
+    if spec is None:
+        presentation = meta.get("eval_presentation") or {}
+        spec = ("surface_randomization"
+                if any(v != "fixed" for v in presentation.values())
+                else "fixed_representation")
+    return SPEC_MODES.get(spec, spec)
+
 
 def collect_cells(paths: List[Path], strict: bool = True) -> Dict[CellKey, Path]:
     """First occurrence wins: the robustness group re-runs the screen's
@@ -285,12 +304,8 @@ def collect_cells(paths: List[Path], strict: bool = True) -> Dict[CellKey, Path]
         meta = (load_json(run_dir, "behavioral.json") or {}).get("metadata")
         if meta is None:
             continue
-        presentation = meta.get("eval_presentation") or {}
-        mode = ("randomized" if any(v != "fixed"
-                                    for v in presentation.values())
-                else "fixed")
         key = (meta["game_type"], meta["moral_value"],
-               meta["representation"], mode)
+               meta["representation"], cell_mode(meta))
         cells.setdefault(key, run_dir)
     return cells
 
@@ -311,19 +326,6 @@ def pct(p: float) -> str:
 def gap_pp(block: Dict) -> int:
     return round(100 * (block["cond_given_opp_c"]["p_C"]
                         - block["cond_given_opp_d"]["p_C"]))
-
-
-def gap_self_pp(block: Dict) -> int:
-    """Own-move counterpart of gap_pp: mean P(C) after the agent's own D
-    minus mean P(C) after its own C. Same four cells as D_OPP, sliced on
-    the agent's previous move instead of the opponent's. Purely
-    descriptive -- the history is fabricated and each episode is one
-    independent decision, so this measures a response to a *stated*
-    prior move, not alternation over time."""
-    sc = block["state_conditioning"]
-    def after(own: str) -> float:
-        return sum(sc[f"({own},{opp})"]["p_C"] for opp in "CD") / 2
-    return round(100 * (after("D") - after("C")))
 
 
 def sign_test_p(c_ward: int, d_ward: int) -> float:
@@ -383,32 +385,16 @@ def state_cooperation_table(cells: Dict[CellKey, Path]) -> Table:
         key="state-cooperation",
         title="Table 1 — behavioral: state-conditioned cooperation",
         caption=(
-            f"Cooperation rate (\\%) of {model} (the agent) by fabricated "
-            "previous state. Each panel opens with its game's structure "
-            "and the fixed eval payoffs it was played with, quoted from "
-            "game/environment.py (FIXED\\_PAYOFFS, Tennant-matching): "
-            "T = temptation (defect on a cooperator), R = reward (mutual "
-            "cooperation), P = punishment (mutual defection), S = sucker "
-            "(cooperate against a defector). Matrix/prose side by side, fixed "
-            f"presentation, $T={meta['eval_temperature']}$, "
+            f"Cooperation rate (\\%) of {model} by fabricated previous "
+            "state; matrix/prose side by side, fixed presentation, "
+            f"$T={meta['eval_temperature']}$, "
             f"{meta['num_episodes']} episodes per cell = 100 decisions "
-            "per state, so each percentage carries a binomial standard "
-            "error of at most 5 points (largest at 50\\%, smaller near "
-            "0 or 100) and two cells differing by less than "
-            "$\\approx$14 points are not distinguishable. "
-            f"{D_OPP} = P(C$\\mid$C$_O$) $-$ P(C$\\mid$D$_O$), in "
-            "percentage points: how much more the agent cooperates "
-            "after the opponent cooperated than after it defected. "
-            "Read it as a tendency, not a strategy: a large value "
-            "shows cooperation covarying strongly with the opponent's "
-            "last move, though one round of history cannot distinguish "
-            "reciprocating from copying it. A small value is not "
-            "evidence of no effect -- the s.e.\\ is $\\approx$5 points, "
-            "and opposite effects in the two own-move strata cancel, so "
-            "a gap near zero can hide large within-stratum swings "
-            "(Table~3b slices on the own move). Presentation effects "
-            "are Table~3. Bold: column-wise "
-            "maximum across the moral values (baseline excluded)."),
+            "per state (binomial s.e.\\ $\\leq$5 points; differences "
+            "under $\\approx$14 points are not distinguishable). "
+            f"{D_OPP} = P(C$\\mid$C$_O$) $-$ P(C$\\mid$D$_O$) tells us "
+            "how much the agent cooperated when the opponent "
+            "cooperated, versus when the opponent defected. A large "
+            "positive number indicates reciprocity behaviour."),
         stub="Value (matrix $\\mid$ prose)",
         col_groups=[(f"P(C$\\mid${state_label(s)})", ["mat.", "prose"])
                     for s in STATES4]
@@ -473,27 +459,24 @@ def probe_b_table(cells: Dict[CellKey, Path],
         key="probe-b-answer-delta",
         title="Table 2 — probe_b: answer shift (teacher $-$ student)",
         caption=(
-            "How far the moral text moves the final answer, with the "
-            "reasoning held fixed. For one trace r, let "
-            "L(p, r) = log P(coop label | p, r) $-$ "
-            "log P(defect label | p, r) be the answer log-odds after "
-            f"prompt p. The entry is the mean over the N = {n_traces} "
-            "traces of [ L(teacher, r) $-$ L(student, r) ], where "
-            "student is the plain prompt and teacher the same prompt "
-            "with the moral wording prepended. Traces are sampled from "
-            "the student prompt ($T = 0.7$, which is what SDPO scores) "
-            "and cut at their final Action: marker, so both sides score "
-            "identical reasoning and only the prepended text differs. "
-            "Natural log-odds: $+0.7$ doubles the odds of cooperating, "
-            "$+2.3$ is $10\\times$, $+3.4$ is $30\\times$; negative is "
-            "defect-ward. A mean over traces, not over tokens -- the "
-            "per-token quantities off these same traces are Tables 2b "
-            "(token\\_delta) and 2c (token\\_jsd). "
-            "Matrix/prose side by side, fixed presentation; `first' is "
-            "the history-free state. Bold: largest magnitude across the "
-            "moral values for that state and representation. *: "
-            "two-sided sign test on the C-ward/D-ward trace split, "
-            f"$p < {alpha}$."),
+            "How much the moral wording shifts the final answer, with "
+            "the reasoning held fixed. r is a trace: one of "
+            f"N = {n_traces} model-generated reasoning chains, sampled "
+            "from the plain game prompt and cut at its final Action: "
+            "marker. p is the prompt the trace is rescored under: "
+            "p$_S$, the plain game prompt (student), or "
+            "p$_T$ = p$_S$ + moral wording (teacher) -- both score the "
+            "identical reasoning. "
+            "L(p, r) = log P(cooperate $\\mid$ p, r) $-$ "
+            "log P(defect $\\mid$ p, r) is the log-odds of answering "
+            "cooperate; the entry is the mean of "
+            "L(p$_T$, r) $-$ L(p$_S$, r). Positive "
+            "= the wording pushes the answer "
+            "toward cooperate; an entry of $+0.7$ multiplies the odds "
+            "of cooperating by exp(0.7) $\\approx$ 2, $+2.3$ by "
+            "$\\approx$10. Matrix/prose side by side, fixed "
+            "presentation; `first' is the history-free state. *: sign "
+            f"test, $p < {alpha}$."),
         stub="Value (matrix $\\mid$ prose)",
         col_groups=[(s if s == "first" else state_label(s),
                      ["mat.", "prose"]) for s in PROBE_STATES],
@@ -505,38 +488,44 @@ def probe_b_table(cells: Dict[CellKey, Path],
 ROBUSTNESS_VALUES = ("none", "deontological")
 
 
-SHARED_TRACE_NOTE = (
-    "Computed on the same 32 student traces as Table 2, but "
-    "teacher-forcing the WHOLE trace (reasoning and answer) after the "
-    "student prompt and after the teacher prompt, rather than only the "
-    "answer label. Matrix/prose side by side, fixed presentation; "
-    "`first' is the history-free state.")
+TRACE_LEAD = (
+    "Same traces r and prompts p$_S$ (student) / p$_T$ (teacher) as "
+    "Table 2, but scored over the whole trace (reasoning and answer) "
+    "rather than only the answer label.")
+
+TRACE_TAIL = (
+    "Matrix/prose side by side, fixed presentation; `first' is the "
+    "history-free state.")
 
 TOKEN_TABLES = (
     ("token_delta", "token\\_delta", "{:+.3f}", "2b",
-     "Mean per-token logprob of the trace under the teacher prompt "
-     "minus under the student prompt: how much less (or more) typical "
-     "the student's own reasoning looks once the moral text is "
+     "$\\ell$(p, r) = mean per-token log-probability of trace r under "
+     "prompt p; the entry is the mean over traces of "
+     "$\\ell$(p$_T$, r) $-$ $\\ell$(p$_S$, r): how much less typical "
+     "the student's own reasoning looks once the moral wording is "
      "prepended. Read the magnitude, not the sign -- it is negative "
-     "almost everywhere by construction, because the trace was sampled "
-     "from the student prompt and any added context lowers its "
-     "likelihood. A diagnostic, not the training objective."),
+     "almost everywhere, because r was sampled under p$_S$ and any "
+     "added context lowers its likelihood. A diagnostic, not the "
+     "training objective."),
     ("token_jsd", "token\\_jsd", "{:.3f}", "2c",
-     "The generalized Jensen-Shannon divergence between the two "
-     "full-vocab next-token distributions -- student-prompt s and "
-     "teacher-prompt t -- averaged over the trace's token positions: "
-     "with m = (1-a)s + at, JSD = (1-a)KL(s||m) + a KL(t||m), the "
-     "a = 0 and a = 1 branches degenerating to plain KL. This mirrors "
-     "SDPO's compute\\_self\\_distillation\\_loss, so it IS the "
-     "per-token loss SDPO computes, evaluated at step 0 -- the size of "
-     "the gradient signal the moral text supplies before any training. "
-     "What it cannot do is point: a divergence is non-negative, so it "
-     "says how far the moral text moves the policy, never which way -- "
-     "a wording can score the same at two states whose signed "
-     "answer\\_delta (Table 2) points in opposite directions. Nor does "
-     "magnitude predict efficacy: a large divergence can accompany a "
-     "weak behavioral pull. Because it averages over the whole "
-     "vocabulary and the whole trace, a wording can score high by "
+     "Rescoring r under a prompt yields, at each of its K token "
+     "positions, a probability vector over the entire vocabulary (one "
+     "entry per token the model could emit next, e.g.\\ 256k for "
+     "gemma-2): its prediction of what comes next at that point -- so "
+     "each prompt produces a K $\\times$ |V| matrix, one row per "
+     "position. s and t are the matching rows at one position under "
+     "p$_S$ and p$_T$. The entry is the generalized Jensen-Shannon "
+     "divergence "
+     "between them, JSD = (1$-$a) KL(s || m) + a KL(t || m) with "
+     "mixture m = (1$-$a)s + a t, averaged over the trace's positions: "
+     "how much the wording reshapes the model's whole next-token "
+     "prediction at each step of the reasoning, not just the "
+     "probability of the token actually there (that is 2b). This "
+     "is SDPO's per-token loss (compute\\_self\\_distillation\\_loss) "
+     "at step 0: the size of the training signal the wording supplies "
+     "before any training. Unsigned -- it says how far the wording "
+     "moves the policy, not which way -- and magnitude does not "
+     "predict behavioral efficacy: a wording can score high by "
      "rewording the reasoning without changing the decision."),
 )
 
@@ -578,10 +567,10 @@ def probe_b_token_tables(cells: Dict[CellKey, Path]) -> List[Table]:
         tables.append(Table(
             key=f"probe-b-{metric.replace('_', '-')}",
             title=f"Table {number} — probe\\_b: {metric_name}",
-            caption=(definition
+            caption=(TRACE_LEAD + " " + definition
                      + (f" Here a = {alpha}." if metric == "token_jsd"
                         and alpha is not None else "")
-                     + " " + SHARED_TRACE_NOTE),
+                     + " " + TRACE_TAIL),
             stub="Value (matrix $\\mid$ prose)",
             col_groups=[(s if s == "first" else state_label(s),
                          ["mat.", "prose"]) for s in PROBE_STATES],
@@ -591,204 +580,95 @@ def probe_b_token_tables(cells: Dict[CellKey, Path]) -> List[Table]:
     return tables
 
 
-def robustness_table(cells: Dict[CellKey, Path]) -> Table:
-    rows = []
-    for value, value_name in VALUES:
-        if value not in ROBUSTNESS_VALUES:
-            continue
-        for repr_, repr_name in REPRS:
-            pair = {mode: cells.get(("prisoners_dilemma", value,
-                                     repr_, mode))
-                    for mode in ("fixed", "randomized")}
-            if None in pair.values():
-                continue
-            row: List[Cell] = []
-            gaps = {}
-            for mode in ("fixed", "randomized"):
-                block = behavioral(pair[mode])
-                gaps[mode] = gap_pp(block)
-                row += [Cell(pct(block["cooperation_rate"])),
-                        Cell(pct(block["cond_given_opp_c"]["p_C"])),
-                        Cell(pct(block["cond_given_opp_d"]["p_C"])),
-                        Cell(f"{gaps[mode]:+d}")]
-            row.append(Cell(f"{gaps['randomized'] - gaps['fixed']:+d}"))
-            rows.append((f"{value_name}, {repr_name.lower()}", row))
-    return Table(
-        key="presentation-robustness",
-        title="Table 3 — pd_presentation_robustness: fixed vs.\\ "
-              "randomized presentation (Prisoner's Dilemma)",
-        caption=(
-            "Fixed vs.\\ surface-randomized presentation (labels, layout, "
-            "label order, role; payoffs fixed). The four axes re-render "
-            "an identical game, so any difference is attributable to how "
-            f"the payoff block is read. The conditioning gap {D_OPP} is "
-            "the more presentation-stable statistic by construction, "
-            "because a shift common to both conditioning arms cancels in "
-            "the difference, while the cooperation level does not. "
-            f"Measured for none and deontological in PD only. {D_SURF} = "
-            f"the change in {D_OPP} under randomization."),
-        stub="Value, repr.",
-        col_groups=[("Fixed", ["P(C)", "P(C$\\mid$C$_O$)",
-                               "P(C$\\mid$D$_O$)", D_OPP]),
-                    ("Randomized", ["P(C)", "P(C$\\mid$C$_O$)",
-                                    "P(C$\\mid$D$_O$)", D_OPP]),
-                    ("", [D_SURF])],
-        panels=[(None, rows)],
-    )
+# Row order of Table 3's panels: endpoints around the single-axis arms
+# (each randomizes ONE surface axis, the other three fixed), the content
+# control last. Modes are presentation_spec values via cell_mode().
+ABLATION_ARMS = (
+    ("fixed", "fixed"),
+    ("labels", "labels only"),
+    ("layout", "layout only"),
+    ("label_order", "label order only"),
+    ("role", "role only"),
+    ("randomized", "all four (surface)"),
+    ("payoffs", "payoffs (content)"),
+)
 
 
-def robustness_states_table(cells: Dict[CellKey, Path]) -> Optional[Table]:
-    """Table 3 re-cut: fixed vs randomized as ROWS (one panel per value x
-    representation, so the pair sits vertically adjacent) and the pooled
-    conditionals expanded into the four fabricated states. Adds D_SELF
-    next to D_OPP, which is the point of the table: the two arms load on
-    different axes, and the loading -- not the level -- is what survives
-    surface randomization."""
-    # Bold the dominant axis so the orthogonality of the two arms reads
-    # straight off the columns -- but only once a gap clears the noise
-    # floor, or near-zero-vs-near-zero cells get a spurious winner.
-    def dominant(a: int, b: int) -> bool:
-        return abs(a) >= 10 and abs(a) > abs(b)
+def ablation_states_tables(cells: Dict[CellKey, Path]) -> Optional[Table]:
+    """Presentation robustness by state, one panel per value:
+    presentation arms as ROWS (fixed, each single randomized axis, all
+    four, the payoff content control), matrix/prose paired per column,
+    the four fabricated states as columns. The single-axis rows say
+    WHICH axis moves the level and the conditioning; an arm whose
+    D_OPP survives every row is reading the payoff structure rather
+    than the surface."""
+    shared_caption = (
+        "Measures whether behaviour reads the payoff structure or its "
+        "surface rendering: the same PD is re-rendered along one "
+        "presentation axis at a time and cooperation by state is "
+        "compared against the fixed rendering. A surface-reader moves "
+        "when the rendering changes; a payoff-reader only when the "
+        "payoffs do. One panel per moral value; rows are the "
+        "randomization axes: `fixed' = the screen's fixed-presentation "
+        "cell; each `only' row randomizes one surface axis with the "
+        "other three fixed; `all four (surface)' draws labels, layout, "
+        "label order and role jointly (payoffs fixed); `payoffs' "
+        "resamples T, R, P, S preserving the PD ordering (the content "
+        "control). Distance from the fixed row = that axis's own "
+        "effect; distance from the all-four row = what the remaining "
+        f"axes add. {D_OPP} = P(C$\\mid$C$_O$) $-$ P(C$\\mid$D$_O$); "
+        f"{D_SURF}(axis) = {D_OPP}(axis) $-$ "
+        f"{D_OPP}(fixed). PD only.")
 
     panels = []
     for value, value_name in VALUES:
         if value not in ROBUSTNESS_VALUES:
             continue
+        fixed_gaps = [gap_pp(behavioral(d)) if d is not None else None
+                      for d in (cells.get(("prisoners_dilemma", value,
+                                           repr_, "fixed"))
+                                for repr_, _ in REPRS)]
         rows = []
-        for repr_, repr_name in REPRS:
-            for mode in ("fixed", "randomized"):
-                run_dir = cells.get(("prisoners_dilemma", value,
-                                     repr_, mode))
+        for mode, arm_name in ABLATION_ARMS:
+            pair = [cells.get(("prisoners_dilemma", value, repr_, mode))
+                    for repr_, _ in REPRS]
+            if all(d is None for d in pair):
+                continue
+            row: List[Cell] = [Cell(MISSING)] * (2 * 7)
+            for i, run_dir in enumerate(pair):
                 if run_dir is None:
                     continue
                 block = behavioral(run_dir)
                 sc = block["state_conditioning"]
-                self_gap, opp_gap = gap_self_pp(block), gap_pp(block)
-                rows.append((f"{repr_name.lower()}, {mode}", [
-                    Cell(pct(block["cooperation_rate"])),
-                    *(Cell(pct(sc[f"({s[0]},{s[1]})"]["p_C"]))
-                      for s in STATES4),
-                    Cell(f"{self_gap:+d}", bold=dominant(self_gap, opp_gap)),
-                    Cell(f"{opp_gap:+d}", bold=dominant(opp_gap, self_gap)),
-                ]))
-        if rows:
-            panels.append((value_name, rows))
+                opp_gap = gap_pp(block)
+                stats = [Cell(pct(block["cooperation_rate"])),
+                         *(Cell(pct(sc[f"({s[0]},{s[1]})"]["p_C"]))
+                           for s in STATES4),
+                         Cell(f"{opp_gap:+d}"),
+                         Cell(MISSING if mode == "fixed"
+                              or fixed_gaps[i] is None
+                              else f"{opp_gap - fixed_gaps[i]:+d}")]
+                for j, cell in enumerate(stats):
+                    row[2 * j + i] = cell
+            rows.append((arm_name, row))
+        if len(rows) < 2:      # nothing to compare against the fixed row
+            continue
+        panels.append((value_name, rows))
     if not panels:
         return None
     return Table(
-        key="presentation-robustness-states",
-        title="Table 3b — pd\\_presentation\\_robustness: fixed vs.\\ "
-              "randomized, by state (Prisoner's Dilemma)",
-        caption=(
-            "Table 3 with the presentation modes as rows and the pooled "
-            "conditionals expanded into the four fabricated states. "
-            f"{D_SELF} = mean P(C) after the agent's own D minus mean "
-            f"P(C) after its own C, the own-move counterpart of {D_OPP}: "
-            "the same four cells, sliced on the agent's previous move "
-            "instead of the opponent's. Bold marks the larger of the two "
-            "gaps when it clears 10 points, i.e.\\ the axis that arm "
-            "loads on where there is one. The comparison to make is "
-            "whether randomization moves the level, the loading, or "
-            "both: an arm whose loading survives is reading the payoff "
-            "structure rather than the surface. Fixed cells are the "
-            "screen group's, as in "
-            "Table 3. Caution: the history is fabricated and each "
-            f"episode is a single independent decision, so {D_SELF} "
-            "describes a response to a stated prior move, not "
-            "alternation over time."),
-        stub="Repr., presentation",
-        col_groups=[("", ["P(C)", *(f"P(C$\\mid${state_label(s)})"
-                                    for s in STATES4),
-                          D_SELF, D_OPP])],
+        key="randomization-ablation",
+        title="Table 3 — randomization ablation by state "
+              "(Prisoner's Dilemma)",
+        caption=shared_caption,
+        stub="Presentation (matrix $\\mid$ prose)",
+        col_groups=[("P(C)", ["mat.", "prose"])]
+        + [(f"P(C$\\mid${state_label(s)})", ["mat.", "prose"])
+           for s in STATES4]
+        + [(D_OPP, ["mat.", "prose"]), (D_SURF, ["mat.", "prose"])],
         panels=panels,
+        pair_groups=True,
     )
-
-
-def _slice_level_stats(
-        run_dir: Path) -> Dict[Tuple[str, str], Tuple[str, str, int]]:
-    data = load_json(run_dir, "behavioral.json")
-    episodes = [ep for block in data["opponents"]
-                for ep in block.get("episode_moves", [])
-                if "presentation" in ep]
-    facets = facet_extractors([ep["presentation"] for ep in episodes])
-    stats = {}
-    for facet, fn in facets.items():
-        by_level: Dict[str, List[Dict]] = {}
-        for i, ep in enumerate(episodes):
-            by_level.setdefault(fn(ep["presentation"]), []).extend(
-                episode_decisions(ep, i, data["metadata"]))
-        for level, decisions in by_level.items():
-            legal = [d for d in decisions if d["move"] in ("C", "D")]
-            cond = {prev: [d["move"] == "C" for d in legal
-                           if d["opp_prev"] == prev]
-                    for prev in ("C", "D")}
-            p_c = sum(d["move"] == "C" for d in legal) / len(legal)
-            gap = round(100 * (sum(cond["C"]) / len(cond["C"])
-                               - sum(cond["D"]) / len(cond["D"])))
-            stats[(facet, level)] = (pct(p_c), f"{gap:+d}",
-                                     len(by_level[level]))
-    return stats
-
-
-def slices_tables(cells: Dict[CellKey, Path]) -> List[Table]:
-    """4a (cooperation level) and 4b (conditioning gap), one column
-    group per value with matrix/prose paired, mirroring Tables 1-2."""
-    groups: List[Tuple[str, List[Dict]]] = []
-    for value, value_name in VALUES:
-        if value not in ROBUSTNESS_VALUES:
-            continue
-        run_dirs = [cells.get(("prisoners_dilemma", value, repr_,
-                               "randomized"))
-                    for repr_, _ in REPRS]
-        if all(d is None for d in run_dirs):
-            continue
-        groups.append((value_name,
-                       [_slice_level_stats(d) if d else {}
-                        for d in run_dirs]))
-    if not groups:
-        return []
-    ref = next(stats for _, per_repr in groups for stats in per_repr
-               if stats)
-    facet_order = list(dict.fromkeys(f for f, _ in ref))
-    keys = sorted(ref, key=lambda k: (facet_order.index(k[0]), k[1]))
-
-    def build(idx: int, key: str, title: str, caption: str) -> Table:
-        rows = []
-        for facet, level in keys:
-            row = [Cell(str(ref[(facet, level)][2]))]
-            for _, per_repr in groups:
-                row += [Cell(stats.get((facet, level),
-                                       (MISSING, MISSING, 0))[idx])
-                        for stats in per_repr]
-            rows.append((f"{facet}: {level}".replace("_", " "), row))
-        return Table(
-            key=key, title=title, caption=caption,
-            stub="Facet: level (matrix $\\mid$ prose)",
-            col_groups=[("", ["$n$"])] + [(name, ["Matrix", "Prose"])
-                                          for name, _ in groups],
-            panels=[(None, rows)],
-            pair_groups=True,
-        )
-
-    shared = ("sliced by presentation facet within the "
-              "surface-randomized PD cells. Level counts $n$ are shared "
-              "across cells (same presentation-sampling seed).")
-    return [
-        build(
-            0, "presentation-slices-coop",
-            "Table 4a — pd_presentation_robustness slices: cooperation "
-            "level by facet (Prisoner's Dilemma, randomized cells)",
-            f"Cooperation rate (\\%) {shared} Layout is the dominant "
-            "positional shortcut for the cooperation level."),
-        build(
-            1, "presentation-slices-gap",
-            "Table 4b — pd_presentation_robustness slices: conditioning "
-            "gap by facet (Prisoner's Dilemma, randomized cells)",
-            f"Conditioning gap {D_OPP} = P(C$\\mid$C$_O$) $-$ "
-            f"P(C$\\mid$D$_O$) (percentage points) {shared} The "
-            "deontological gap stays positive in every slice while the "
-            "baseline gap wobbles around zero."),
-    ]
 
 
 def model_slug(cells: Dict[CellKey, Path]) -> str:
@@ -816,15 +696,10 @@ def readme_header(cells: Dict[CellKey, Path], paths: List[Path]) -> str:
         "",
         "States are the fabricated previous round, subscripted A "
         f"(agent) and O (opponent): {plain(state_label('CD'))} = agent "
-        "cooperated, opponent defected; C = cooperate. Illegal moves are a third category, "
-        "never folded into D. Table sections are named after the "
-        "experiment that produced them (behavioral, probe_b, "
-        "pd_presentation_robustness). Every gap statistic carries a "
-        f"subscript naming what it measures: {plain(D_OPP)} = "
-        "opponent-conditioning gap, "
-        f"{plain(D_SURF)} = its change under surface randomization. "
-        "Rendered from the same cell data as the LaTeX sources in "
-        "`tex/` by `scripts/analysis/publication_tables.py`.",
+        "cooperated, opponent defected; C = cooperate. Illegal moves "
+        "are a third category, never folded into D. Generated by "
+        "`scripts/analysis/publication_tables.py` (LaTeX sources in "
+        "`tex/`).",
         "", "",
     ])
 
@@ -834,46 +709,48 @@ def readme_header(cells: Dict[CellKey, Path], paths: List[Path]) -> str:
 # game-theoretic reading lives here.
 GAME_NOTES = {
     "prisoners_dilemma": (
-        "Defection strictly dominates: it pays more whatever the "
-        "opponent does (T > R and P > S). The unique Nash equilibrium "
-        "is mutual defection, which pays both players less than mutual "
-        "cooperation would — cooperating means overriding the dominant "
-        "strategy."),
+        "Defection strictly dominates (T > R and P > S): cooperating "
+        "means overriding the dominant strategy."),
     "stag_hunt": (
-        "No dominant strategy; a trust/coordination problem. Two pure "
-        "equilibria: mutual cooperation (payoff-dominant, the joint "
-        "best) and mutual defection (the safe choice — defecting "
-        "guarantees P, cooperating risks S). Cooperation is the best "
-        "reply once the opponent is believed to cooperate with "
-        "probability above the mixed-equilibrium threshold."),
+        "Trust/coordination game, two equilibria: mutual cooperation "
+        "(joint best) vs mutual defection (safe)."),
     "chicken": (
-        "No dominant strategy; an anti-coordination game. The two pure "
-        "equilibria are asymmetric (one player yields, the other "
-        "exploits); mutual defection is the worst joint outcome, and "
-        "mutual cooperation is stable for neither player. The best "
-        "reply is the opposite of what the opponent is expected to "
-        "do."),
+        "Anti-coordination game: the best reply is the opposite of the "
+        "opponent's expected move; mutual defection is the worst joint "
+        "outcome."),
 }
 
 
 def moral_values_section() -> str:
     """Verbatim teacher texts, quoted from the single source of truth
-    (game/moral_values.py) so the tables read without the codebase."""
+    (game/moral_values.py) so the tables read without the codebase.
+    A composite quotes only the paragraphs it ADDS to components already
+    listed above it, so shared text appears once."""
     lines = [
         "### Moral value prompts",
         "",
         "Teacher texts of the sweep's arms, verbatim from "
         "`src/moralgym_verl/game/moral_values.py` (the exact string "
         "prepended to the prompt at eval time). `none` adds no text; "
-        "`+`-composites join their parts as separate paragraphs.",
+        "`+`-composites join their parts as separate paragraphs, and "
+        "are shown here as only the paragraphs they add to parts "
+        "already listed above.",
         "",
     ]
+    shown: List[str] = []
     for value, value_name in VALUES:
         if value == "none":
             continue
+        parts = value.split("+")
+        base = [p for p in parts if p in shown]
+        new = [p for p in parts if p not in shown]
         lines += [f"**{value_name}** (`{value}`)", ""]
-        lines += ["> " + line if line else ">"
-                  for line in get_moral_value(value).splitlines()]
+        if base:
+            lines += [f"`{'+'.join(base)}` plus:", ""]
+        for part in new:
+            lines += ["> " + line if line else ">"
+                      for line in get_moral_value(part).splitlines()]
+            shown.append(part)
         lines.append("")
     return "\n".join(lines + [""])
 
@@ -899,8 +776,7 @@ def main() -> None:
     builders: List[Callable[[Dict[CellKey, Path]],
                             Union[Table, List[Table], None]]] = [
         state_cooperation_table, probe_b_table, probe_b_token_tables,
-        robustness_table,
-        robustness_states_table, slices_tables,
+        ablation_states_tables,
     ]
     tables: List[Table] = []
     for build in builders:
