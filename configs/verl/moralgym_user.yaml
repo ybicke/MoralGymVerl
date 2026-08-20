@@ -8,11 +8,15 @@ defaults:
 vars:
   moralgym_dir: /users/${oc.env:USER}/MoralGymVerl
   sdpo_dir: /users/${oc.env:USER}/SDPO
-  log_dir: /users/${oc.env:USER}/output/MoralGymVerl
+  log_dir: /users/${oc.env:USER}/logs_verl/training
   # Set by train_verl.sh: per-run dataset generated at submit time on SCRATCH.
   # For manual runs: export MORALGYM_DATASET_DIR=<dir with train/val.parquet>.
   dataset_dir: ${oc.env:MORALGYM_DATASET_DIR}
-  ckpt_dir: /capstor/scratch/cscs/${oc.env:USER}/moralgym_verl_runs
+  # Live checkpoints on SCRATCH; train_verl.sh stages them out to $STORE on
+  # success. Must be a path bind-mounted in ~/.edf/moralgym_verl.toml — writes
+  # to unmounted paths land in the container's RAM overlay and vanish at job
+  # end (cost us the first sdpo_run1 checkpoints, 2026-08-19).
+  ckpt_dir: /iopsstor/scratch/cscs/${oc.env:USER}/moralgym_verl_runs
 
 data:
   train_files: ["${vars.dataset_dir}/train.parquet"]
