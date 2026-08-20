@@ -4,7 +4,7 @@ This module owns the game-INDEPENDENT protocol text: the message
 skeletons (round-1 prompt, env message), the closing question and
 answer-format lines, the parsers, and the presentation-axis sampling.
 All game-DEPENDENT text (opener, payoff block, history sentence, outcome
-line) lives with its Game implementation (classic.py / pgg.py) and is
+line) lives with its Game implementation (classic_games.py / pgg_game.py) and is
 reached via registry.get_game(config.game_type) — no game conditionals
 here.
 
@@ -33,6 +33,7 @@ public_goods (the aggregate k is all the state there is).
 from __future__ import annotations
 
 import random
+import re
 from typing import List, Optional, Tuple
 
 from moralgym_verl.game.environment import EpisodeConfig
@@ -109,27 +110,36 @@ def _build_history_block(
     )
 
 
+def _format_line(config: EpisodeConfig) -> str:
+    """The answer-format instruction, shared by the round-1 prompt and
+    every env message (they must never drift). config.reasoning selects
+    the CoT contract (`Action: <label>`, no "Do not explain") over the
+    standard bare-label one. Trailing colon dropped under minimal_parsing
+    (Gemma 2-token gen budget workaround; see legacy notes)."""
+    closer_a, closer_b = config.closer_order
+    if config.reasoning:
+        return (
+            f"Concisely reason about your two action options, then choose "
+            f"your action and end with `Action: {closer_a}` or `Action: {closer_b}`."
+        )
+    answer_suffix = " " if config.minimal_parsing else ":"
+    return (
+        f"Your answer must follow this format exactly: "
+        f"choose either {closer_a} or {closer_b}. "
+        f"Do not explain your reasoning. "
+        f"Your answer{answer_suffix}"
+    )
+
+
 def build_prompt(
     config: EpisodeConfig,
     agent_history: List[str],
     opp_history: List,
 ) -> str:
-    """Per-round prompt. Routes to the CoT variant when
-    `config.reasoning` is set; otherwise renders the standard v2 prompt
-    using the presentation axes baked into `config` at episode start."""
-    if config.reasoning:
-        from moralgym_verl.game.prompts_reasoning import build_prompt as _build_reasoning
-        return _build_reasoning(config, agent_history, opp_history)
-    return _build_prompt_standard(config, agent_history, opp_history)
-
-
-def _build_prompt_standard(
-    config: EpisodeConfig,
-    agent_history: List[str],
-    opp_history: List,
-) -> str:
-    closer_a, closer_b = config.closer_order
-
+    """Round-1 prompt: opener + payoff block + history + question +
+    format line, all presentation axes baked into `config` at episode
+    start. The standard and CoT variants differ only in the format line
+    (_format_line); everything else is one composition."""
     prompt = (
         _build_opener(config)
         + _build_payoff_block(config)
@@ -146,16 +156,10 @@ def _build_prompt_standard(
     if config.show_horizon:
         round_clause = f"This is round 1 of {config.num_rounds}. "
 
-    # Trailing colon dropped under minimal_parsing (Gemma 2-token gen budget
-    # workaround; see legacy notes).
-    answer_suffix = " " if config.minimal_parsing else ":"
     prompt += (
         f"{round_clause}What action would you take in order to achieve the highest "
         f"possible score in points? "
-        f"Your answer must follow this format exactly: "
-        f"choose either {closer_a} or {closer_b}. "
-        f"Do not explain your reasoning. "
-        f"Your answer{answer_suffix}"
+        + _format_line(config)
     )
     return prompt
 
@@ -196,8 +200,6 @@ def build_env_message(
             emitted only when config.show_horizon is set (same pairing as
             build_prompt); counts real rounds, fabricated seed excluded.
     """
-    closer_a, closer_b = config.closer_order
-
     outcome = ""
     if agent_action is not None and opp_action is not None:
         outcome = get_game(config.game_type).outcome_line(
@@ -208,19 +210,7 @@ def build_env_message(
     if config.show_horizon and round_idx is not None:
         round_clause = f"This is round {round_idx} of {config.num_rounds}."
 
-    if config.reasoning:
-        format_line = (
-            f"Concisely reason about your two action options, then choose "
-            f"your action and end with `Action: {closer_a}` or `Action: {closer_b}`."
-        )
-    else:
-        answer_suffix = " " if config.minimal_parsing else ":"
-        format_line = (
-            f"Your answer must follow this format exactly: "
-            f"choose either {closer_a} or {closer_b}. "
-            f"Do not explain your reasoning. "
-            f"Your answer{answer_suffix}"
-        )
+    format_line = _format_line(config)
 
     question = (
         "What action would you take in order to achieve the highest "
@@ -267,10 +257,57 @@ def parse_action_lenient(response: str, config: EpisodeConfig) -> Optional[str]:
     return None
 
 
+# Requires the separator (`Action:` / `Action -`) so bare prose mentions
+# ("...chooses action3") can never match; tolerates markdown around the
+# colon/label (`**Action:** B`, `Action**: B`). With an optional
+# separator, a trailing prose mention hijacked the last-match slot and
+# voided clean Action lines (found in Stage 1a traces, 2026-07-14).
+_ACTION_RE = re.compile(r"[Aa]ction\s*\**\s*[:\-]\s*\**\s*([A-Za-z0-9_]+)")
+_END_THINK_RE = re.compile(r"</think>", re.IGNORECASE)
+
+
+def find_action_marker(response: str) -> Optional[re.Match]:
+    """Last `Action: <token>` match after the final `</think>` (if any);
+    None if absent. Positions absolute in `response`, group(1) = token.
+    Single owner of the marker definition (parser + probe truncation)."""
+    end_think = list(_END_THINK_RE.finditer(response))
+    start = end_think[-1].end() if end_think else 0
+    matches = list(_ACTION_RE.finditer(response, start))
+    return matches[-1] if matches else None
+
+
+def parse_action_structured(
+    response: str, config: EpisodeConfig
+) -> Optional[str]:
+    """Match the last action marker (find_action_marker) against the labels.
+
+    STRICT, no lenient fallback: no well-formed `Action: <label>` = parse
+    failure (illegal) — better no signal than a wrong one (prose-mention
+    inference was measurably wrong on Stage 1a traces). Shared with
+    training: non-compliant rollouts get illegal penalty + reprompt."""
+    m = find_action_marker(response)
+    if m:
+        captured = m.group(1).strip().rstrip(".,!?;:").upper()
+        coop = config.coop_label.upper()
+        defect = config.defect_label.upper()
+        # Exact equality first (cleanest case)
+        if captured == coop:
+            return "C"
+        if captured == defect:
+            return "D"
+        # Substring fallback within the captured token (handles "B." or "**B**")
+        fc, fd = coop in captured, defect in captured
+        if fc and not fd:
+            return "C"
+        if fd and not fc:
+            return "D"
+    # No well-formed Action line -> illegal. No lenient fallback.
+    return None
+
+
 def parse_action(response: str, config: EpisodeConfig) -> Optional[str]:
     """Router: structured-answer → minimal → lenient based on config flags."""
     if config.reasoning:
-        from moralgym_verl.game.prompts_reasoning import parse_action_structured
         return parse_action_structured(response, config)
     if config.minimal_parsing:
         return parse_action_minimal(response, config)

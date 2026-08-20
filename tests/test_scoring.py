@@ -15,7 +15,7 @@ from moralgym_verl.eval.scoring import (
     BETRAYAL_PENALTY, ILLEGAL_PENALTY, iter_scored_decisions, score_decision,
 )
 from moralgym_verl.game.environment import EpisodeConfig
-from moralgym_verl.game.trajectory import TrajectoryResult
+from moralgym_verl.game.episode import TrajectoryResult
 
 CFG = EpisodeConfig(
     game_type="prisoners_dilemma",

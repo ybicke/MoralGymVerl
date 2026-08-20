@@ -27,7 +27,8 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-from moralgym_verl.game.environment import EpisodeConfig, get_score
+from moralgym_verl.game.classic_games import get_score
+from moralgym_verl.game.environment import EpisodeConfig
 
 
 # ---------------------------------------------------------------------------

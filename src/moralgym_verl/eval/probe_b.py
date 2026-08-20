@@ -39,12 +39,12 @@ from moralgym_verl.eval.teacher_forcing import (
     PROBE_STATES, answer_logodds, chat_prefix, chat_prefix_messages,
     delta_stats, dual_continuation_scores, probe_setup, sample_trace,
 )
-from moralgym_verl.game.environment import FIXED_PAYOFFS
-from moralgym_verl.game.players import get_opponent_action
+from moralgym_verl.game.classic_games import FIXED_PAYOFFS
+from moralgym_verl.game.opponents import get_opponent_action
 from moralgym_verl.game.prompts import (
     build_env_message, build_prompt, parse_action, parse_failure_feedback,
 )
-from moralgym_verl.game.prompts_reasoning import find_action_marker
+from moralgym_verl.game.prompts import find_action_marker
 
 logger = logging.getLogger(__name__)
 

@@ -14,22 +14,24 @@ import random
 import pytest
 
 from moralgym_verl.game.environment import EpisodeConfig
-from moralgym_verl.game.pgg import (
-    PGG_PARAMS,
+from moralgym_verl.game.opponents import (
     conditional_contributor,
     get_group_actions,
+    tit_for_tat,
+)
+from moralgym_verl.game.pgg_game import (
+    PGG_PARAMS,
     get_score_pgg,
     group_payoff_pgg,
     pgg_fab_states,
 )
-from moralgym_verl.game.players import tit_for_tat
 from moralgym_verl.game.prompts import (
     _build_payoff_block,
     build_env_message,
     build_prompt,
     parse_failure_feedback,
 )
-from moralgym_verl.game.trajectory import run_episode
+from moralgym_verl.game.episode import run_episode
 from moralgym_verl.rewards import compute_round_reward
 
 RULES_MARKER = "The points are awarded as follows"

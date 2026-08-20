@@ -1,7 +1,7 @@
 """game_type -> Game implementation registry.
 
 Separate from base.py so the import graph stays a DAG:
-base <- classic/pgg <- registry <- prompts/trajectory/rewards.
+base <- classic_games/pgg_game <- registry <- prompts/episode/rewards.
 The three classic game_types share one stateless ClassicGame instance;
 a new paradigm registers its implementation here and nowhere else.
 """
@@ -9,8 +9,8 @@ a new paradigm registers its implementation here and nowhere else.
 from __future__ import annotations
 
 from moralgym_verl.game.base import Game
-from moralgym_verl.game.classic import ClassicGame
-from moralgym_verl.game.pgg import PublicGoodsGame
+from moralgym_verl.game.classic_games import ClassicGame
+from moralgym_verl.game.pgg_game import PublicGoodsGame
 
 _CLASSIC = ClassicGame()
 _PGG = PublicGoodsGame()

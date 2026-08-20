@@ -27,7 +27,8 @@ import random
 from pathlib import Path
 from typing import Any
 
-from moralgym_verl.game.environment import EpisodeConfig, sample_labels, sample_payoffs
+from moralgym_verl.game.classic_games import sample_payoffs
+from moralgym_verl.game.environment import EpisodeConfig, sample_labels
 from moralgym_verl.game.prompts import build_prompt, sample_prompt_randomization
 
 

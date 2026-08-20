@@ -40,8 +40,9 @@ from moralgym_verl.eval.metrics import aggregate_rollout_metrics, per_round_brea
 from moralgym_verl.eval.model_loading import load_model_for_eval
 from moralgym_verl.eval.teacher_context import load_reprompt_template, wrap_prompt
 from moralgym_verl.game.moral_values import MORAL_VALUE_REGISTRY, get_moral_value
-from moralgym_verl.game.environment import FIXED_PAYOFFS, EpisodeConfig
-from moralgym_verl.game.trajectory import FAB_STATES, TrajectoryResult, run_episode
+from moralgym_verl.game.classic_games import FIXED_PAYOFFS
+from moralgym_verl.game.environment import EpisodeConfig
+from moralgym_verl.game.episode import FAB_STATES, TrajectoryResult, run_episode
 
 logger = logging.getLogger(__name__)
 

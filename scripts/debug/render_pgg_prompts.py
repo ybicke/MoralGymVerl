@@ -10,7 +10,7 @@ Runs on the login node: /usr/bin/python3.11 with PYTHONPATH=src.
 """
 
 from moralgym_verl.game.environment import EpisodeConfig
-from moralgym_verl.game.pgg import PGG_PARAMS, pgg_fab_states
+from moralgym_verl.game.pgg_game import PGG_PARAMS, pgg_fab_states
 from moralgym_verl.game.prompts import build_env_message, build_prompt
 
 

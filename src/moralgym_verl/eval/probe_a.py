@@ -35,7 +35,7 @@ from moralgym_verl.eval.config import PROTOCOL_PRESETS
 from moralgym_verl.eval.teacher_forcing import (
     PROBE_STATES, answer_logodds, chat_prefix, probe_setup, two_way_jsd,
 )
-from moralgym_verl.game.environment import FIXED_PAYOFFS
+from moralgym_verl.game.classic_games import FIXED_PAYOFFS
 from moralgym_verl.game.prompts import build_prompt
 
 logger = logging.getLogger(__name__)

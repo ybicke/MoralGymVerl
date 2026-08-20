@@ -16,9 +16,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Tuple
 
-# Re-exported from classic.py (its new home) — eval code imports
+# Re-exported from classic_games.py (its home) — eval code imports
 # FAB_STATES from here.
-from moralgym_verl.game.classic import FAB_STATES as FAB_STATES
+from moralgym_verl.game.classic_games import FAB_STATES as FAB_STATES
 from moralgym_verl.game.environment import EpisodeConfig
 from moralgym_verl.game.prompts import (
     build_env_message, build_prompt, parse_action, parse_failure_feedback,

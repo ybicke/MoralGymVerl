@@ -24,7 +24,7 @@ from typing import Any
 
 from moralgym_verl.game.environment import EpisodeConfig
 from moralgym_verl.game.moral_values import get_moral_value
-from moralgym_verl.game.players import get_opponent_action
+from moralgym_verl.game.opponents import get_opponent_action
 from moralgym_verl.game.prompts import parse_action
 from moralgym_verl.rewards import (
     get_game_reward_fn,

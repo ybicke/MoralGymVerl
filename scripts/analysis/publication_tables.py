@@ -67,7 +67,7 @@ from eval_cells import (  # noqa: E402
     load_json,
     mode_splits,
 )
-from moralgym_verl.game.environment import FIXED_PAYOFFS  # noqa: E402
+from moralgym_verl.game.classic_games import FIXED_PAYOFFS  # noqa: E402
 from moralgym_verl.game.moral_values import get_moral_value  # noqa: E402
 
 GAMES = (("prisoners_dilemma", "Prisoner's Dilemma"),

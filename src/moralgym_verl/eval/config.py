@@ -38,9 +38,8 @@ def git_provenance() -> Optional[str]:
     except Exception:
         return None
 
-from moralgym_verl.game.environment import (
-    EpisodeConfig, sample_labels, sample_payoffs,
-)
+from moralgym_verl.game.classic_games import sample_payoffs
+from moralgym_verl.game.environment import EpisodeConfig, sample_labels
 from moralgym_verl.game.prompts import sample_prompt_randomization
 
 # Named experiment protocols (--protocol): a protocol's flag bundle in

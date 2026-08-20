@@ -51,7 +51,7 @@ import os
 from typing import Any, Optional
 
 from moralgym_verl.game.environment import EpisodeConfig
-from moralgym_verl.game.players import get_opponent_action
+from moralgym_verl.game.opponents import get_opponent_action
 from moralgym_verl.game.prompts import (
     build_env_message,
     parse_action,

@@ -23,7 +23,7 @@ from moralgym_verl.eval.config import (
 from moralgym_verl.eval.generation import render_chat_inputs
 from moralgym_verl.eval.model_loading import load_model_for_eval
 from moralgym_verl.eval.teacher_context import load_reprompt_template, wrap_prompt
-from moralgym_verl.game.environment import FIXED_PAYOFFS
+from moralgym_verl.game.classic_games import FIXED_PAYOFFS
 from moralgym_verl.game.moral_values import get_moral_value
 
 logger = logging.getLogger(__name__)

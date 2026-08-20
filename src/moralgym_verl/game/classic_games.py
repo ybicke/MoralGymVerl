@@ -1,15 +1,15 @@
 """Classic 2-player matrix games (PD, Stag Hunt, Chicken): Game impl.
 
-The Tennant-style identified-opponent games. Payoff data and scoring
-primitives stay in environment.py (GAME_ORDERINGS, FIXED_PAYOFFS,
-get_score — they are public API across eval/training); this module
-implements the Game protocol on top of them and owns the classic prompt
-text, moved verbatim from prompts.py (byte-pinned by the test suite).
+The Tennant-style identified-opponent games. This module owns the payoff
+data and scoring primitives (GAME_ORDERINGS, FIXED_PAYOFFS, get_score),
+the classic prompt text, and the ClassicGame implementation of the
+base.Game protocol (wording and draws moved verbatim from their previous
+homes — byte-pinned by the test suite).
 
 Deliberately 2-player: the N-player generalizations of these games
 (N-PD, N-stag-hunt, N-chicken) are aggregative games — linear/threshold/
-volunteer public goods — and belong to the PGG family in pgg.py, not to
-a widened matrix.
+volunteer public goods — and belong to the PGG family in pgg_game.py, not to
+a widened matrix. The scripted 2x2 opponents live in opponents.py.
 """
 
 from __future__ import annotations
@@ -18,20 +18,79 @@ import random
 from typing import Dict, List, Optional, Tuple
 
 from moralgym_verl.game.base import Game, OpponentSide, _pts
-from moralgym_verl.game.environment import EpisodeConfig, get_score
-from moralgym_verl.game.players import get_opponent_action
-from moralgym_verl.rewards import (
-    compute_round_reward,
-    get_game_reward_fn,
-    get_intrinsic_fn,
-    r_intrinsic_deontological_tailored,
-)
+from moralgym_verl.game.environment import EpisodeConfig
+from moralgym_verl.game.opponents import get_opponent_action
+
+GAME_ORDERINGS = {
+    #                      T   R   P   S      Constraint
+    "prisoners_dilemma": (3, 2, 1, 0),      # T > R > P > S
+    "chicken":           (3, 2, 0, 1),      # T > R > S > P
+    "stag_hunt":         (2, 3, 1, 0),      # R > T > P > S
+}
+
+# Canonical fixed-payoff matrices used at eval time (Tennant-matching values
+# from docs/experimental/eval_implementation_spec.md). Selected by
+# evaluate.py --game to override the config's training payoffs, so one
+# checkpoint can be evaluated on any supported game with consistent structure.
+# BoS / ICD are asymmetric and need the EpisodeConfig refactor in
+# docs/experimental/game_extension_plan.md — not yet included.
+FIXED_PAYOFFS = {
+    "prisoners_dilemma": {"T": 4, "R": 3, "P": 1, "S": 0},
+    "stag_hunt":         {"T": 3, "R": 4, "P": 1, "S": 0},
+    "chicken":           {"T": 4, "R": 2, "P": 0, "S": 1},
+}
+
+
+def sample_payoffs(
+    game_type: str, lo: int = 1, hi: int = 10,
+    rng: Optional[random.Random] = None,
+) -> Tuple[int, int, int, int]:
+    """Sample 4 distinct integer payoffs satisfying the ordering for *game_type*.
+
+    Returns (T, R, P, S).
+
+    The reward signal is normalized, so only relative gaps matter for training.
+    However, absolute values appear in the prompt and influence LLM reasoning,
+    so we use [1, 10] (no zero) to avoid a degenerate semantic anchor.
+    C(10, 4) = 210 tuples per game type.
+
+    For PD and Chicken, rejection-sample on the Axelrod condition 2R > T + S
+    (see experimental_design.md: prevents multi-turn GRPO collapse and ensures
+    utilitarian reward favors mutual cooperation). Retains 160/210 PD tuples.
+    Stag Hunt (R is largest) satisfies 2R > T + S automatically.
+    """
+    if game_type not in GAME_ORDERINGS:
+        raise ValueError(
+            f"Unknown game type: {game_type}. "
+            f"Choose from {list(GAME_ORDERINGS)}"
+        )
+    idx = GAME_ORDERINGS[game_type]
+    r = rng if rng is not None else random
+    while True:
+        vals = sorted(r.sample(range(lo, hi + 1), 4))
+        T, R, P, S = (vals[i] for i in idx)
+        if 2 * R > T + S:
+            return T, R, P, S
+
+
+def get_score(
+    my_move: str, opp_move: str, T: int, R: int, P: int, S: int
+) -> Tuple[int, int]:
+    """Return (my_score, opponent_score) for a single round."""
+    payoffs = {
+        ("C", "C"): (R, R),
+        ("C", "D"): (S, T),
+        ("D", "C"): (T, S),
+        ("D", "D"): (P, P),
+    }
+    return payoffs[(my_move, opp_move)]
+
 
 # Canonical order of the four fabricated (agent_prev, opp_prev) states.
 # Balanced eval designs cycle through this list (episode i -> i % 4) so
 # every state gets exactly num_episodes/4 decisions, deterministically.
 # The public_goods generalization ({C,D} x {0..N-1}, 2N states) is
-# pgg.pgg_fab_states(n_players).
+# pgg_game.pgg_fab_states(n_players).
 FAB_STATES: List[Tuple[str, str]] = [
     ("C", "C"), ("C", "D"), ("D", "C"), ("D", "D"),
 ]
@@ -253,6 +312,13 @@ class ClassicGame(Game):
         agent_prev: Optional[str],
         shaping: Optional[dict],
     ) -> Dict[str, float]:
+        # Lazy import: rewards.py imports get_score from this module, so
+        # its primitives cannot be top-level imports here.
+        from moralgym_verl.rewards import (
+            get_game_reward_fn,
+            get_intrinsic_fn,
+            r_intrinsic_deontological_tailored,
+        )
         game_fn = get_game_reward_fn(game_reward_type)
         rg = game_fn(action, obs, config.T, config.R, config.P, config.S)
 
@@ -291,6 +357,7 @@ class ClassicGame(Game):
         lambda_val: float, intrinsic_type: str, game_reward_type: str,
         shaping: Optional[dict],
     ) -> str:
+        from moralgym_verl.rewards import compute_round_reward
         opp_pts = get_score(
             action, obs, config.T, config.R, config.P, config.S
         )[1]

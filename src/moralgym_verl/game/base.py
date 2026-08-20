@@ -1,10 +1,10 @@
 """Game protocol: the per-paradigm interface behind the shared machinery.
 
-One implementation per game *paradigm* (classic.py: 2-player
-identified-opponent matrix games; pgg.py: N-player aggregative
+One implementation per game *paradigm* (classic_games.py: 2-player
+identified-opponent matrix games; pgg_game.py: N-player aggregative
 public-goods game). The shared protocol modules — prompts.py (message
-skeletons), trajectory.py (episode loop), rewards.py (composition),
-environment.py (config) — contain no game conditionals: they resolve the
+skeletons), episode.py (episode loop), rewards.py (composition),
+environment.py (episode spec) — contain no game conditionals: they resolve the
 implementation via registry.get_game(config.game_type) and delegate.
 
 The opponent-side observation type is game-specific and flows through
@@ -144,3 +144,4 @@ class Game(ABC):
     ) -> str:
         """One human-readable line for run_episode(verbose=True)."""
         return f"  R{rnd + 1:>2}: Agent={action}  pts={agent_pts}"
+
