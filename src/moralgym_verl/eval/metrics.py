@@ -15,7 +15,7 @@ import numpy as np
 from moralgym_verl.eval.scoring import (
     compute_regret, iter_decisions, iter_scored_decisions,
 )
-from moralgym_verl.game.trajectory import TrajectoryResult
+from moralgym_verl.game.episode import TrajectoryResult
 
 MORALITIES = ("game", "deon", "util", "gamedeon")
 

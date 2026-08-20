@@ -40,7 +40,7 @@ def test_probe_episode_reprompts_after_parse_failure(monkeypatch):
                    "Reasoning...\n\nAction: action3"])
     student_user_msgs = []
 
-    def fake_prefix(tokenizer, messages, device):
+    def fake_prefix(tokenizer, messages, device, enable_thinking=None):
         # Student prefixes are plain; teacher prefixes have the FIRST user
         # turn value-wrapped ("[MV]"). Rollout phase runs all student calls
         # before the scoring phase runs any teacher call.

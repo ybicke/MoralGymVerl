@@ -13,15 +13,19 @@ import torch
 from moralgym_verl.eval.teacher_context import wrap_first_user, wrap_latest_user
 
 
-def render_chat_inputs(tokenizer, messages, device):
+def render_chat_inputs(tokenizer, messages, device, enable_thinking=None):
     """Chat-template `messages` into generation inputs, training-exact.
 
     add_special_tokens=False: the rendered template already starts with
     <bos>; the HF default would prepend a second, deviating from verl's
     training tokenization. Returns (rendered_text, model inputs).
+
+    enable_thinking is passed through only when set, so templates that
+    don't branch on it render exactly as before.
     """
+    extra = {} if enable_thinking is None else {"enable_thinking": enable_thinking}
     text = tokenizer.apply_chat_template(
-        messages, tokenize=False, add_generation_prompt=True,
+        messages, tokenize=False, add_generation_prompt=True, **extra,
     )
     inputs = tokenizer(
         text, return_tensors="pt", add_special_tokens=False,
@@ -55,6 +59,7 @@ def make_policy_fn(
     temperature: Optional[float] = 1.0,
     raw_log: Optional[list] = None,
     prompt_wrapper=None,
+    enable_thinking: Optional[bool] = None,
 ):
     """Policy function for run_episode.
 
@@ -69,7 +74,8 @@ def make_policy_fn(
         if prompt_wrapper is not None:
             prompt = prompt_wrapper(prompt)
         messages = [{"role": "user", "content": prompt}]
-        _, inputs = render_chat_inputs(tokenizer, messages, model.device)
+        _, inputs = render_chat_inputs(tokenizer, messages, model.device,
+                                       enable_thinking)
         raw = generate(model, tokenizer, inputs, max_new_tokens, temperature)
         if raw_log is not None:
             raw_log.append({"prompt": prompt, "raw": raw})
@@ -86,6 +92,7 @@ def make_chat_policy_fn(
     raw_log: Optional[list] = None,
     prompt_wrapper=None,
     wrap_position: str = "first",
+    enable_thinking: Optional[bool] = None,
 ):
     """Transcript-mode policy for multi-turn eval (Stage 1b): the episode
     conversation accumulates, mirroring verl's multi-turn agent loop, so
@@ -112,7 +119,8 @@ def make_chat_policy_fn(
             wrap_fn(state["messages"], prompt_wrapper)
             if prompt_wrapper is not None else state["messages"]
         )
-        text, inputs = render_chat_inputs(tokenizer, gen_messages, model.device)
+        text, inputs = render_chat_inputs(tokenizer, gen_messages, model.device,
+                                          enable_thinking)
         raw = generate(model, tokenizer, inputs, max_new_tokens, temperature)
         state["messages"].append({"role": "assistant", "content": raw})
         if raw_log is not None:

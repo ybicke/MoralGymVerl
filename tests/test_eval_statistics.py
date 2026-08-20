@@ -10,12 +10,9 @@ Three properties, each load-bearing for paired comparisons:
 
 import random
 
-from moralgym_verl.game.environment import (
-    EpisodeConfig,
-    sample_labels,
-    sample_payoffs,
-)
-from moralgym_verl.game.trajectory import FAB_STATES, run_episode
+from moralgym_verl.game.classic_games import sample_payoffs
+from moralgym_verl.game.environment import EpisodeConfig, sample_labels
+from moralgym_verl.game.episode import FAB_STATES, run_episode
 
 CFG = EpisodeConfig(
     game_type="prisoners_dilemma", T=4, R=3, P=1, S=0,

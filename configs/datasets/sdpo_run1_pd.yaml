@@ -1,0 +1,49 @@
+# SDPO run 1 dataset — PD single-round, screen-matched.
+# (consumed by moralgym_verl.training.dataset, NOT by verl/Hydra.)
+#
+# Design (from the single-turn screen conclusions, 2026-08-19):
+# - PD only: the cleanest instrument; SH's deon teacher is anti-escape at
+#   D_A D_O and chicken is eval-only (see docs/single_turn_screen_comparison.md).
+# - Random opponent + hist_coop_bias 0.5: uniform over the four fabricated
+#   states, matching the screen's balanced-state design, so the D-states
+#   (repair, escape) are trained as often as the C-states.
+# - Prose representation; surface randomization on EXCEPT labels (fixed
+#   early as scaffold, randomize in a later run); payoffs fixed.
+# - intrinsic none / lambda 0: the moral signal lives ONLY in the teacher
+#   context (see teacher: below), not in the reward — attribution stays
+#   with the wording under test.
+game:
+  type: prisoners_dilemma
+  payoffs: {T: 4, R: 3, P: 1, S: 0}
+  num_rounds: 1
+  sample_payoffs: false
+
+opponent:
+  types: [random]
+  distribution: [1.0]
+
+reward:
+  game_reward: normalized
+  intrinsic: none
+  lambda: 0.0
+  illegal_penalty: -6
+
+# SDPO teacher context: the screened principle text, verbatim, instead of
+# the outcome critique.
+teacher:
+  feedback: principle
+  moral_value: deontological+repair+generosity
+
+prompt:
+  game_design: hist
+  hist_coop_bias: 0.5
+  representation: prose
+  # CoT + "Answer: <label>" — the regime the screen measured (eval
+  # teacher_signal configs run reasoning: true; probe B's teacher signal
+  # is over reasoning traces). Without it, responses collapse to bare
+  # action tokens and the whole-trace distillation has nothing to shape.
+  reasoning: true
+  randomize_labels: false
+  randomize_layout: true
+  randomize_label_order: true
+  randomize_role: true

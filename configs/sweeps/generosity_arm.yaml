@@ -1,0 +1,45 @@
+# Generosity arm — gemma-2-9b-it. Delta sweep extending the single-turn
+# screen (single_turn_screen.yaml, run 2026-08-10) with one new composite:
+# deontological+repair+generosity. The generosity rider is the DD escape
+# clause (see moral_values.py): the 2026-08-13 screen analysis showed
+# deontological+repair leaves P(C|DD) at 6-32 on gemma, i.e. conditional
+# cooperators that cannot exit a mutual-defection spiral. Its marginal
+# effect is read against the screen's deontological+repair cells; adopt
+# iff DD lifts to an intermediate level without eroding the low CD cell.
+#
+# Separate sweep + eval_group on purpose: submit_sweep has no
+# skip-completed logic and overwrites the group's sweep_manifest.json, so
+# adding the arm to the screen yaml and resubmitting would re-run all 36
+# finished cells and clobber their manifest. Pool this group with
+# single_turn_screen_gemma-2-9b-it at analysis time (publication_tables
+# takes multiple groups; duplicates resolve first-occurrence-wins).
+#
+# All other axes and settings match the screen exactly, so the cells are
+# comparable: 400 episodes (100/state), single_round protocol, T=0.7,
+# probes on.
+#
+# Submit:
+#   /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/sweeps/generosity_arm.yaml --dry-run
+#
+# 3 x 2 x 1 = 6 cells.
+name: generosity_arm
+eval_group: generosity_arm_gemma-2-9b-it
+
+num_episodes: 400
+
+axes:
+  game: [prisoners_dilemma, stag_hunt, chicken]
+
+  representation: [matrix, prose]
+
+  moral_value:
+    - deontological+repair+generosity
+
+  protocol: [single_round]
+
+env:
+  RUN_PROBES: "on"
+  RUN_PROBE_B_EPISODE: "off"
+
+extra_args: ["--temperature", "0.7"]

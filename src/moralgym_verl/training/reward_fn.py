@@ -23,7 +23,8 @@ import json
 from typing import Any
 
 from moralgym_verl.game.environment import EpisodeConfig
-from moralgym_verl.game.players import get_opponent_action
+from moralgym_verl.game.moral_values import get_moral_value
+from moralgym_verl.game.opponents import get_opponent_action
 from moralgym_verl.game.prompts import parse_action
 from moralgym_verl.rewards import (
     get_game_reward_fn,
@@ -100,7 +101,14 @@ def compute_score(
         r_intr = get_intrinsic_fn(intrinsic)(action, opp_prev)
 
     score = r_game + lambda_val * r_intr
-    feedback = _build_feedback(action, opp_action, score, r_game, r_intr, state, config)
+    if state.get("feedback_mode") == "principle":
+        # Teacher context = the screened moral-principle text, verbatim —
+        # the same string the single-turn screen validated as the teacher
+        # signal. No outcome critique, so the steer is attributable to the
+        # wording alone.
+        feedback = get_moral_value(state["moral_value"])
+    else:
+        feedback = _build_feedback(action, opp_action, score, r_game, r_intr, state, config)
     return {"score": score, "feedback": feedback, **_game_metrics(action, state)}
 
 

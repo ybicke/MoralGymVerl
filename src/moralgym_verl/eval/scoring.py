@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from typing import Dict, Iterator, Optional
 
-from moralgym_verl.game.trajectory import TrajectoryResult
+from moralgym_verl.game.episode import TrajectoryResult
 
 ILLEGAL_PENALTY: float = -6.0   # r_illegal — all streams on unparseable output
 BETRAYAL_PENALTY: float = -3.0  # -ξ — legal betrayal in r_deon

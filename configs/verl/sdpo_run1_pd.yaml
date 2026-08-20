@@ -1,0 +1,160 @@
+# =============================================================================
+# SDPO run 1: distill the screened moral principle
+# (deontological+repair+generosity) into the plain-prompt policy.
+#
+# Methodology (differs from sdpo_pd_tft, the cross-stack parity config):
+#   - Teacher context = the verbatim principle text (dataset teacher: block,
+#     reward_fn feedback_mode=principle), placed AFTER the game prompt and
+#     before "Now make your decision." — byte-identical to the screen's
+#     teacher geometry (eval teacher_context.py).
+#   - No intrinsic reward: the moral signal enters only through the teacher.
+#   - PD single-round, prose, surface-randomized (see
+#     configs/datasets/sdpo_run1_pd.yaml).
+#
+# SHARED recipe — do not submit directly. The model entrypoints are
+# sdpo_run1_pd_gemma.yaml and sdpo_run1_pd_qwen3.yaml (model overrides
+# only; the recipe is identical by design, so the model is the only axis
+# that moves). Both use DATASET_CONFIG=sdpo_run1_pd.
+#
+# Checkpoint eval: trained model, NO teacher text (= none arm), fixed +
+# randomized presentation, against the base model's existing none cells
+# (screen + robustness groups). Read state profiles and D_opp, not pooled
+# cooperation; chicken cells as the held-out exploitability discriminator.
+# =============================================================================
+defaults:
+  - ppo_trainer         # verl base — found in SDPO/verl/trainer/config/
+  - moralgym_user       # Clariden paths — found in MoralGymVerl/configs/verl/
+  - _self_
+
+# Single-round: prompt (~400-500 tok, 2048 cap) + response 2048. 2048 is
+# the qwen screen's generous-headroom budget (teacher_signal_qwen3_8b);
+# the gemma screen ran 512, but run 1 at 512 hit a rising truncation→
+# parse-fail rate (14→29% on qwen), so both models get 2048 to remove the
+# truncation confound. The teacher reprompt adds the principle text
+# (~120 tok): ~500 + 120 + 2048 ≈ 2670 worst case, so 4096 gives packing
+# headroom. With loss_mode sdpo the reward never reaches the gradient, so
+# this cap is the ONLY brake on length drift.
+max_model_len: 4096
+
+actor_rollout_ref:
+  model:
+    lora_rank: 32
+    lora_alpha: 64
+    target_modules: all-linear
+  actor:
+    # LoRA run: the base model is frozen, so verl's default full-model
+    # shards (4x9.6GB/ckpt) are redundant — the trained artifact is
+    # lora_adapter/ (413MB), saved unconditionally by fsdp_workers.py:1127
+    # regardless of this list. 40GB -> ~1.3GB per checkpoint. CAVEAT:
+    # exact resume-from-checkpoint no longer has model shards to load;
+    # resume via base HF weights + lora_adapter_path instead (untested).
+    checkpoint:
+      save_contents: [optimizer, extra]
+    optim:
+      lr: 5.0e-6
+      # Short warmup for a 70-step run (the old 50 was tuned for long
+      # runs and would keep most of this run below target LR).
+      lr_warmup_steps: 10
+    # = train_batch_size: ONE gradient step per generation batch,
+    # fully on-policy (paper setup).
+    ppo_mini_batch_size: 16
+    policy_loss:
+      loss_mode: sdpo
+    self_distillation:
+      # Logit-level top-K distillation, the paper's best variant (Fig. 10)
+      # and the main GPU-memory lever (vs full 256k-vocab tensors on
+      # gemma). add_tail keeps the truncated distributions normalized.
+      # Approximates probe 2c's full-vocab JSD; same mixing weight
+      # alpha = 0.5 = the paper's symmetric JSD.
+      full_logit_distillation: true
+      alpha: 0.5
+      distillation_topk: 100
+      distillation_add_tail: true
+      is_clip: 2.0
+
+      teacher_regularization: ema
+      teacher_update_rate: 0.01
+
+      # Solution channel DISABLED for run 1 (threshold above the max
+      # achievable score): with intrinsic none, normalized game reward puts
+      # exploitation (T -> 1.0) ABOVE mutual cooperation (R -> 0.75), so a
+      # reachable threshold would insert exploitation traces as
+      # "cooperative trajectory" demonstrations. Teacher = principle +
+      # prompt only — exactly the geometry the screen and probe B
+      # validated. Re-enable solutions only with a reward that ranks
+      # cooperation on top.
+      success_reward_threshold: 1.5
+
+      # The principle must reach EVERY teacher prompt (this also makes the
+      # self_distillation_mask all-true: every sample is distilled).
+      include_environment_feedback: true
+      environment_feedback_only_without_solution: false
+      dont_reprompt_on_self_success: true
+
+      max_reprompt_len: 2048
+      reprompt_truncation: right
+
+      # EXACTLY the screen's teacher geometry: the eval (teacher_context.py)
+      # rendered game prompt -> "Moral value to follow:" + principle ->
+      # "Now make your decision." (principle directly precedes the decision;
+      # template mirrored from sdpo_pd_tft via the eval's template_source,
+      # feedback wrapper mirrored from DEFAULT_FEEDBACK_TEMPLATE).
+      # {feedback} = the verbatim principle (feedback_mode=principle),
+      # {solution} = disabled for run 1 (renders empty).
+      reprompt_template: |
+        {prompt}
+        {solution}
+        {feedback}
+        Now make your decision.
+      solution_template: |
+
+        A cooperative trajectory from this situation:
+        {successful_previous_attempt}
+
+      feedback_template: |
+
+        Moral value to follow:
+        {feedback_raw}
+
+  rollout:
+    n: 16
+    temperature: 0.7
+    top_p: 1.0
+
+data:
+  train_batch_size: 16
+  max_response_length: 2048
+
+algorithm:
+  adv_estimator: grpo
+  norm_adv_by_std_in_grpo: true
+  use_kl_in_reward: false
+
+trainer:
+  # The checkpoint eval reads a TRAJECTORY (every save_freq steps), but
+  # moralgym_user.yaml caps retention at 3 (sized for 40GB full-model
+  # checkpoints — both sanity runs silently pruned step 10). Slim LoRA
+  # checkpoints (~1GB) make the cap pointless: keep everything.
+  max_actor_ckpt_to_keep: null
+  # Paper scale: main experiments evaluate at ~80 steps on a far harder
+  # task (LCBv6 code, 131 questions, same 4x GH200 hardware); prior SDPO
+  # runs here showed movement within 20-25 steps, and our task is a
+  # binary decision over ~5 states. 70 steps = single pass over 1,120 of
+  # the 8,000 samples; checkpoints every 10 steps give the eval a
+  # 7-point trajectory of D_opp / D_A D_O over training. Extend by
+  # resuming from the last checkpoint if the trajectory is still moving.
+  total_epochs: 1
+  total_training_steps: 70
+  val_before_train: false
+  test_freq: 10
+  save_freq: 10
+  # Browsable CoT traces in wandb: 16 of the 1024 val generations
+  # (256 prompts x 4 samples) per test point — for the qualitative
+  # "does the CoT sound like the principle" read.
+  log_val_generations: 16
+  # Full training-rollout text dump (prompt/response/score/extras as one
+  # JSONL per step, ~1MB/step at this scale — decoded text only, no
+  # tensors). Lives inside the run's ckpt dir so the stage-out ships it
+  # to $STORE with the checkpoints; enables post-hoc analysis (principle
+  # vocabulary over steps, per-state decisions) without rerunning.
+  rollout_data_dir: ${vars.ckpt_dir}/${trainer.experiment_name}/rollouts

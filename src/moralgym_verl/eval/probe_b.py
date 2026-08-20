@@ -39,12 +39,12 @@ from moralgym_verl.eval.teacher_forcing import (
     PROBE_STATES, answer_logodds, chat_prefix, chat_prefix_messages,
     delta_stats, dual_continuation_scores, probe_setup, sample_trace,
 )
-from moralgym_verl.game.environment import FIXED_PAYOFFS
-from moralgym_verl.game.players import get_opponent_action
+from moralgym_verl.game.classic_games import FIXED_PAYOFFS
+from moralgym_verl.game.opponents import get_opponent_action
 from moralgym_verl.game.prompts import (
     build_env_message, build_prompt, parse_action, parse_failure_feedback,
 )
-from moralgym_verl.game.prompts_reasoning import find_action_marker
+from moralgym_verl.game.prompts import find_action_marker
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +106,7 @@ def trace_probe(
     for state, hist_a, hist_o in PROBE_STATES:
         prompts[state] = build_prompt(cfg, hist_a, hist_o)
         student_ids[state] = chat_prefix(
-            tokenizer, prompts[state], model.device)
+            tokenizer, prompts[state], model.device, cfg.enable_thinking)
         for _ in range(num_traces):
             sampled.append((state, sample_trace(
                 model, tokenizer, student_ids[state],
@@ -115,7 +115,8 @@ def trace_probe(
     # Phase 2 — scoring: teacher prefixes + teacher-forced passes over the
     # stored traces.
     teacher_ids = {
-        state: chat_prefix(tokenizer, wrapper(prompts[state]), model.device)
+        state: chat_prefix(tokenizer, wrapper(prompts[state]), model.device,
+                           cfg.enable_thinking)
         for state, _, _ in PROBE_STATES
     }
     buckets = {state: {"token_delta": [], "token_jsd": [], "answer_delta": [],
@@ -194,7 +195,8 @@ def play_episode(
             pending_feedback = None
         messages.append({"role": "user", "content": prompt})
 
-        student_ids = chat_prefix_messages(tokenizer, messages, model.device)
+        student_ids = chat_prefix_messages(tokenizer, messages, model.device,
+                                           config.enable_thinking)
         trace = sample_trace(model, tokenizer, student_ids,
                              max_new_tokens, temperature)
         messages.append({"role": "assistant", "content": trace})
@@ -231,7 +233,8 @@ def score_rounds(
     records: List[Dict] = []
     for r in rounds:
         teacher_ids = chat_prefix_messages(
-            tokenizer, r["teacher_messages"], model.device)
+            tokenizer, r["teacher_messages"], model.device,
+            config.enable_thinking)
         scores = _score_trace(model, tokenizer, r["student_ids"], teacher_ids,
                               r["trace"], alpha,
                               config.coop_label, config.defect_label)

@@ -17,7 +17,7 @@ from moralgym_verl.game.environment import EpisodeConfig
 from moralgym_verl.game.prompts import (
     _build_payoff_block, build_env_message, build_prompt, parse_failure_feedback,
 )
-from moralgym_verl.game.trajectory import run_episode
+from moralgym_verl.game.episode import run_episode
 from moralgym_verl.training.game_interaction import GameInteraction
 
 RULES_MARKER = "The points are awarded as follows"

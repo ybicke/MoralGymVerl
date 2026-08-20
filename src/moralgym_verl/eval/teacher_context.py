@@ -16,6 +16,7 @@ Keep this module torch-free so it stays unit-testable outside the container.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Optional
 
 import yaml
@@ -24,12 +25,25 @@ import yaml
 # it in the training yaml's feedback_template for Session 2).
 DEFAULT_FEEDBACK_TEMPLATE = "\nMoral value to follow:\n{feedback_raw}\n"
 
+# src/moralgym_verl/eval/teacher_context.py -> repo root. Valid because
+# the repo is always bind-mounted / editable-installed from source.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _resolve_yaml_path(yaml_path: str) -> str:
+    """teacher.template_source is absolute or repo-relative (the
+    convention in configs/eval/*.yaml) — a relative path always anchors
+    to the repo root, never to the caller's cwd, so resolution is
+    deterministic no matter where the process was launched."""
+    p = Path(yaml_path)
+    return yaml_path if p.is_absolute() else str(_REPO_ROOT / p)
+
 
 def load_reprompt_template(yaml_path: str) -> str:
     """Read actor_rollout_ref.actor.self_distillation.reprompt_template
     from an SDPO training yaml (plain safe_load — the key is a literal
     string, no hydra interpolation)."""
-    with open(yaml_path) as f:
+    with open(_resolve_yaml_path(yaml_path)) as f:
         cfg = yaml.safe_load(f)
     try:
         return cfg["actor_rollout_ref"]["actor"]["self_distillation"][
@@ -46,7 +60,7 @@ def load_distillation_alpha(yaml_path: str, default: float = 0.5) -> float:
     """Read self_distillation.alpha from the SDPO training yaml — single
     source of truth, so the probe's JSD cannot drift from the training
     loss's divergence."""
-    with open(yaml_path) as f:
+    with open(_resolve_yaml_path(yaml_path)) as f:
         cfg = yaml.safe_load(f)
     try:
         return float(

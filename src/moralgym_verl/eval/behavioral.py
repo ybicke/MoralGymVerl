@@ -40,8 +40,9 @@ from moralgym_verl.eval.metrics import aggregate_rollout_metrics, per_round_brea
 from moralgym_verl.eval.model_loading import load_model_for_eval
 from moralgym_verl.eval.teacher_context import load_reprompt_template, wrap_prompt
 from moralgym_verl.game.moral_values import MORAL_VALUE_REGISTRY, get_moral_value
-from moralgym_verl.game.environment import FIXED_PAYOFFS, EpisodeConfig
-from moralgym_verl.game.trajectory import FAB_STATES, TrajectoryResult, run_episode
+from moralgym_verl.game.classic_games import FIXED_PAYOFFS
+from moralgym_verl.game.environment import EpisodeConfig
+from moralgym_verl.game.episode import FAB_STATES, TrajectoryResult, run_episode
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +121,7 @@ def build_policy(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] =
     eval_cfg = cfg.get("evaluation", {})
     temperature = eval_cfg.get("temperature", 1.0)
     max_new_tokens = eval_cfg.get("max_new_tokens", 10)
+    enable_thinking = cfg.get("prompt", {}).get("enable_thinking")
 
     teacher_cfg = cfg.get("teacher") or {}
     moral_value_name = teacher_cfg.get("moral_value", "none")
@@ -155,6 +157,7 @@ def build_policy(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] =
             temperature=temperature, raw_log=raw_log,
             prompt_wrapper=prompt_wrapper,
             wrap_position=teacher_cfg.get("wrap_position", "first"),
+            enable_thinking=enable_thinking,
         )
         logger.info("Multi-round: conversation policy (wrap_position=%s), "
                     "episode dialogues accumulate (verl multi-turn parity)",
@@ -164,6 +167,7 @@ def build_policy(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] =
             model, tokenizer, max_new_tokens=max_new_tokens,
             temperature=temperature, raw_log=raw_log,
             prompt_wrapper=prompt_wrapper,
+            enable_thinking=enable_thinking,
         )
     logger.info("Decoding: %s, max_new_tokens=%d",
                 "greedy" if not (temperature and temperature > 0)

@@ -1,13 +1,11 @@
-"""Game environment: payoff matrices, episode configuration, scoring.
+"""Episode configuration and sampling.
 
-Standard 2x2 symmetric game:
-             Opponent
-             C          D
-  Me  C    (R, R)     (S, T)
-      D    (T, S)     (P, P)
-
-Payoff values are sampled from [lo, hi] with 4 distinct integers,
-sorted ascending, then assigned via index tuples per game type.
+This module owns the shared EpisodeConfig (the full specification of one
+episode, serialized into datasets and YAML) plus the game-independent
+samplers. Everything paradigm-specific — payoff data, scoring, prompt
+text — lives with the Game implementations (classic_games.py /
+pgg_game.py), resolved via registry.get_game: validation and utility
+bounds delegate there.
 """
 
 from __future__ import annotations
@@ -15,57 +13,6 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
-
-GAME_ORDERINGS = {
-    #                      T   R   P   S      Constraint
-    "prisoners_dilemma": (3, 2, 1, 0),      # T > R > P > S
-    "chicken":           (3, 2, 0, 1),      # T > R > S > P
-    "stag_hunt":         (2, 3, 1, 0),      # R > T > P > S
-}
-
-# Canonical fixed-payoff matrices used at eval time (Tennant-matching values
-# from docs/experimental/eval_implementation_spec.md). Selected by
-# evaluate.py --game to override the config's training payoffs, so one
-# checkpoint can be evaluated on any supported game with consistent structure.
-# BoS / ICD are asymmetric and need the EpisodeConfig refactor in
-# docs/experimental/game_extension_plan.md — not yet included.
-FIXED_PAYOFFS = {
-    "prisoners_dilemma": {"T": 4, "R": 3, "P": 1, "S": 0},
-    "stag_hunt":         {"T": 3, "R": 4, "P": 1, "S": 0},
-    "chicken":           {"T": 4, "R": 2, "P": 0, "S": 1},
-}
-
-
-def sample_payoffs(
-    game_type: str, lo: int = 1, hi: int = 10,
-    rng: Optional[random.Random] = None,
-) -> Tuple[int, int, int, int]:
-    """Sample 4 distinct integer payoffs satisfying the ordering for *game_type*.
-
-    Returns (T, R, P, S).
-
-    The reward signal is normalized, so only relative gaps matter for training.
-    However, absolute values appear in the prompt and influence LLM reasoning,
-    so we use [1, 10] (no zero) to avoid a degenerate semantic anchor.
-    C(10, 4) = 210 tuples per game type.
-
-    For PD and Chicken, rejection-sample on the Axelrod condition 2R > T + S
-    (see experimental_design.md: prevents multi-turn GRPO collapse and ensures
-    utilitarian reward favors mutual cooperation). Retains 160/210 PD tuples.
-    Stag Hunt (R is largest) satisfies 2R > T + S automatically.
-    """
-    if game_type not in GAME_ORDERINGS:
-        raise ValueError(
-            f"Unknown game type: {game_type}. "
-            f"Choose from {list(GAME_ORDERINGS)}"
-        )
-    idx = GAME_ORDERINGS[game_type]
-    r = rng if rng is not None else random
-    while True:
-        vals = sorted(r.sample(range(lo, hi + 1), 4))
-        T, R, P, S = (vals[i] for i in idx)
-        if 2 * R > T + S:
-            return T, R, P, S
 
 
 def sample_labels(rng: Optional[random.Random] = None) -> Tuple[str, str]:
@@ -136,10 +83,17 @@ class EpisodeConfig:
     #         be high.
     minimal_parsing: bool = False
 
-    # CoT variant: dispatches to prompts_reasoning (closer asks for
-    # `Answer: <label>`, no "Do not explain"). Pair with max_new_tokens≥64
-    # and stop_strings=null in YAML.
+    # CoT variant: selects the reasoning format line and the structured
+    # parser (`Action: <label>`, no "Do not explain") — see
+    # prompts._format_line / parse_action_structured. Pair with
+    # max_new_tokens≥64 and stop_strings=null in YAML.
     reasoning: bool = False
+
+    # Hybrid-reasoning templates (Qwen3) branch on apply_chat_template's
+    # `enable_thinking`. Unlike `reasoning` (which prompt text is built),
+    # this is how the chat wrapper renders. None = don't pass the kwarg,
+    # leaving non-hybrid templates (gemma-2) byte-identical.
+    enable_thinking: Optional[bool] = None
 
     # Payoff-representation variant for the middle block of the prompt
     # (see prompts._build_payoff_block):
@@ -170,13 +124,49 @@ class EpisodeConfig:
     # See docs/multi_turn_implementation_plan.md Phase 1.
     restate_rules_per_round: bool = False
 
+    # Public-goods extension (docs/pgg_design.md). game_type="public_goods"
+    # replaces the 2x2 payoff matrix with the binary linear PGG: C =
+    # contribute the whole endowment, D = keep it. Payoffs are functions of
+    # (endowment, share, k_others) via pgg_game.get_score_pgg; the T/R/P/S
+    # fields are unused and must be passed as 0 (guarded in
+    # PublicGoodsGame.validate_config) so no code path can read a 2x2
+    # matrix that doesn't exist. matrix_layout is reinterpreted as the PGG
+    # surface facets (see pgg_game._build_pgg_table) and agent_is_row is forced
+    # to identity — there are no rows to play. Defaults keep every
+    # existing 2x2 call site valid.
+    n_players: int = 2
+    endowment: Optional[int] = None
+    share: Optional[int] = None
+
+    def __post_init__(self) -> None:
+        # Paradigm-specific field validation lives with the Game
+        # implementation. Lazy import: the game modules import this one.
+        from moralgym_verl.game.registry import get_game
+        get_game(self.game_type).validate_config(self)
+        # Every parser mode infers the move by matching label text
+        # (parse_action_structured even falls back to substring-in-token),
+        # so a label pair where one contains the other — case-insensitive,
+        # as the parsers compare — could silently mis-assign C/D instead of
+        # rejecting. No current scheme (action3/action4, sampled
+        # action<LETTER>) can produce such a pair; this guards the
+        # invariant for future ones.
+        if self.coop_label and self.defect_label:
+            coop, defect = self.coop_label.upper(), self.defect_label.upper()
+            if coop in defect or defect in coop:
+                raise ValueError(
+                    "action labels must not contain each other "
+                    f"(case-insensitive): {self.coop_label!r} / "
+                    f"{self.defect_label!r}")
+
     @property
     def u_max(self) -> int:
-        return max(self.T, self.R)
+        from moralgym_verl.game.registry import get_game
+        return get_game(self.game_type).utility_bounds(self)[1]
 
     @property
     def u_min(self) -> int:
-        return min(self.P, self.S)
+        from moralgym_verl.game.registry import get_game
+        return get_game(self.game_type).utility_bounds(self)[0]
 
     def label_for(self, move: str) -> str:
         """Convert internal move (C/D) to the randomized label."""
@@ -189,19 +179,6 @@ class EpisodeConfig:
         if label == self.defect_label:
             return "D"
         return None
-
-
-def get_score(
-    my_move: str, opp_move: str, T: int, R: int, P: int, S: int
-) -> Tuple[int, int]:
-    """Return (my_score, opponent_score) for a single round."""
-    payoffs = {
-        ("C", "C"): (R, R),
-        ("C", "D"): (S, T),
-        ("D", "C"): (T, S),
-        ("D", "D"): (P, P),
-    }
-    return payoffs[(my_move, opp_move)]
 
 
 def sample_episode_config(
@@ -223,7 +200,10 @@ def sample_episode_config(
         randomize_presentation: if True, randomize labels and matrix layout.
             Set False for fixed Tennant-style prompts.
     """
-    from moralgym_verl.game.players import OPPONENT_REGISTRY
+    from moralgym_verl.game.classic_games import (
+        GAME_ORDERINGS, sample_payoffs,
+    )
+    from moralgym_verl.game.opponents import OPPONENT_REGISTRY
 
     games = game_pool or list(GAME_ORDERINGS)
     opponents = opponent_pool or list(OPPONENT_REGISTRY)

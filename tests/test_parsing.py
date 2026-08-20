@@ -7,7 +7,7 @@ old parser (optional separator + lenient fallback) mishandled.
 import pytest
 
 from moralgym_verl.game.environment import EpisodeConfig
-from moralgym_verl.game.prompts_reasoning import parse_action_structured
+from moralgym_verl.game.prompts import parse_action_structured
 
 
 CFG = EpisodeConfig(

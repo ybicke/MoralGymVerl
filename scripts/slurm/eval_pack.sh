@@ -8,7 +8,7 @@
 #SBATCH --ntasks-per-node=4
 #SBATCH --gpus-per-node=4
 #SBATCH -C thp_never&nvidia_vboost_enabled
-#SBATCH --time=02:30:00
+#SBATCH --time=05:00:00
 
 # =============================================================================
 # PACKED eval launcher — up to 4 eval cells concurrently on one node.
@@ -51,7 +51,10 @@ export STORE_BASE="/capstor/store/cscs/swissai/aa004/${USER}"
 
 BATCH_JSON="${1:?Usage: eval_pack.sh <batch.json>}"
 
-LOG_BASE="${HOME}/logs_verl/slurm"
+# Logs: ~/logs_verl/{pre_eval,training,eval}. Base-model screens (the
+# default) go to pre_eval; submit with EVAL_STAGE=eval for post-training
+# checkpoint evals.
+LOG_BASE="${HOME}/logs_verl/${EVAL_STAGE:-pre_eval}"
 mkdir -p "${LOG_BASE}"
 exec > "${LOG_BASE}/eval_pack_${SLURM_JOB_ID}.out" 2>&1
 
@@ -78,15 +81,22 @@ batch_path, workdir, root, config = sys.argv[1:5]
 cells = json.load(open(batch_path))["cells"]
 
 for i, c in enumerate(cells):
-    run_dir = f"{root}/eval_results/teacher_signal/{c['eval_group']}/{c['run_dir_stem']}_$SLURM_JOB_ID"
+    # cells/ keeps the machine-readable results in one place, so the group
+    # root holds only the manifest, the batch payloads and analysis/.
+    run_dir = f"{root}/eval_results/teacher_signal/{c['eval_group']}/cells/{c['run_dir_stem']}_$SLURM_JOB_ID"
     env = c.get("env", {})
     args = [str(a) for a in c.get("args", [])]
+    # A sweep's `config:` key travels in the cell env (sweep.cell_submission).
+    # The job-level CONFIG is only the fallback: the packed submit path does
+    # not export env, so reading it alone would silently run the default
+    # config for every cell.
+    cell_config = env.get("CONFIG", config)
 
     def flag(name, key):
         return f'--{name} {shlex.quote(env[key])}' if env.get(key) else ''
 
     common = " ".join(filter(None, [
-        f'--config {shlex.quote(root)}/{shlex.quote(config)}',
+        f'--config {shlex.quote(root)}/{shlex.quote(cell_config)}',
         '--checkpoint base',
         f'--game {shlex.quote(c["game"])}',
         f'--moral-value {shlex.quote(c["moral_value"])}',

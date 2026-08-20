@@ -44,7 +44,7 @@ class ScriptedPolicy:
         self.wrapper = None
 
     def factory(self, model, tokenizer, max_new_tokens=10, temperature=1.0,
-                raw_log=None, prompt_wrapper=None):
+                raw_log=None, prompt_wrapper=None, enable_thinking=None):
         self.wrapper = prompt_wrapper
 
         def policy_fn(prompt):

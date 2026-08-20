@@ -11,7 +11,7 @@ that touch the model are monkeypatched:
 Everything else — config/protocol handling, teacher wrapping (applied
 inside the real make_policy_fn), presentation RNG, the round loop,
 parsing, metrics, JSON output — is the real code. Set breakpoints
-directly in behavioral.py / trajectory.py / prompts_reasoning.py.
+directly in behavioral.py / episode.py / prompts.py.
 
     cd /users/bickery/MoralGymVerl
     PYTHONPATH=src /usr/bin/python3.11 scripts/debug/eval_stubbed.py [behavioral.py flags]

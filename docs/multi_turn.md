@@ -464,6 +464,85 @@ verl stack — investigation first, then implementation plan, then code.
 - Eval: stage1b_transcript before/after short training run (the eval side is DONE —
   see docs/teacher_signal_eval.md and the behavioral pipeline).
 
+# Part 4 — SOTA check: multi-turn self-distillation (2026-08-10 web review)
+
+*(Condensed findings of a literature pass over the 2026 multi-turn OPD/self-
+distillation thread, and what they change — or confirm — about Parts 1–3.
+Full sources in the references below.)*
+
+## 4.1 The field independently found our flaws — and mostly our fix
+
+**RL side (Flaw 1):** turn-level reformulation is the converged answer.
+MT-GRPO and Turn-PPO recast the episode as a turn-level MDP with per-turn
+advantages; GiGPO adds step-level grouping. Scheme B is this, not a
+homegrown detour.
+
+**Distillation side (Flaw 2):** multi-turn on-policy self-distillation is
+its own 2026 research thread, and it documents our decay as a general
+phenomenon: as turns accumulate, the teacher assigns progressively lower
+probability to student tokens and supervision degrades ("multi-turn OPSD
+instability", SDAR; OPD survey). Prefix Replay is the direct precedent
+for the split on this side too: one training row per decision, history in
+the prompt, teacher supervision attached at the decision point — claimed
+to fix exactly signal dilution, credit assignment, and the context
+mismatch. (Caveat: their teacher also gets hindsight/future information;
+ours does not.)
+
+**Not investigated there:** Skill-SD and SDAR — the two closest
+*self*-distillation works (teacher = same model + privileged context) —
+do NOT split. They keep the whole-trajectory masked row and patch it
+in-place (importance-weighted losses, token-level gap-gating, teacher
+sync). Note why they can: their privilege (retrieved skills) stays
+informative at every turn, so teacher/student contexts never fully
+converge. Our privilege is a static principle in message 1 — decay is
+structural for us in the unsplit form, which makes the split MORE
+necessary here than in their settings.
+
+## 4.2 What transfers directly (actionable)
+
+1. **Keep student rollouts plain and on-policy** — validated twice over:
+   teacher-generated rollouts collapse training, and prepending the
+   privileged text to the *student* prompt causes train-test-mismatch
+   overfitting (Skill-SD). Our SDPO already does both correctly.
+2. **Divergence direction is a live knob:** SDAR's ablation found reverse
+   KL substantially beats Jensen-Shannon in multi-turn agentic
+   distillation (mode-seeking: only teacher-endorsed tokens are
+   incorporated). Our `generalized_jsd` alpha already implements the
+   reverse-KL branch (alpha=1 -> KL(s||t)) — a zero-code Phase-4 ablation
+   arm the literature now specifically motivates.
+3. **Gap-gating** (distill hard only where the teacher confidently
+   disagrees, SDAR) is the candidate remedy if late-round signal is weak
+   even after wrap-latest.
+4. **SDAR is the existence proof that GRPO and self-distillation combine
+   on shared rollouts** — indirect support for our comparability design
+   (same rollouts, same split rows, two separated loss heads).
+
+## 4.3 What the split does and does not fix — the mirror image
+
+Naive multi-turn: **GRPO has a strong but unattributed signal** (one
+scalar smeared over all decisions); **wrap-first SDPO has an attributed
+but vanishing one** (pointwise loss, but teacher/student contexts
+converge, gradient -> 0 in late rounds). Credit assignment and decay are
+different axes: SDPO never has the attribution problem (dense pointwise
+supervision), decay is a signal-STRENGTH problem.
+
+Consequently the split alone fixes Flaws 1/3/4 but NOT decay — a split
+row with wrap-first still buries the value at the top of a long prompt.
+Decay is fixed by **split + wrap-latest** (value adjacent to every
+decision). This is why the wrap-position probe ablation is the one
+pre-Phase-4 experiment that tests the component the split does not
+automatically deliver.
+
+## 4.4 The gap that stays ours
+
+Nobody in this literature uses a static normative principle as the
+privileged context, and nobody trains in strategic games against
+adaptive opponents — privilege is always dynamic and task-instrumental
+(retrieved skills, correct solutions, hindsight), objectives are task
+success. "Multi-turn self-distillation of moral principles in social
+dilemmas" is unclaimed; every ingredient of our design now has
+independent published support, but the combination does not.
+
 ## References (from the preceding literature review)
 
 - Turn-Level Credit Assignment (ICML 2025): https://arxiv.org/abs/2505.11821
@@ -474,3 +553,24 @@ verl stack — investigation first, then implementation plan, then code.
 - Response-Level Rewards Are All You Need (counterpoint): https://arxiv.org/pdf/2506.02553
 - Fireworks best practices for multi-turn RL: https://fireworks.ai/blog/best-practices-for-multi-turn-RL
 - In-context co-player inference (IPD cooperation mechanism): https://arxiv.org/html/2602.16301
+
+### 2026 self-distillation / multi-turn OPD thread (Part 4 sources)
+
+- SDPO — RL via Self-Distillation (the algorithm our fork implements):
+  https://arxiv.org/abs/2601.20802 (project: https://self-distillation.github.io/SDPO)
+- Skill-SD — skill-conditioned self-distillation, multi-turn agents
+  (OPSD failure-mode catalogue): https://arxiv.org/abs/2604.10674
+- SDAR — Self-Distilled Agentic RL (gated GRPO+OPSD hybrid; reverse-KL >
+  JSD ablation; gap-gating): https://arxiv.org/abs/2605.15155
+- Prefix Replay — multi-turn OPD with one row per decision (the split's
+  distillation-side precedent): https://arxiv.org/abs/2607.04763
+- Guided-OPD — curriculum turn-level teacher guidance: https://arxiv.org/abs/2606.15912
+- Turn-PPO — turn-level MDP + turn-level critic: https://arxiv.org/abs/2512.17008
+- OPD survey (documents turn-wise teacher-probability decay):
+  https://arxiv.org/abs/2604.00626
+- TCOD / ATOD — temporal-curriculum OPD variants: https://arxiv.org/abs/2604.24005,
+  https://arxiv.org/abs/2606.27814
+- SAGE-OPD — selective turn-level intervention + confidence weighting:
+  https://arxiv.org/abs/2606.19659
+- Privileged Information Distillation: https://arxiv.org/abs/2602.04942
+- Credit-assignment survey (reasoning -> agentic): https://arxiv.org/abs/2604.09459
