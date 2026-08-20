@@ -28,7 +28,6 @@ from __future__ import annotations
 from typing import Dict, List
 
 from moralgym_verl.game.environment import EpisodeConfig, get_score
-from moralgym_verl.game.pgg import get_score_pgg, group_payoff_pgg
 
 
 # ---------------------------------------------------------------------------
@@ -223,58 +222,6 @@ def get_game_reward_fn(name: str):
 # Composite per-round reward
 # ---------------------------------------------------------------------------
 
-def _compute_round_reward_pgg(
-    action: str,
-    k_others: int,
-    config: EpisodeConfig,
-    lambda_val: float,
-    intrinsic_type: str,
-    game_reward_type: str,
-    k_prev: int | None,
-) -> Dict[str, float]:
-    """PGG round reward. Mirrors the 2x2 composition with the opponent
-    slots carrying k (docs/pgg_design.md §4): game reward from the
-    current round's k_others, intrinsic from k_prev. Normalized uses the
-    config's dilemma-regime u_max/u_min (do not use it in the compliance
-    null, s > E — see EpisodeConfig). 'deontological_tailored' has no PGG
-    rules and raises."""
-    n_others = config.n_players - 1
-    pts = get_score_pgg(action, k_others, config)
-
-    if game_reward_type == "raw":
-        rg = float(pts)
-    elif game_reward_type == "normalized":
-        rg = (pts - config.u_min) / (config.u_max - config.u_min)
-    elif game_reward_type == "none":
-        rg = 0.0
-    elif game_reward_type == "utilitarian":
-        m = k_others + (1 if action == "C" else 0)
-        rg = float(group_payoff_pgg(m, config))
-    else:
-        raise ValueError(
-            f"Unknown game reward type: {game_reward_type}. "
-            f"Choose from {list(GAME_REWARD_REGISTRY)}"
-        )
-
-    if k_prev is None or intrinsic_type == "none":
-        ri = 0.0
-    elif intrinsic_type == "deontological":
-        ri = r_intrinsic_deontological_pgg(action, k_prev, n_others)
-    elif intrinsic_type == "v1":
-        ri = r_intrinsic_v1_pgg(action, k_prev, n_others)
-    else:
-        raise ValueError(
-            f"Intrinsic reward {intrinsic_type!r} is not defined for "
-            f"public_goods"
-        )
-
-    return {
-        "r_game": rg,
-        "r_intrinsic": ri,
-        "r_total": rg + lambda_val * ri,
-    }
-
-
 def compute_round_reward(
     action: str,
     opp_action,
@@ -309,31 +256,13 @@ def compute_round_reward(
         shaping: Per-game shaping dict for 'deontological_tailored'.
             See r_intrinsic_deontological_tailored docstring.
     """
-    if config.game_type == "public_goods":
-        return _compute_round_reward_pgg(
-            action, opp_action, config, lambda_val, intrinsic_type,
-            game_reward_type, opp_prev_action,
-        )
-
-    game_fn = get_game_reward_fn(game_reward_type)
-    rg = game_fn(action, opp_action, config.T, config.R, config.P, config.S)
-
-    if intrinsic_type == "deontological_tailored":
-        ri = r_intrinsic_deontological_tailored(
-            action, agent_prev_action, opp_prev_action,
-            config.game_type, shaping or {},
-        )
-    elif opp_prev_action is not None:
-        ri_fn = get_intrinsic_fn(intrinsic_type)
-        ri = ri_fn(action, opp_prev_action)
-    else:
-        ri = 0.0
-
-    return {
-        "r_game": rg,
-        "r_intrinsic": ri,
-        "r_total": rg + lambda_val * ri,
-    }
+    # Lazy import: the Game implementations import this module's reward
+    # primitives, so the registry cannot be a top-level import here.
+    from moralgym_verl.game.registry import get_game
+    return get_game(config.game_type).round_reward(
+        config, action, opp_action, lambda_val, intrinsic_type,
+        game_reward_type, opp_prev_action, agent_prev_action, shaping,
+    )
 
 
 def compute_episode_rewards(

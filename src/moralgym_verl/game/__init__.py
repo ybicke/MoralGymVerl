@@ -14,6 +14,7 @@ from moralgym_verl.game.pgg import (
     group_payoff_pgg,
     pgg_fab_states,
 )
+from moralgym_verl.game.registry import GAMES, get_game
 from moralgym_verl.game.players import (
     OPPONENT_REGISTRY,
     get_opponent_action,
@@ -33,6 +34,8 @@ __all__ = [
     "get_score_pgg",
     "group_payoff_pgg",
     "pgg_fab_states",
+    "GAMES",
+    "get_game",
     "OPPONENT_REGISTRY",
     "get_opponent_action",
     "build_prompt",
