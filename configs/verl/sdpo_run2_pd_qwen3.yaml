@@ -1,0 +1,31 @@
+# =============================================================================
+# SDPO run 2 — Qwen3-8B. Layers the run-2 axis (length + lr) on the run-1
+# qwen entrypoint; everything else identical by design so run 1 -> run 2
+# attribution stays clean.
+#
+# Run-2 rationale (state-resolved analysis of run 1, 2026-08-20):
+#   - 200 steps: run 1 was still climbing at 70. CC extrapolates to its
+#     teacher-forced target (~84+) within ~20 steps; DD (~37 target) needs
+#     the length; DC is predicted to PLATEAU ~33 (teacher-forcing ceiling,
+#     probe-B arithmetic) — documenting that plateau is a run-2 result,
+#     the fix (demonstration channel) is run 3.
+#   - lr 1e-5 (2x run 1): the one speed knob turned; LoRA-safe per the
+#     GRPO lr5x history. Watch grad_norm for instability in the first
+#     ~30 steps before submitting gemma.
+#
+# Submit:
+#   DATASET_CONFIG=sdpo_run1_pd TIME=06:00:00 bash scripts/slurm/train_verl.sh \
+#       sdpo_run2_pd_qwen3 qwen_run2_200
+# =============================================================================
+defaults:
+  - sdpo_run1_pd_qwen3
+  - _self_
+
+actor_rollout_ref:
+  actor:
+    optim:
+      lr: 1.0e-5
+
+trainer:
+  # 200 steps = 3,200 of the 8,000 samples, still a single pass.
+  total_training_steps: 200
