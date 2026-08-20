@@ -19,7 +19,7 @@
 #
 # Run (from the repo root):
 #   sbatch scripts/debug/pack_test.sh
-#   cat ~/logs_verl/slurm/pack_test_<jobid>.out
+#   cat ~/logs_verl/pre_eval/pack_test_<jobid>.out
 # =============================================================================
 #SBATCH --job-name=pack-test
 #SBATCH --account=aa004
@@ -34,7 +34,7 @@
 
 set -uo pipefail
 
-LOG_BASE="${HOME}/logs_verl/slurm"
+LOG_BASE="${HOME}/logs_verl/pre_eval"
 mkdir -p "${LOG_BASE}"
 exec > "${LOG_BASE}/pack_test_${SLURM_JOB_ID}.out" 2>&1
 

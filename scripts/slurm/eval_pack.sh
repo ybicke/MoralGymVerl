@@ -51,7 +51,10 @@ export STORE_BASE="/capstor/store/cscs/swissai/aa004/${USER}"
 
 BATCH_JSON="${1:?Usage: eval_pack.sh <batch.json>}"
 
-LOG_BASE="${HOME}/logs_verl/slurm"
+# Logs: ~/logs_verl/{pre_eval,training,eval}. Base-model screens (the
+# default) go to pre_eval; submit with EVAL_STAGE=eval for post-training
+# checkpoint evals.
+LOG_BASE="${HOME}/logs_verl/${EVAL_STAGE:-pre_eval}"
 mkdir -p "${LOG_BASE}"
 exec > "${LOG_BASE}/eval_pack_${SLURM_JOB_ID}.out" 2>&1
 

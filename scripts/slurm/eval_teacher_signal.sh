@@ -55,11 +55,14 @@ GAME="${1:?Usage: eval_teacher_signal.sh <game> <moral_value> [num_episodes]}"
 MORAL_VALUE="${2:?Usage: eval_teacher_signal.sh <game> <moral_value> [num_episodes]}"
 NUM_EPISODES="${3:-25}"
 
-# Redirect output early so errors are never lost to /dev/null
-LOG_BASE="${HOME}/logs_verl"
-mkdir -p "${LOG_BASE}/slurm"
+# Redirect output early so errors are never lost to /dev/null.
+# Logs: ~/logs_verl/{pre_eval,training,eval}. Base-model screens (the
+# default) go to pre_eval; submit with EVAL_STAGE=eval for post-training
+# checkpoint evals.
+LOG_BASE="${HOME}/logs_verl/${EVAL_STAGE:-pre_eval}"
+mkdir -p "${LOG_BASE}"
 RUN_NAME="teacher_signal_${GAME}_${MORAL_VALUE}_${SLURM_JOB_ID}"
-exec > "${LOG_BASE}/slurm/${RUN_NAME}.out" 2> "${LOG_BASE}/slurm/${RUN_NAME}.err"
+exec > "${LOG_BASE}/${RUN_NAME}.out" 2> "${LOG_BASE}/${RUN_NAME}.err"
 
 CONFIG="${CONFIG:-configs/eval/teacher_signal_9b.yaml}"
 # Results layout: eval_results/teacher_signal/<EVAL_GROUP>/<cell>/
