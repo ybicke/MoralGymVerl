@@ -12,6 +12,9 @@ from dataclasses import dataclass
 from typing import Callable, Dict, List, Tuple
 
 from moralgym_verl.game.environment import EpisodeConfig, get_score
+from moralgym_verl.game.pgg import (
+    get_group_actions, get_score_pgg, group_payoff_pgg,
+)
 from moralgym_verl.game.players import get_opponent_action
 from moralgym_verl.game.prompts import (
     build_env_message, build_prompt, parse_action, parse_failure_feedback,
@@ -31,6 +34,14 @@ class TrajectoryResult:
     fab_agent: str | None = None
     fab_opp: str | None = None
     parse_failures: int = 0
+
+    # public_goods only (None for 2x2 games): k_others per round (None on
+    # illegal rounds) and the fabricated k_prev seed. opponent_moves is
+    # all-None for PGG — there is no single opponent, so the pair-based
+    # rate properties below correctly return None; use k_history and
+    # per_round["others_moves"] instead.
+    k_history: List[int | None] | None = None
+    fab_k: int | None = None
 
     # Rate properties return None (not 0.0) when the episode has no legal
     # decisions: an all-illegal episode carries no evidence about the
@@ -70,6 +81,8 @@ class TrajectoryResult:
 # Canonical order of the four fabricated (agent_prev, opp_prev) states.
 # Balanced eval designs cycle through this list (episode i -> i % 4) so
 # every state gets exactly num_episodes/4 decisions, deterministically.
+# The public_goods generalization ({C,D} x {0..N-1}, 2N states) is
+# pgg.pgg_fab_states(n_players).
 FAB_STATES: List[Tuple[str, str]] = [
     ("C", "C"), ("C", "D"), ("D", "C"), ("D", "D"),
 ]
@@ -109,22 +122,47 @@ def run_episode(
             state. None (default) samples uniformly from {C,D}x{C,D} via
             module `random` — training-parity behavior. The eval passes
             an explicit state to run a balanced design (see FAB_STATES).
+            For public_goods the state is (own_prev, k_prev) with
+            k_prev an int in 0..N-1 (see pgg.pgg_fab_states); uniform
+            sampling covers the same 2N grid.
         game_reward_type: Which game reward function to use for reward
             computation ('raw', 'normalized', 'none', 'utilitarian').
         shaping: Per-game shaping dict for intrinsic_type='deontological_tailored'.
             See rewards.r_intrinsic_deontological_tailored for schema.
     """
+    is_pgg = config.game_type == "public_goods"
+    n_bots = config.n_players - 1 if is_pgg else 1
+
     fab_agent: str | None = None
     fab_opp: str | None = None
+    fab_k: int | None = None
+    # PGG group state: each bot's own move history, plus the k-history the
+    # prompt builders consume (k per legal round, parallel to
+    # agent_history, fabricated seed included).
+    bots_histories: List[List[str]] = [[] for _ in range(n_bots)] if is_pgg else []
+    k_history: List[int] = []
 
     if fabricate_history:
-        if fab_state is not None:
-            fab_agent, fab_opp = fab_state
+        if is_pgg:
+            if fab_state is not None:
+                fab_agent, fab_k = fab_state
+            else:
+                fab_agent = random.choice(["C", "D"])
+                fab_k = random.randint(0, n_bots)
+            # Which bots contributed is arbitrary (payoffs, prompts, and
+            # homogeneous policies depend only on the count).
+            bots_histories = [
+                ["C" if i < fab_k else "D"] for i in range(n_bots)
+            ]
         else:
-            fab_agent = random.choice(["C", "D"])
-            fab_opp = random.choice(["C", "D"])
+            if fab_state is not None:
+                fab_agent, fab_opp = fab_state
+            else:
+                fab_agent = random.choice(["C", "D"])
+                fab_opp = random.choice(["C", "D"])
         agent_history: List[str] = [fab_agent]
-        opp_history: List[str] = [fab_opp]
+        opp_history: List[str] = [fab_opp] if not is_pgg else []
+        k_history = [fab_k] if is_pgg else []
     else:
         agent_history = []
         opp_history = []
@@ -133,13 +171,16 @@ def run_episode(
     parse_failures = 0
     pending_feedback: str | None = None
     # Previous round's outcome for the env message; None after an illegal
-    # round (state frozen, nothing to report).
+    # round (state frozen, nothing to report). For PGG, prev_opp holds the
+    # round's k_others (int) — the builders' PGG convention.
     prev_agent: str | None = None
-    prev_opp: str | None = None
+    prev_opp = None
 
     for rnd in range(config.num_rounds):
         if rnd == 0:
-            prompt = build_prompt(config, agent_history, opp_history)
+            prompt = build_prompt(
+                config, agent_history, k_history if is_pgg else opp_history
+            )
         else:
             # Rounds >= 2: the rules (round-1 prompt) and all previous
             # rounds are already in the accumulated conversation — send
@@ -165,19 +206,62 @@ def run_episode(
             parse_failures += 1
             pending_feedback = parse_failure_feedback(config)
             prev_agent = prev_opp = None
+            entry = {
+                "round": rnd + 1,
+                "prompt": prompt,
+                "raw_response": raw,
+                "agent_move": "illegal",
+                "opp_move": None,
+                "agent_pts": None,
+                "opp_pts": None,
+            }
+            if is_pgg:
+                entry.update(
+                    {"k_others": None, "others_moves": None,
+                     "group_payoff": None}
+                )
+            per_round.append(entry)
+            if verbose:
+                print(f"  R{rnd + 1:>2}: Agent=illegal (state frozen)")
+            continue
+
+        if is_pgg:
+            # Simultaneous group draw: bot policies see histories BEFORE
+            # this round, same convention as get_opponent_action below.
+            bot_moves = get_group_actions(
+                config.opponent, agent_history, bots_histories
+            )
+            k_others = sum(1 for m in bot_moves if m == "C")
+            agent_pts = get_score_pgg(agent_move, k_others, config)
+            m_total = k_others + (1 if agent_move == "C" else 0)
+            group_pts = group_payoff_pgg(m_total, config)
+
+            agent_history.append(agent_move)
+            for hist, move in zip(bots_histories, bot_moves):
+                hist.append(move)
+            k_history.append(k_others)
+            prev_agent, prev_opp = agent_move, k_others
+
             per_round.append(
                 {
                     "round": rnd + 1,
                     "prompt": prompt,
                     "raw_response": raw,
-                    "agent_move": "illegal",
+                    "agent_move": agent_move,
                     "opp_move": None,
-                    "agent_pts": None,
+                    "agent_pts": agent_pts,
                     "opp_pts": None,
+                    "k_others": k_others,
+                    "others_moves": bot_moves,
+                    "group_payoff": group_pts,
                 }
             )
             if verbose:
-                print(f"  R{rnd + 1:>2}: Agent=illegal (state frozen)")
+                print(
+                    f"  R{rnd + 1:>2}: Agent={agent_move}  "
+                    f"k={k_others}/{n_bots}  pts={agent_pts}  "
+                    f"group={group_pts}"
+                )
             continue
 
         opp_move = get_opponent_action(
@@ -228,13 +312,15 @@ def run_episode(
     # Episode rewards computed over legal decisions only — agent_history /
     # opp_history already exclude illegal rounds (we didn't append on illegal).
     # Drop the fabricated entry (if any) so reward aggregation sees real play only.
+    # For PGG the opponent side is the k-history (compute_episode_rewards'
+    # PGG convention) and the fabricated seed is fab_k.
     fab_offset = 1 if fabricate_history else 0
     legal_agent = agent_history[fab_offset:]
-    legal_opp = opp_history[fab_offset:]
+    legal_opp = k_history[fab_offset:] if is_pgg else opp_history[fab_offset:]
     rewards = compute_episode_rewards(
         legal_agent, legal_opp, config, lambda_val, intrinsic_type,
         game_reward_type=game_reward_type,
-        opp_prev_initial=fab_opp,
+        opp_prev_initial=fab_k if is_pgg else fab_opp,
         agent_prev_initial=fab_agent,
         shaping=shaping,
     )
@@ -248,4 +334,8 @@ def run_episode(
         fab_agent=fab_agent,
         fab_opp=fab_opp,
         parse_failures=parse_failures,
+        k_history=(
+            [pr["k_others"] for pr in per_round] if is_pgg else None
+        ),
+        fab_k=fab_k,
     )

@@ -8,6 +8,10 @@ Standard 2x2 symmetric game:
 
 Payoff values are sampled from [lo, hi] with 4 distinct integers,
 sorted ascending, then assigned via index tuples per game type.
+
+The N-player public-goods game (game_type="public_goods") keeps its
+mechanics in pgg.py; this module only carries its EpisodeConfig fields
+and validation.
 """
 
 from __future__ import annotations
@@ -176,7 +180,37 @@ class EpisodeConfig:
     # See docs/multi_turn_implementation_plan.md Phase 1.
     restate_rules_per_round: bool = False
 
+    # Public-goods extension (docs/pgg_design.md). game_type="public_goods"
+    # replaces the 2x2 payoff matrix with the binary linear PGG: C =
+    # contribute the whole endowment, D = keep it. Payoffs are functions of
+    # (endowment, share, k_others) via get_score_pgg; the T/R/P/S fields are
+    # unused and must be passed as 0 (guarded in __post_init__) so no code
+    # path can read a 2x2 matrix that doesn't exist. matrix_layout is
+    # reinterpreted as the PGG surface facets (see prompts._build_pgg_table)
+    # and agent_is_row is forced to identity — there are no rows to play.
+    # Defaults keep every existing 2x2 call site valid.
+    n_players: int = 2
+    endowment: Optional[int] = None
+    share: Optional[int] = None
+
     def __post_init__(self) -> None:
+        if self.game_type == "public_goods":
+            if self.endowment is None or self.share is None:
+                raise ValueError(
+                    "public_goods requires endowment and share to be set")
+            if self.n_players < 2 or self.endowment <= 0 or self.share <= 0:
+                raise ValueError(
+                    "public_goods requires n_players >= 2 and positive "
+                    f"endowment/share, got n_players={self.n_players}, "
+                    f"endowment={self.endowment}, share={self.share}")
+            if (self.T, self.R, self.P, self.S) != (0, 0, 0, 0):
+                raise ValueError(
+                    "public_goods ignores T/R/P/S — pass 0s (payoffs come "
+                    "from endowment/share via get_score_pgg)")
+            if not self.agent_is_row:
+                raise ValueError(
+                    "agent_is_row is meaningless for public_goods "
+                    "(forced identity)")
         # Every parser mode infers the move by matching label text
         # (parse_action_structured even falls back to substring-in-token),
         # so a label pair where one contains the other — case-insensitive,
@@ -192,12 +226,22 @@ class EpisodeConfig:
                     f"(case-insensitive): {self.coop_label!r} / "
                     f"{self.defect_label!r}")
 
+    # PGG bounds are the DILEMMA-regime extremes (docs/pgg_design.md §4):
+    # u_max = keep while all others contribute, u_min = contribute alone.
+    # They are wrong in the compliance regime (s > E, where u_max = s*N) —
+    # normalized rewards must not be used there. At N=2 they equal the
+    # derived-PD max(T, R) / min(P, S) exactly (E+s = T, s = S).
+
     @property
     def u_max(self) -> int:
+        if self.game_type == "public_goods":
+            return self.endowment + self.share * (self.n_players - 1)
         return max(self.T, self.R)
 
     @property
     def u_min(self) -> int:
+        if self.game_type == "public_goods":
+            return self.share
         return min(self.P, self.S)
 
     def label_for(self, move: str) -> str:

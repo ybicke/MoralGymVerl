@@ -328,3 +328,51 @@ v3 training touches it.
 4. **Probe-state thinning** (9 vs 7 rows) — decide on P1 cost numbers.
 5. **Waste-null placement**: follow-up block after the dilemma screen
   (rec) vs in the first screen.
+
+## 9. P0 verification addendum + implementation record (2026-08-20)
+
+Design verified pre-implementation (math, regime partition, N=2
+reduction, code seams). Two corrections to §6-P0 and the resolved open
+choices, as built:
+
+- **Parity params**: canonical (E=10, s=5) sits ON the N=2 strictness
+  boundary (R=P=10, not a strict PD) — the N=2≡PD tests use their own
+  entry `PGG_PARAMS["parity"]` (E=10, s=6) ⇒ (T,R,P,S)=(16,12,10,6).
+  Note the derived-PD always has R=2S, so parity can never be checked
+  against the fixed Tennant (4,3,1,0); the PD side runs with the derived
+  payoffs.
+- **`rewards.py` is in P0 scope** (omitted from the §6 seam list):
+  `run_episode` unconditionally computes episode rewards, so P0 ships
+  the eval-side PGG branch — raw/normalized/none/utilitarian (group
+  total) + graded deon/v1 (`±k_prev/(N−1)`, exact 2×2 reduction at N=2);
+  `deontological_tailored` raises. Normalization bounds are
+  dilemma-regime only (compliance null s>E would need u_max = s·N).
+- **Resolved choices**: `conditional_contributor` = contribute-first +
+  majority of the N−1 others (`k_prev ≥ ceil((N−1)/2)`) — exactly TFT at
+  N=2. PGG configs pass T=R=P=S=0 (guarded in `__post_init__`).
+  Prose states the rule in the s-form ("every contributor causes each of
+  the N players to receive s points") — integer-safe for any (E, s), so
+  the prose cell measures rule-composition, not fraction arithmetic.
+  Representation names: "table" canonical ("matrix" alias), "list"
+  rejected. `matrix_layout` reinterpreted: bit 0 = k-row order, bit 1 =
+  column/mention order; `agent_is_row` forced True.
+- **Layout**: PGG content (params, scoring, 2N-state grid, contribution
+  policies, group draw) lives in `game/pgg.py` — one file per paradigm;
+  the protocol modules (`prompts.py` incl. shared opener/history helpers
+  now also used by `prompts_reasoning.py`, `trajectory.py`,
+  `rewards.py`) only dispatch on `game_type == "public_goods"`. The
+  builders' PGG convention: the opponent slot carries k (ints) —
+  `build_prompt`/`build_env_message` take the k-history/k_others where
+  2×2 games pass moves.
+- **Flags for P1/P3** (from the verification): sucker/freeride metric
+  definitions in §4 condition on k_prev while their 2×2 ancestors are
+  same-round outcome stats — decide decision-based vs outcome-based
+  before `eval/metrics.py`. Stochastic group draws (random_contributor
+  default) need the single-draw-point discipline (`get_group_actions`
+  only) or dataset-seeded draws for reward re-simulation.
+
+Built + tested: `game/pgg.py`, dispatch seams, `tests/test_pgg.py` (29
+tests: payoffs, policies, builders, rewards, N=2 parity incl. fab-state
+bijection k=1↔opp C, episode-loop lockstep), and
+`scripts/debug/render_pgg_prompts.py` (8-state × {table, prose} render
+for eyeballing / browser paste-tests).

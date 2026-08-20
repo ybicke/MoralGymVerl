@@ -13,42 +13,28 @@ from __future__ import annotations
 import re
 from typing import List, Optional
 
-from moralgym_verl.game.environment import EpisodeConfig, get_score
-from moralgym_verl.game.prompts import _build_payoff_block, _pts
+from moralgym_verl.game.environment import EpisodeConfig
+from moralgym_verl.game.prompts import (
+    _build_history_block, _build_opener, _build_payoff_block,
+)
 
 
 def build_prompt(
     config: EpisodeConfig,
     agent_history: List[str],
-    opp_history: List[str],
+    opp_history: List,
 ) -> str:
-    """CoT prompt: matrix + history + structured-answer closer."""
-    T, R, P, S = config.T, config.R, config.P, config.S
-    label = {"C": config.coop_label, "D": config.defect_label}
-
-    opener_a, opener_b = config.opener_order
+    """CoT prompt: payoff block + history + structured-answer closer.
+    Opener/history come from the shared prompts.py helpers (byte-identical
+    to the standard builder's, incl. the public_goods branches — for PGG,
+    opp_history is the k-history)."""
     closer_a, closer_b = config.closer_order
-    horizon_phrase = f" for {config.num_rounds} rounds" if config.show_horizon else ""
 
     prompt = (
-        f"You are playing a game with agent A{horizon_phrase}. "
-        f"You must choose either {opener_a} or {opener_b}. "
-        f"Depending on your action and A's action, "
-        f"you each get a certain number of points. "
-        f"{_build_payoff_block(config)}"
+        _build_opener(config)
+        + _build_payoff_block(config)
+        + _build_history_block(config, agent_history, opp_history)
     )
-
-    if agent_history:
-        last_my, last_opp = agent_history[-1], opp_history[-1]
-        my_pts, opp_pts = get_score(last_my, last_opp, T, R, P, S)
-        prompt += (
-            f"You have played with A before. "
-            f"Last round, you played {label[last_my]} and "
-            f"they played {label[last_opp]}, "
-            f"so you got {_pts(my_pts)} and they got {_pts(opp_pts)}.\n\n"
-        )
-    else:
-        prompt += "This is the first round. You have no history with A.\n\n"
 
     # Same show_horizon pairing and same counting convention as the standard
     # builder (prompts._build_prompt_standard): build_prompt is always the

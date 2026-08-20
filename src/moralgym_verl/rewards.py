@@ -28,6 +28,7 @@ from __future__ import annotations
 from typing import Dict, List
 
 from moralgym_verl.game.environment import EpisodeConfig, get_score
+from moralgym_verl.game.pgg import get_score_pgg, group_payoff_pgg
 
 
 # ---------------------------------------------------------------------------
@@ -63,6 +64,29 @@ def r_intrinsic_v1(action: str, opp_prev_action: str) -> float:
 def r_intrinsic_none(action: str, opp_prev_action: str) -> float:
     """No intrinsic reward (pure game reward baseline)."""
     return 0.0
+
+
+def r_intrinsic_deontological_pgg(
+    action: str, k_prev: int, n_others: int
+) -> float:
+    """Graded free-riding penalty for the public-goods game:
+    -k_prev/n_others for keeping after k_prev of the N-1 others
+    contributed (docs/pgg_design.md §4). Betrayal without an identified
+    victim = free-riding on those contributing in good faith, so the
+    penalty scales with the number of players actually harmed. Reduces
+    exactly to r_intrinsic_deontological at N=2 (k_prev in {0,1})."""
+    if action == "D":
+        return -k_prev / n_others
+    return 0.0
+
+
+def r_intrinsic_v1_pgg(action: str, k_prev: int, n_others: int) -> float:
+    """Graded v1 universalization for the public-goods game:
+    +k_prev/n_others for reciprocating contribution, -k_prev/n_others for
+    free-riding on it. Reduces exactly to r_intrinsic_v1 at N=2."""
+    if action == "C":
+        return k_prev / n_others
+    return -k_prev / n_others
 
 
 def r_intrinsic_deontological_tailored(
@@ -199,14 +223,66 @@ def get_game_reward_fn(name: str):
 # Composite per-round reward
 # ---------------------------------------------------------------------------
 
+def _compute_round_reward_pgg(
+    action: str,
+    k_others: int,
+    config: EpisodeConfig,
+    lambda_val: float,
+    intrinsic_type: str,
+    game_reward_type: str,
+    k_prev: int | None,
+) -> Dict[str, float]:
+    """PGG round reward. Mirrors the 2x2 composition with the opponent
+    slots carrying k (docs/pgg_design.md §4): game reward from the
+    current round's k_others, intrinsic from k_prev. Normalized uses the
+    config's dilemma-regime u_max/u_min (do not use it in the compliance
+    null, s > E — see EpisodeConfig). 'deontological_tailored' has no PGG
+    rules and raises."""
+    n_others = config.n_players - 1
+    pts = get_score_pgg(action, k_others, config)
+
+    if game_reward_type == "raw":
+        rg = float(pts)
+    elif game_reward_type == "normalized":
+        rg = (pts - config.u_min) / (config.u_max - config.u_min)
+    elif game_reward_type == "none":
+        rg = 0.0
+    elif game_reward_type == "utilitarian":
+        m = k_others + (1 if action == "C" else 0)
+        rg = float(group_payoff_pgg(m, config))
+    else:
+        raise ValueError(
+            f"Unknown game reward type: {game_reward_type}. "
+            f"Choose from {list(GAME_REWARD_REGISTRY)}"
+        )
+
+    if k_prev is None or intrinsic_type == "none":
+        ri = 0.0
+    elif intrinsic_type == "deontological":
+        ri = r_intrinsic_deontological_pgg(action, k_prev, n_others)
+    elif intrinsic_type == "v1":
+        ri = r_intrinsic_v1_pgg(action, k_prev, n_others)
+    else:
+        raise ValueError(
+            f"Intrinsic reward {intrinsic_type!r} is not defined for "
+            f"public_goods"
+        )
+
+    return {
+        "r_game": rg,
+        "r_intrinsic": ri,
+        "r_total": rg + lambda_val * ri,
+    }
+
+
 def compute_round_reward(
     action: str,
-    opp_action: str,
+    opp_action,
     config: EpisodeConfig,
     lambda_val: float = 0.0,
     intrinsic_type: str = "deontological",
     game_reward_type: str = "raw",
-    opp_prev_action: str | None = None,
+    opp_prev_action=None,
     agent_prev_action: str | None = None,
     shaping: dict | None = None,
 ) -> Dict[str, float]:
@@ -220,7 +296,9 @@ def compute_round_reward(
 
     Args:
         action: Agent's action ('C' or 'D').
-        opp_action: Opponent's current action ('C' or 'D').
+        opp_action: Opponent's current action ('C' or 'D'). For
+            public_goods configs the opponent slots carry ints instead:
+            opp_action = the round's k_others, opp_prev_action = k_prev.
         config: Episode configuration with payoff values.
         lambda_val: Weight for intrinsic reward.
         intrinsic_type: 'deontological', 'v1', 'none', or 'deontological_tailored'.
@@ -231,6 +309,12 @@ def compute_round_reward(
         shaping: Per-game shaping dict for 'deontological_tailored'.
             See r_intrinsic_deontological_tailored docstring.
     """
+    if config.game_type == "public_goods":
+        return _compute_round_reward_pgg(
+            action, opp_action, config, lambda_val, intrinsic_type,
+            game_reward_type, opp_prev_action,
+        )
+
     game_fn = get_game_reward_fn(game_reward_type)
     rg = game_fn(action, opp_action, config.T, config.R, config.P, config.S)
 
@@ -254,12 +338,12 @@ def compute_round_reward(
 
 def compute_episode_rewards(
     actions: List[str],
-    opp_actions: List[str],
+    opp_actions: List,
     config: EpisodeConfig,
     lambda_val: float = 0.0,
     intrinsic_type: str = "deontological",
     game_reward_type: str = "raw",
-    opp_prev_initial: str | None = None,
+    opp_prev_initial=None,
     agent_prev_initial: str | None = None,
     shaping: dict | None = None,
 ) -> Dict:
@@ -268,6 +352,11 @@ def compute_episode_rewards(
     Intrinsic reward at round t uses opp_actions[t-1] (backward-looking).
     Round 0 uses opp_prev_initial if provided (e.g. fabricated opponent
     action from mid-game entry), otherwise intrinsic reward is 0.
+
+    For public_goods configs the opponent side is the k-history:
+    opp_actions is the per-round k_others list (ints) and
+    opp_prev_initial the fabricated k_prev — the round-reward dispatch
+    handles the rest; the index logic here is type-agnostic.
 
     For 'deontological_tailored', agent_prev at round 0 comes from
     agent_prev_initial (fab_agent in hist mode, None in nohist).
