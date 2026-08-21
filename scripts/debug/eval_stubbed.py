@@ -36,19 +36,35 @@ def _fake_load_model_for_eval(checkpoint, base_model=None):
     return SimpleNamespace(device="cpu", eval=lambda: None), SimpleNamespace()
 
 
-def _fake_render_chat_inputs(tokenizer, messages, device):
+def _fake_render_chat_inputs(tokenizer, messages, device, enable_thinking=None):
     # Real version applies the chat template and tokenizes. Here the
     # messages pass straight through to _fake_generate as "inputs".
     return None, messages
 
 
 def _fake_generate(model, tokenizer, messages, max_new_tokens, temperature):
-    """Scripted tit-for-tat that plays by READING the prompt, like the model
-    must: extract the two labels, mirror the opponent's last move from the
-    Markov-1 history sentence, cooperate on a fresh round 1."""
+    """Scripted policy that plays by READING the prompt, like the model
+    must: extract the two labels, then
+
+      2x2:  tit-for-tat — mirror the opponent's move from the Markov-1
+            history sentence, cooperate on a fresh round 1.
+      PGG:  conditional contributor — contribute iff k_prev >= 2 in the
+            "k of the other N-1 players played <label>" sentence (or on
+            a fresh round 1), which yields a positive k-slope in the
+            "pgg" metrics block.
+    """
     prompt = messages[-1]["content"]
     m = re.search(r"either (\w+) or (\w+)", prompt)
     coop, defect = m.groups() if m else ("action3", "action4")
+    pgg_hist = re.search(r"(\d+) of the other \d+ players played (\w+)", prompt)
+    if pgg_hist:
+        # The history sentence names the CONTRIBUTE label ("...players
+        # played <coop_label>") — identify it semantically; with
+        # label_order randomized, mention order in the opener is not it.
+        k_prev, contribute = int(pgg_hist.group(1)), pgg_hist.group(2)
+        keep = defect if contribute == coop else coop
+        mine = contribute if k_prev >= 2 else keep
+        return f"Scripted conditional contributor.\nAction: {mine}"
     hist = re.search(r"they played (\w+)", prompt)
     mine = defect if (hist and hist.group(1) == defect) else coop
     return f"Scripted TFT: mirror the opponent's last move.\nAction: {mine}"
