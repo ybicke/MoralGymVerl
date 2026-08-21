@@ -230,6 +230,27 @@ class PublicGoodsGame(Game):
     ) -> _PGGOpponents:
         return _PGGOpponents(config, fab_obs)
 
+    # ---- game facts consumed by the eval layer ----
+
+    def fab_states(self, config: EpisodeConfig) -> List[Tuple[str, int]]:
+        return pgg_fab_states(config.n_players)
+
+    def good_faith_fraction(self, config: EpisodeConfig, obs: int) -> float:
+        # k of the N-1 others contributed: free-riding on more
+        # contributors is graded proportionally. Reduces to the classic
+        # binary rule at N=2 (k in {0, 1}).
+        return obs / (config.n_players - 1)
+
+    def max_social_payoff(self, config: EpisodeConfig) -> int:
+        # Group payoff is linear in the contributor count m, so the best
+        # group outcome is an endpoint: m=N in the dilemma/compliance
+        # regimes (contributions create value), m=0 in the waste null
+        # (s < E/N, contributions destroy it).
+        return max(
+            group_payoff_pgg(config.n_players, config),
+            group_payoff_pgg(0, config),
+        )
+
     # ---- prompt text ----
 
     def opener(self, config: EpisodeConfig) -> str:
@@ -351,16 +372,23 @@ class PublicGoodsGame(Game):
         opp_side: OpponentSide,
     ) -> Dict:
         m = obs + (1 if action == "C" else 0)
+        group = group_payoff_pgg(m, config)
+        # obs / social_payoff: the uniform record keys the eval layer
+        # reads game-blind (obs duplicates k_others; social_payoff the
+        # group total). See base.Game "game facts" section.
         return {
             "opp_move": None,
             "opp_pts": None,
             "k_others": obs,
             "others_moves": opp_side._last_moves,
-            "group_payoff": group_payoff_pgg(m, config),
+            "group_payoff": group,
+            "obs": obs,
+            "social_payoff": group,
         }
 
     def illegal_extras(self) -> Dict:
-        return {"k_others": None, "others_moves": None, "group_payoff": None}
+        return {"k_others": None, "others_moves": None, "group_payoff": None,
+                "obs": None, "social_payoff": None}
 
     def result_extras(self, fab_obs, per_round: List[Dict]) -> Dict:
         return {

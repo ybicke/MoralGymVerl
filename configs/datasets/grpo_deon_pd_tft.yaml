@@ -1,0 +1,48 @@
+# GRPO deon-reward dataset v2 — TFT opponent replaces random.
+# (consumed by moralgym_verl.training.dataset, NOT by verl/Hydra.)
+#
+# Why (analysis of grpo_deon_qwen_200 @ step 50, 2026-08-21): with the
+# random opponent, 10/16 prompt-groups were PURE (all 16 rollouts same
+# action) yet had reward std 0.351 vs 0.386 in mixed groups — i.e. the
+# opponent's coin flip alone, which norm_adv_by_std amplifies to
+# full-scale +-1 advantages. ~60% of each batch's gradient was pure
+# noise; coop stayed flat 5-9% and KL-to-base reached only 0.003 by
+# step 48. TFT makes the reward deterministic given the action (it
+# copies fab_agent), so pure groups get zero std -> zero advantage ->
+# silent, restoring the NeMo-RL t2 signal geometry.
+#
+# Verified 2026-08-21 (same seed): prompts stay BYTE-IDENTICAL to
+# grpo_deon_pd / sdpo_run1_pd (opponent type never enters the prompt or
+# the RNG stream), so cross-arm comparability is untouched. Deterministic
+# per-state scores (normalized game + 0.75*deon):
+#   (fa,fo)  C      D
+#   CC      +0.75  +0.25   -> reciprocity optimal
+#   CD      +0.75  +1.00   -> retaliation optimal (deon silent on fo=D)
+#   DC      +0.00  -0.50   -> repair optimal
+#   DD      +0.00  +0.25   -> defection optimal
+# Max-coop policy = 50% (C in states CC and DC).
+game:
+  type: prisoners_dilemma
+  payoffs: {T: 4, R: 3, P: 1, S: 0}
+  num_rounds: 1
+  sample_payoffs: false
+
+opponent:
+  types: [tit_for_tat]
+  distribution: [1.0]
+
+reward:
+  game_reward: normalized
+  intrinsic: deontological
+  lambda: 0.75
+  illegal_penalty: -6
+
+prompt:
+  game_design: hist
+  hist_coop_bias: 0.5
+  representation: prose
+  reasoning: true
+  randomize_labels: false
+  randomize_layout: true
+  randomize_label_order: true
+  randomize_role: true
