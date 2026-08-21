@@ -183,6 +183,11 @@ CONTRIBUTION_REGISTRY = {
     "free_rider": free_rider,
     "full_contributor": full_contributor,
     "random_contributor": random_contributor,
+    # Alias: the game-agnostic protocol presets (eval/config.py
+    # PROTOCOL_PRESETS) name the stochastic co-player "random" for every
+    # game; the registries are per-paradigm namespaces, so the shared
+    # name maps to each paradigm's own implementation.
+    "random": random_contributor,
 }
 
 

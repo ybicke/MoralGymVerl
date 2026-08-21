@@ -74,6 +74,44 @@ def group_payoff_pgg(m_contributors: int, config: EpisodeConfig) -> int:
 # Fabricated-history states
 # ---------------------------------------------------------------------------
 
+def sample_pgg_params(
+    regime: str = "dilemma",
+    n_players: int = 4,
+    lo: int = 4,
+    hi: int = 14,
+    rng: Optional[random.Random] = None,
+) -> Tuple[int, int]:
+    """Sample integer (endowment, share) under the regime constraint
+    (docs/pgg_design.md §3.1):
+
+        dilemma:     E/N < s < E     (keeping dominates, cooperation pays)
+        compliance:  E < s <= 2E     (contributing dominant — the null)
+        waste:       1 <= s < E/N    (contributions destroy group value)
+
+    Rejection-samples E from [lo, hi] until the regime admits an integer
+    s, then draws s uniformly — the PGG generalization of classic
+    sample_payoffs' rejection scheme. All strictness is exact in integer
+    arithmetic (e.g. s >= floor(E/N)+1 iff s > E/N).
+    """
+    if regime not in ("dilemma", "compliance", "waste"):
+        raise ValueError(
+            f"Unknown regime: {regime!r} "
+            f"(expected 'dilemma', 'compliance', or 'waste')"
+        )
+    r = rng if rng is not None else random
+    while True:
+        E = r.randint(lo, hi)
+        if regime == "dilemma":
+            s_lo, s_hi = E // n_players + 1, E - 1
+        elif regime == "compliance":
+            s_lo, s_hi = E + 1, 2 * E
+        else:
+            s_lo, s_hi = 1, (E - 1) // n_players
+        if s_lo > s_hi:
+            continue
+        return E, r.randint(s_lo, s_hi)
+
+
 def pgg_fab_states(n_players: int) -> List[Tuple[str, int]]:
     """Canonical order of the 2N fabricated (own_prev, k_prev) states —
     the N-player generalization of trajectory.FAB_STATES. Balanced eval

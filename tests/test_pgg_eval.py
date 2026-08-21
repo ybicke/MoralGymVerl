@@ -99,3 +99,70 @@ def test_classic_output_shape_unchanged():
     assert out["pgg"] is None
     assert out["cond_given_opp_c"]["n"] == 1   # round 2 conditioned on C
     assert out["mutual_cooperation_rate"] == 1.0
+
+
+# ------------------------------------------------ config plumbing (P1 step 6)
+
+import random as _random
+
+from moralgym_verl.eval.config import build_eval_config
+from moralgym_verl.game.opponents import CONTRIBUTION_REGISTRY
+from moralgym_verl.game.pgg_game import sample_pgg_params
+
+PGG_EVAL_CFG = {
+    "game": {"type": "public_goods", "num_rounds": 1,
+             "n_players": 4, "endowment": 10, "share": 5},
+    "prompt": {"representation": "table"},
+    "evaluation": {"labels": "randomize", "label_order": "randomize"},
+}
+
+
+def test_build_eval_config_pgg_fixed_params():
+    cfg = build_eval_config(PGG_EVAL_CFG, "conditional_contributor",
+                            rng=_random.Random(0))
+    assert cfg.game_type == "public_goods"
+    assert (cfg.n_players, cfg.endowment, cfg.share) == (4, 10, 5)
+    assert (cfg.T, cfg.R, cfg.P, cfg.S) == (0, 0, 0, 0)
+    assert cfg.agent_is_row is True
+    assert cfg.representation == "table"
+    assert cfg.coop_label.startswith("action")
+
+
+def test_build_eval_config_pgg_role_randomize_rejected():
+    bad = {**PGG_EVAL_CFG,
+           "evaluation": {**PGG_EVAL_CFG["evaluation"], "role": "randomize"}}
+    with pytest.raises(ValueError):
+        build_eval_config(bad, "conditional_contributor",
+                          rng=_random.Random(0))
+
+
+def test_build_eval_config_pgg_sampled_regime():
+    cfg_dict = {**PGG_EVAL_CFG,
+                "game": {**PGG_EVAL_CFG["game"], "regime": "dilemma"},
+                "evaluation": {**PGG_EVAL_CFG["evaluation"],
+                               "payoffs": "sample"}}
+    rng = _random.Random(7)
+    for _ in range(20):
+        cfg = build_eval_config(cfg_dict, "conditional_contributor", rng=rng)
+        n, E, s = cfg.n_players, cfg.endowment, cfg.share
+        assert E / n < s < E   # strict dilemma condition, every draw
+
+
+def test_sample_pgg_params_regime_bounds():
+    rng = _random.Random(3)
+    for _ in range(50):
+        E, s = sample_pgg_params("dilemma", 4, rng=rng)
+        assert E / 4 < s < E
+        E, s = sample_pgg_params("compliance", 4, rng=rng)
+        assert s > E
+        E, s = sample_pgg_params("waste", 4, rng=rng)
+        assert 1 <= s < E / 4
+    with pytest.raises(ValueError):
+        sample_pgg_params("bogus", 4)
+
+
+def test_random_alias_maps_to_random_contributor():
+    # PROTOCOL_PRESETS name the stochastic co-player "random" for every
+    # game; the PGG registry must accept it.
+    assert CONTRIBUTION_REGISTRY["random"] is \
+        CONTRIBUTION_REGISTRY["random_contributor"]

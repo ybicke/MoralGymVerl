@@ -42,7 +42,9 @@ from moralgym_verl.eval.teacher_context import load_reprompt_template, wrap_prom
 from moralgym_verl.game.moral_values import MORAL_VALUE_REGISTRY, get_moral_value
 from moralgym_verl.game.classic_games import FIXED_PAYOFFS
 from moralgym_verl.game.environment import EpisodeConfig
-from moralgym_verl.game.episode import FAB_STATES, TrajectoryResult, run_episode
+from moralgym_verl.game.episode import TrajectoryResult, run_episode
+from moralgym_verl.game.pgg_game import PGG_PARAMS
+from moralgym_verl.game.registry import get_game
 
 logger = logging.getLogger(__name__)
 
@@ -195,8 +197,10 @@ def run_opponent(
     game_reward_type = cfg["reward"].get("game_reward", "raw")
     shaping = cfg["reward"].get("shaping") or {}
 
-    # 'balanced' (default) cycles FAB_STATES deterministically (n/4 per
-    # state, identical every run); 'random' = legacy uniform draw in run_episode.
+    # 'balanced' (default) cycles the game's fabricated-state grid
+    # deterministically (n/len per state, identical every run — 4 states
+    # for 2x2 games, 2N for PGG); 'random' = legacy uniform draw in
+    # run_episode.
     state_design = eval_cfg.get("state_design", "balanced")
     fabricate = game_design == "hist"
 
@@ -208,7 +212,13 @@ def run_opponent(
             policy_fn.reset()   # fresh conversation per episode
         config = build_eval_config(cfg, opponent, rng=presentation_rng)
         episode_configs.append(config)
-        fab_state = (FAB_STATES[ep_idx % len(FAB_STATES)]
+        states = get_game(config.game_type).fab_states(config)
+        if ep_idx == 0 and fabricate and state_design == "balanced" \
+                and num_episodes % len(states):
+            logger.warning(
+                "num_episodes=%d not divisible by %d fabricated states — "
+                "the balanced design is uneven", num_episodes, len(states))
+        fab_state = (states[ep_idx % len(states)]
                      if fabricate and state_design == "balanced" else None)
         traj = run_episode(
             config, policy_fn,
@@ -248,7 +258,7 @@ def run_opponent(
 
 def _presentation(c: EpisodeConfig) -> Dict:
     """JSON-serializable record of how one episode was rendered."""
-    return {
+    out = {
         "representation": c.representation,
         "coop_label": c.coop_label, "defect_label": c.defect_label,
         "matrix_layout": c.matrix_layout,
@@ -257,6 +267,10 @@ def _presentation(c: EpisodeConfig) -> Dict:
         "agent_is_row": c.agent_is_row,
         "payoffs": {"T": c.T, "R": c.R, "P": c.P, "S": c.S},
     }
+    if c.game_type == "public_goods":
+        out["payoffs"] = {"n_players": c.n_players,
+                          "endowment": c.endowment, "share": c.share}
+    return out
 
 
 def evaluate(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = None):
@@ -364,7 +378,7 @@ def build_parser() -> argparse.ArgumentParser:
                              "individual overrides, which still win. Recorded "
                              "in metadata.")
     parser.add_argument("--game", type=str, default=None,
-                        choices=sorted(FIXED_PAYOFFS),
+                        choices=sorted(FIXED_PAYOFFS) + ["public_goods"],
                         help="Override game.type for cross-game eval. "
                              "Payoffs switch to FIXED_PAYOFFS[game] "
                              "(canonical per-game matrix); config's training "
@@ -383,7 +397,7 @@ def build_parser() -> argparse.ArgumentParser:
                              "round-1 history (Tennant); 'nohist' starts round 1 "
                              "fresh. Used for off-training-protocol eval.")
     parser.add_argument("--representation", type=str, default=None,
-                        choices=["matrix", "prose", "list"],
+                        choices=["matrix", "prose", "list", "table"],
                         help="Override prompt.representation: how the payoff "
                              "block is rendered. 'matrix' = markdown table "
                              "(default); 'prose' = the four outcomes as one "
@@ -489,7 +503,14 @@ def apply_overrides(cfg: Dict, args: argparse.Namespace) -> None:
     if args.game is not None:
         cfg["game"]["type"] = args.game
         cfg["game"]["sample_payoffs"] = False
-        cfg["game"]["payoffs"] = dict(FIXED_PAYOFFS[args.game])
+        if args.game == "public_goods":
+            # Canonical (N, E, s) unless the YAML already pinned them
+            # (docs/pgg_design.md §3.1); no payoff matrix.
+            cfg["game"].pop("payoffs", None)
+            for key, value in PGG_PARAMS["canonical"].items():
+                cfg["game"].setdefault(key, value)
+        else:
+            cfg["game"]["payoffs"] = dict(FIXED_PAYOFFS[args.game])
     if args.opponent is not None:
         cfg.setdefault("evaluation", {})["opponents"] = [args.opponent]
 
