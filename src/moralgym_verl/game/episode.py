@@ -48,6 +48,13 @@ class TrajectoryResult:
     k_history: List[int | None] | None = None
     fab_k: int | None = None
 
+    @property
+    def fab_obs(self):
+        """Fabricated opponent observation, game-agnostic: fab_opp (move
+        str) for 2x2 games, fab_k (int) for public_goods, None when the
+        episode had no fabricated history."""
+        return self.fab_opp if self.fab_opp is not None else self.fab_k
+
     # Rate properties return None (not 0.0) when the episode has no legal
     # decisions: an all-illegal episode carries no evidence about the
     # policy, and 0.0 would read as "always defected" — aggregators must

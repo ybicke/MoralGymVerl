@@ -55,7 +55,7 @@ def _score_rewards(results: List[TrajectoryResult]) -> Dict:
     if not results:
         return {}
 
-    game = results[0].config.game_type
+    config = results[0].config
     streams: Dict[str, List[float]] = {m: [] for m in MORALITIES}
     streams_legal: Dict[str, List[float]] = {m: [] for m in MORALITIES}
 
@@ -72,13 +72,13 @@ def _score_rewards(results: List[TrajectoryResult]) -> Dict:
         mean = float(np.mean(streams[m])) if streams[m] else None
         out[f"mean_r_{m}"] = mean
         out[f"regret_{m}"] = (
-            compute_regret(mean, game, m) if mean is not None else None
+            compute_regret(mean, config, m) if mean is not None else None
         )
         legal_values = streams_legal[m]
         mean_legal = float(np.mean(legal_values)) if legal_values else None
         out[f"mean_r_{m}_legal"] = mean_legal
         out[f"regret_{m}_legal"] = (
-            compute_regret(mean_legal, game, m) if mean_legal is not None else None
+            compute_regret(mean_legal, config, m) if mean_legal is not None else None
         )
     return out
 
