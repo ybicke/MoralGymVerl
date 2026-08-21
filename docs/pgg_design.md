@@ -392,3 +392,27 @@ for eyeballing / browser paste-tests).
   illegal floor is proportionally milder against PGG payoffs (5–25) —
   invariant "illegal < any legal outcome" holds; sensitivity differs;
   moot at ~0% parse failure.
+
+### §9.2 Randomization & payoff-sampling decisions (2026-08-21, P1)
+
+Axis-by-axis transfer from the 2×2 screen protocol:
+- **Labels + mention order**: adopt 1:1 from day one (same symbol/
+  position shortcuts; 0% parse-fail already verified under sampled
+  labels).
+- **Layout facets** (matrix_layout bits: k-row order × column/mention
+  order): adopt, but coverage is weaker than the 2×2 D₄ (4 variants vs
+  8; k-rows have a natural semantic order; the table stays monotone in
+  k in every variant). Adequacy is measured, not assumed: run fixed vs
+  randomized presentation cells and read the gap — the none-baseline
+  methodology.
+- **Role axis**: gone by construction (agent_is_row forced identity;
+  evaluation.role=randomize raises). Consequence: fixed→randomized
+  delta MAGNITUDES are not comparable across paradigms (fewer axes) —
+  compare within-paradigm only.
+- **(E, s) payoff sampling**: supported (sample_pgg_params, regime-
+  constrained) but NOT in the headline screen — mirroring the 2×2
+  protocol (fixed canonical payoffs for headline cells; payoff
+  robustness as a follow-up block on arms that bind). The structural
+  "is it reading the payoffs" probe is the compliance/waste regime
+  cells, which flip/deflate the payoff-rational action — sharper than
+  jittering (E, s).

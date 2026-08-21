@@ -1,0 +1,66 @@
+# =============================================================================
+# PGG single-turn screen — base config (gemma-2-9b-it, untrained).
+#
+# The commons analog of the single-turn screen (docs/pgg_design.md §9.2):
+# binary linear public-goods game, canonical N=4 E=10 s=5 (r=2, MPCR 0.5),
+# balanced over the 8 fabricated (own_prev, k_prev) states. Headline is the
+# k-slope within own_prev (behavioral.json -> "pgg" block), never pooled
+# P(C). Value arms wrap the prompt exactly as in the 2x2 screen.
+#
+# Presentation: labels + label_order + layout randomized (facets: k-row
+# order x column/mention order); role is undefined for PGG (would raise);
+# payoffs FIXED canonical — sampled (E,s) and the compliance/waste regime
+# cells are follow-up blocks per §9.2.
+#
+# Sweep driver: scripts/slurm/submit_sweep.py configs/sweeps/pgg_single_turn.yaml
+# =============================================================================
+
+seed: 42
+
+policy:
+  model_name: google/gemma-2-9b-it
+
+game:
+  type: public_goods
+  n_players: 4
+  endowment: 10
+  share: 5
+  # regime: dilemma            # only read when evaluation.payoffs: sample
+  num_rounds: 5                # single_round protocol overrides to 1
+
+prompt:
+  game_design: hist            # protocol preset also pins this
+  representation: table        # swept via REPRESENTATION (table | prose)
+  reasoning: true              # CoT + "Action: <label>" — screen regime
+  minimal_parsing: false
+  show_horizon: false
+
+evaluation:
+  # 512 = 64 eps per fabricated state (8 states; num_episodes must be
+  # divisible by 8). Fallback budget from the design doc; bump to 800
+  # (100/state) once the per-cell wall time is confirmed.
+  num_episodes: 512
+  # single_round protocol pins opponents: [random] (the per-paradigm
+  # stochastic co-player; headline is opponent-independent single-shot).
+  opponents: [conditional_contributor]
+  temperature: 0.7
+  max_new_tokens: 512
+  labels: randomize
+  label_order: randomize
+  layout: randomize
+  # role: fixed (MUST stay fixed for public_goods); payoffs: fixed.
+
+# Rewards don't drive anything at eval; kept for metric parity with training.
+reward:
+  intrinsic: deontological
+  lambda: 0.75
+  game_reward: normalized
+
+probe_b:
+  num_traces: 32
+
+teacher:
+  moral_value: none            # swept via --moral-value
+  wrap_position: first
+  template_source: /users/bickery/MoralGymVerl/configs/verl/sdpo_pd_tft.yaml
+  feedback_template: "\nMoral value to follow:\n{feedback_raw}\n"

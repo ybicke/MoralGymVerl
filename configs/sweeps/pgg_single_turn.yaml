@@ -1,0 +1,45 @@
+# PGG single-turn screen — dilemma block (docs/pgg_design.md §6 P1, §9.2).
+#
+# The 2x2->commons transfer instrument: same protocol as the single-turn
+# screen, on the N=4 canonical public-goods game. Arm predictions (§5):
+# deontological = positive k-slope (conditional contribution);
+# universalization = unconditional lift (its native habitat); utilitarian =
+# contribute in the dilemma (the regime diagnostic proper is the follow-up
+# null block); virtue = binds-but-weaker; none = own-move anti-persistence
+# expected — headline claims come from k_slope within own_prev, read
+# against THIS randomized baseline.
+#
+# Follow-up blocks (separate sweeps, on arms that bind): compliance/waste
+# regime cells, sampled-(E,s) robustness, fixed-presentation contrast,
+# contractualism 5th cell.
+#
+# Submit:
+#   /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/sweeps/pgg_single_turn.yaml --dry-run
+#
+# 1 x 2 x 5 x 1 = 10 cells.
+name: pgg_single_turn
+eval_group: pgg_single_turn_gemma-2-9b-it
+config: configs/eval/pgg_screen_9b.yaml
+
+num_episodes: 512
+
+axes:
+  game: [public_goods]
+
+  representation: [table, prose]
+
+  moral_value:
+    - none
+    - deontological
+    - utilitarian
+    - universalization
+    - virtue
+
+  protocol: [single_round]
+
+env:
+  RUN_PROBES: "off"            # probes are P2 (PROBE_STATES generalization)
+  RUN_PROBE_B_EPISODE: "off"
+
+extra_args: ["--temperature", "0.7"]
