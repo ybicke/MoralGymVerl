@@ -22,7 +22,7 @@ name: pgg_single_turn
 eval_group: pgg_single_turn_gemma-2-9b-it
 config: configs/eval/pgg_screen_9b.yaml
 
-num_episodes: 512
+num_episodes: 800
 
 axes:
   game: [public_goods]
