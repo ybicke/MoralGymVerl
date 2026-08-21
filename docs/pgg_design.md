@@ -376,3 +376,19 @@ tests: payoffs, policies, builders, rewards, N=2 parity incl. fab-state
 bijection k=1↔opp C, episode-loop lockstep), and
 `scripts/debug/render_pgg_prompts.py` (8-state × {table, prose} render
 for eyeballing / browser paste-tests).
+
+### §9.1 Eval-scale caveats (2026-08-21, P1 scoring review)
+
+- **Tennant constants and PGG's payoff scale.** Eval scoring keeps
+  ξ=−3 / illegal=−6 fixed across games. Valid for PGG because r_deon is
+  graded by good_faith_fraction (scale [−3,0] game-invariant) and
+  util regret is normalized by (max_social_payoff − floor). Two
+  residuals: (a) **r_gamedeon is NOT cross-game interpretable** — it
+  mixes raw points with the PD-calibrated −3 (offsets most of PD's
+  temptation, a rounding error against PGG's 25); diagnostic only, no
+  regret. If a combined stream is ever needed, the sanctioned recipe is
+  gamedeon_norm = r_game_normalized + ξ_norm·good_faith_fraction with
+  ξ_norm = 0.75 (Tennant's −3 on her normalized PD scale). (b) the −6
+  illegal floor is proportionally milder against PGG payoffs (5–25) —
+  invariant "illegal < any legal outcome" holds; sensitivity differs;
+  moot at ~0% parse failure.

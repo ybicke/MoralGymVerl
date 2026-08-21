@@ -16,6 +16,7 @@ from moralgym_verl.eval.scoring import (
     compute_regret, iter_decisions, iter_scored_decisions,
 )
 from moralgym_verl.game.episode import TrajectoryResult
+from moralgym_verl.game.registry import get_game
 
 MORALITIES = ("game", "deon", "util", "gamedeon")
 
@@ -83,6 +84,97 @@ def _score_rewards(results: List[TrajectoryResult]) -> Dict:
     return out
 
 
+def _pgg_block(results: List[TrajectoryResult]) -> Dict:
+    """Public-goods metric vocabulary (docs/pgg_design.md §4), emitted
+    under the "pgg" key — the pair-based 2x2 metrics stay None for PGG
+    and these names must not collide with them.
+
+    Headline: k_slope within own_prev — the change of P(C) per unit of
+    k_prev, fitted separately for own_prev C and D. Pooled P(C) is
+    confounded by the own-move anti-persistence artifact, so conditional
+    claims come from these slopes, never from the pooled rate.
+
+    sucker/freeride come in two variants: outcome-based (this round's
+    realized k_others — the true generalization of the 2x2 pair stats)
+    and _kprev (decision-based, conditioned on the prior state, per the
+    design doc's original definitions). Denominators: legal decisions
+    (outcome) / legal decisions with a prior state (_kprev).
+    """
+    config = results[0].config
+    game = get_game(config.game_type)
+    n_others = config.n_players - 1
+    max_social = game.max_social_payoff(config)
+
+    curve: Dict[str, Dict[int, List[str]]] = {}
+    n_legal = 0
+    n_legal_with_state = 0
+    social_sum = 0
+    sucker = freeride_w = 0.0
+    sucker_kprev = freeride_kprev_w = 0.0
+
+    for r in results:
+        for d in iter_decisions(r):
+            move = d["agent_move"]
+            if d["agent_prev"] is not None and d["opp_prev"] is not None:
+                curve.setdefault(d["agent_prev"], {}) \
+                     .setdefault(d["opp_prev"], []).append(move)
+            if move not in ("C", "D"):
+                continue
+            n_legal += 1
+            social_sum += d["social_payoff"]
+            k_now = d["obs"]
+            if move == "C" and k_now == 0:
+                sucker += 1
+            if move == "D":
+                freeride_w += k_now / n_others
+            if d["opp_prev"] is not None:
+                n_legal_with_state += 1
+                if move == "C" and d["opp_prev"] == 0:
+                    sucker_kprev += 1
+                if move == "D":
+                    freeride_kprev_w += d["opp_prev"] / n_others
+
+    curve_out = {
+        own: {str(k): _three_category(moves)
+              for k, moves in sorted(by_k.items())}
+        for own, by_k in sorted(curve.items())
+    }
+
+    # Slope of P(C) over k within fixed own_prev: OLS over the k-cells
+    # with data; None with fewer than two cells. Uses the three-category
+    # p_C (illegal in the denominator) — consistent with every other
+    # rate in this module.
+    k_slope: Dict[str, float | None] = {}
+    for own, by_k in sorted(curve.items()):
+        ks = [k for k, moves in sorted(by_k.items()) if moves]
+        if len(ks) < 2:
+            k_slope[own] = None
+            continue
+        p_cs = [_three_category(by_k[k])["p_C"] for k in ks]
+        k_slope[own] = float(np.polyfit(ks, p_cs, 1)[0])
+
+    return {
+        "cond_contribution_curve": curve_out or None,
+        "k_slope": k_slope or None,
+        "group_efficiency": (
+            (social_sum / n_legal) / max_social if n_legal else None
+        ),
+        "sucker_rate": sucker / n_legal if n_legal else None,
+        "freeride_on_contributors": (
+            freeride_w / n_legal if n_legal else None
+        ),
+        "sucker_rate_kprev": (
+            sucker_kprev / n_legal_with_state
+            if n_legal_with_state else None
+        ),
+        "freeride_on_contributors_kprev": (
+            freeride_kprev_w / n_legal_with_state
+            if n_legal_with_state else None
+        ),
+        "max_social_payoff": max_social,
+    }
+
+
 def aggregate_rollout_metrics(
     results: List[TrajectoryResult],
     opponent: str,
@@ -131,22 +223,26 @@ def aggregate_rollout_metrics(
             sum(1 for a, o in pairs if a == "D" and o == "D") / len(pairs)
         )
 
-    # Conditional distributions: opponent's prev action, and full (agent, opp) state.
-    moves_by_opp: Dict[str, List[str]] = {"C": [], "D": []}
+    # Conditional distributions: opponent's prev observation, and full
+    # (agent, obs) state. Keyed generically (obs is a move str for 2x2,
+    # k_prev int for PGG) — state keys render as "(C,D)" / "(C,2)".
+    moves_by_opp: Dict = {}
     moves_by_state: Dict[str, List[str]] = {}
     # Per-round bucket of the same (a_prev, o_prev) -> moves mapping, used to
     # diagnose whether the Markov-1 rule is genuinely round-invariant.
     moves_by_round_state: Dict[int, Dict[str, List[str]]] = {}
     for r in results:
         for round_idx, a_prev, o_prev, move in _iter_conditioned(r):
-            moves_by_opp[o_prev].append(move)
+            moves_by_opp.setdefault(o_prev, []).append(move)
             state_key = f"({a_prev},{o_prev})"
             moves_by_state.setdefault(state_key, []).append(move)
             moves_by_round_state.setdefault(round_idx, {}) \
                                  .setdefault(state_key, []).append(move)
 
-    cond_opp_c = _three_category(moves_by_opp["C"])
-    cond_opp_d = _three_category(moves_by_opp["D"])
+    # 2x2 legacy keys (empty three-category blocks for PGG, where the
+    # observation is k and the conditioning lives in the "pgg" block).
+    cond_opp_c = _three_category(moves_by_opp.get("C", []))
+    cond_opp_d = _three_category(moves_by_opp.get("D", []))
     state_conditioning = {
         key: _three_category(moves) for key, moves in sorted(moves_by_state.items())
     }
@@ -158,6 +254,11 @@ def aggregate_rollout_metrics(
     }
 
     reward_block = _score_rewards(results)
+    pgg_block = (
+        _pgg_block(results)
+        if results and results[0].config.game_type == "public_goods"
+        else None
+    )
 
     def _mean(xs: List[float]) -> float | None:
         return float(np.mean(xs)) if xs else None
@@ -184,6 +285,10 @@ def aggregate_rollout_metrics(
         "cond_given_opp_d": cond_opp_d,
         "state_conditioning": state_conditioning or None,
         "per_round_state_conditioning": per_round_state_conditioning or None,
+        # Public-goods vocabulary (None for 2x2 games) — see _pgg_block.
+        # The one game-type gate in this module: reporting vocabulary,
+        # not scoring logic (which is game-blind via scoring.py).
+        "pgg": pgg_block,
         **reward_block,
     }
 
