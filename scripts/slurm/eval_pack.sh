@@ -76,8 +76,16 @@ nvidia-smi --query-gpu=index,name,driver_version --format=csv
 # contain '+', args contain spaces) and leaves an inspectable artifact:
 # cat ${WORKDIR}/cell_N.sh shows exactly what that cell ran.
 /usr/bin/python3.11 - "${BATCH_JSON}" "${WORKDIR}" "${PROJECT_ROOT}" "${CONFIG}" <<'PYEOF'
-import json, shlex, sys
+import json, os, shlex, sys
 batch_path, workdir, root, config = sys.argv[1:5]
+CKPT_ROOT = os.environ.get("CKPT_ROOT",
+                           f"/iopsstor/scratch/cscs/{os.environ['USER']}/moralgym_verl_runs")
+
+def resolve_checkpoint(value):
+    """'base' | absolute adapter dir | '<run>/global_step_N' (verl layout)."""
+    if value == "base" or value.startswith("/"):
+        return value
+    return f"{CKPT_ROOT}/{value}/actor/lora_adapter"
 cells = json.load(open(batch_path))["cells"]
 
 for i, c in enumerate(cells):
@@ -97,7 +105,7 @@ for i, c in enumerate(cells):
 
     common = " ".join(filter(None, [
         f'--config {shlex.quote(root)}/{shlex.quote(cell_config)}',
-        '--checkpoint base',
+        f'--checkpoint {shlex.quote(resolve_checkpoint(env.get("CHECKPOINT", "base")))}',
         f'--game {shlex.quote(c["game"])}',
         f'--moral-value {shlex.quote(c["moral_value"])}',
         flag('model', 'MODEL'),

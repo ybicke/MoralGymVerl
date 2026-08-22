@@ -119,11 +119,20 @@ echo "--- end fingerprint ---"
 # --save-raw-responses: keep every (wrapped prompt, reasoning trace) pair —
 # reading whether the model actually invokes the moral value is half the
 # point of the screening. Extra args after the 3 positionals are forwarded.
+# CHECKPOINT: "base" | absolute adapter dir | "<run>/global_step_N", the
+# latter resolved against CKPT_ROOT (verl run layout, train_verl.sh CKPT_DIR).
+CHECKPOINT="${CHECKPOINT:-base}"
+CKPT_ROOT="${CKPT_ROOT:-/iopsstor/scratch/cscs/${USER}/moralgym_verl_runs}"
+case "${CHECKPOINT}" in
+    base|/*) CKPT="${CHECKPOINT}" ;;
+    *)       CKPT="${CKPT_ROOT}/${CHECKPOINT}/actor/lora_adapter" ;;
+esac
+
 srun --environment=moralgym_verl \
     --gpus-per-task=1 \
     python3 -m moralgym_verl.eval.behavioral \
         --config "${PROJECT_ROOT}/${CONFIG}" \
-        --checkpoint base \
+        --checkpoint "${CKPT}" \
         --game "${GAME}" \
         --moral-value "${MORAL_VALUE}" \
         --num-episodes "${NUM_EPISODES}" \
@@ -147,7 +156,7 @@ if [ "${MORAL_VALUE}" != "none" ] && [ "${RUN_PROBES:-on}" != "off" ]; then
         --gpus-per-task=1 \
         python3 -m moralgym_verl.eval.probe_a \
             --config "${PROJECT_ROOT}/${CONFIG}" \
-            --checkpoint base \
+            --checkpoint "${CKPT}" \
             --game "${GAME}" \
             --moral-value "${MORAL_VALUE}" \
             ${MODEL:+--model "${MODEL}"} \
@@ -158,7 +167,7 @@ if [ "${MORAL_VALUE}" != "none" ] && [ "${RUN_PROBES:-on}" != "off" ]; then
         --gpus-per-task=1 \
         python3 -m moralgym_verl.eval.probe_b \
             --config "${PROJECT_ROOT}/${CONFIG}" \
-            --checkpoint base \
+            --checkpoint "${CKPT}" \
             --game "${GAME}" \
             --moral-value "${MORAL_VALUE}" \
             --states fabricated \
@@ -178,7 +187,7 @@ if [ "${MORAL_VALUE}" != "none" ] && [ "${RUN_PROBE_B_EPISODE:-off}" = "on" ]; t
         --gpus-per-task=1 \
         python3 -m moralgym_verl.eval.probe_b \
             --config "${PROJECT_ROOT}/${CONFIG}" \
-            --checkpoint base \
+            --checkpoint "${CKPT}" \
             --game "${GAME}" \
             --moral-value "${MORAL_VALUE}" \
             --states episode \

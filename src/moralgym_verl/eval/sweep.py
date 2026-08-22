@@ -62,7 +62,11 @@ _POSITIONAL_AXES = ("game", "moral_value")
 # which turn structure, how the payoff block is rendered) travels by env.
 _ENV_AXES = {"representation": "REPRESENTATION",
              "model": "MODEL",
-             "protocol": "PROTOCOL"}
+             "protocol": "PROTOCOL",
+             # Trained-adapter cells: "base", an absolute adapter dir, or
+             # "<run>/global_step_N" resolved by the launcher against
+             # $CKPT_ROOT (the verl run layout, see train_verl.sh CKPT_DIR).
+             "checkpoint": "CHECKPOINT"}
 # Axes every sweep must declare, even single-valued. game/moral_value are the
 # launcher's positionals; protocol is required so a sweep can never silently
 # inherit the eval yaml's turn structure — the configs are 5-round, so an
@@ -167,7 +171,9 @@ def run_dir_stem(cell: Dict) -> str:
     `_<jobid>` and never derives a name itself (two implementations that
     can disagree would mean two cells writing one directory).
     """
-    rest = [str(v) for axis, v in cell.items() if axis not in _POSITIONAL_AXES]
+    # '/' would nest directories (checkpoint values are path-like).
+    rest = [str(v).replace("/", "-") for axis, v in cell.items()
+            if axis not in _POSITIONAL_AXES]
     stem = f"{cell['game']}__{cell['moral_value']}"
     return f"{stem}__{'__'.join(rest)}" if rest else stem
 
