@@ -1,18 +1,18 @@
-# Checkpoint eval, qwen_run2_200 — single-round state profile (none arm).
-# Trained adapters vs base, same seed/code/presentation: the per-state
-# P(C|state) table the training rollouts only approximated (training
-# states are surface-randomized, this is the screen's fixed-presentation
-# prose read). Step 100 = predicted balanced-profile band, step 200 =
-# endpoint (over-cooperation drift: CD past the <=40 exploitability bound).
-# No probes: the none arm has nothing to contrast, and the teacher-context
-# arm is a separate sweep.
+# Checkpoint eval, qwen_run2_200 — four steps bracketing the selected
+# checkpoint (90 = balanced-profile point of the state-resolved
+# trajectory; 60 emerging, 120 past it, 200 the over-cooperation
+# endpoint), single-round none arm, fixed prose presentation: the
+# screen's own protocol, so each row drops into Table 1 next to the
+# existing base-none (12|0|2|4) and base+principle (99|33|94|40) rows.
+# Four cells = one packed node (billed the same as one cell).
+# No probes (nothing to contrast without teacher text).
 #
-# Submit (checkpoints live on iopsstor — the eval container does not
-# mount /capstor/store):
+# Submit (adapter lives on iopsstor — the eval container does not mount
+# /capstor/store):
 #   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
 #       configs/sweeps/ckpt_qwen_run2_single.yaml --dry-run
 #
-# 1 x 1 x 1 x 1 x 3 = 3 cells.
+# 4 cells, 1 node.
 name: ckpt_qwen_run2_single
 eval_group: ckpt_qwen_run2_200_single
 config: configs/eval/teacher_signal_qwen3_8b.yaml
@@ -25,8 +25,9 @@ axes:
   moral_value: [none]
   protocol: [single_round]
   checkpoint:
-    - base
-    - qwen_run2_200/global_step_100
+    - qwen_run2_200/global_step_60
+    - qwen_run2_200/global_step_90
+    - qwen_run2_200/global_step_120
     - qwen_run2_200/global_step_200
 
 env:
