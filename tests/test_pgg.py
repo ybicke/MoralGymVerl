@@ -182,48 +182,40 @@ def test_pgg_representation_names():
         _build_payoff_block(make_pgg_config(representation="bogus"))
 
 
-RULE_SENTENCES = [
-    "Each of the 4 players starts the round with 10 points and chooses one "
-    "of the two actions at the same time.",
-    "If you choose action2, you keep your 10 points.",
-    "If you choose action1, your 10 points go into a group project.",
-    "The project total is multiplied by 2 and then split equally: every "
-    "player — whether or not they put points in — receives the multiplied "
-    "project total divided by 4.",
-    "Your final score is the points you kept plus what you received from "
-    "the project.",
-]
-
-PROSE_ENUMERATED = (
-    "The points are awarded as follows: "
+OUTCOME_SENTENCES = [
     "If 0 of the other 3 players choose action1, you get 5 points for "
-    "action1 and 10 points for action2. "
+    "action1 and 10 points for action2.",
     "If 1 of the other 3 players chooses action1, you get 10 points for "
-    "action1 and 15 points for action2. "
+    "action1 and 15 points for action2.",
     "If 2 of the other 3 players choose action1, you get 15 points for "
-    "action1 and 20 points for action2. "
+    "action1 and 20 points for action2.",
     "If 3 of the other 3 players choose action1, you get 20 points for "
-    "action1 and 25 points for action2.\n\n"
-)
+    "action1 and 25 points for action2.",
+]
 
 DESCRIPTION = (
     "If you choose action2, you keep your 10 points. If you choose "
-    "action1, your 10 points go into a group project. The project total "
-    "is multiplied by 2 and then split equally among the 4 players: every "
-    "player — whether or not they put points in — receives the multiplied "
-    "project total divided by 4. Your final score is the points you kept "
-    "plus what you received from the project. "
+    "action1, your 10 points go into a group project that is multiplied "
+    "by 2 and shared equally among all 4 players. "
 )
 
 
 def test_pgg_prose_is_enumerated_outcomes():
     """The screen's prose cell = the table's outcomes as sentences (the 2x2
     prose convention): same information, different format. No mechanism
-    words, no derived arithmetic for the model to do (docs §9.4)."""
+    words, no arithmetic for the model to do (docs §9.4)."""
     block = _build_payoff_block(make_pgg_config(representation="prose"))
-    assert block == PROSE_ENUMERATED
+    assert block == ("The points are awarded as follows: "
+                     + " ".join(OUTCOME_SENTENCES) + "\n\n")
     for word in ("project", "multiplied", "share", "pool"):
         assert word not in block
+
+
+def test_pgg_list_is_outcome_bullets():
+    block = _build_payoff_block(make_pgg_config(representation="list"))
+    assert block == ("The points are awarded as follows:\n\n"
+                     + "\n".join(f"- {x}" for x in OUTCOME_SENTENCES)
+                     + "\n\n")
 
 
 def test_pgg_prose_facets_mirror_table():
@@ -235,58 +227,34 @@ def test_pgg_prose_facets_mirror_table():
     assert "you get 10 points for action2 and 5 points for action1" in swapped
 
 
-def test_pgg_rule_and_list_representations():
-    """Mechanism text, kept as comprehension probes (not screen cells)."""
-    rule = _build_payoff_block(make_pgg_config(representation="rule"))
-    expected = "The points are awarded as follows: " + " ".join(
-        [RULE_SENTENCES[0][0].lower() + RULE_SENTENCES[0][1:]]
-        + RULE_SENTENCES[1:]) + "\n\n"
-    assert rule == expected
-    lst = _build_payoff_block(make_pgg_config(representation="list"))
-    assert lst == ("The points are awarded as follows:\n\n"
-                   + "\n".join(f"- {x}" for x in RULE_SENTENCES) + "\n\n")
-    for rep in ("rule", "list"):
-        swapped = _build_payoff_block(
-            make_pgg_config(representation=rep, matrix_layout=2))
-        assert swapped.index("action1") < swapped.index("action2")
-
-
 def test_pgg_game_description_switch():
-    """The mechanism preamble is prepended to BOTH screen cells (never only
-    one), and only when the switch is on; rule/list never get it."""
-    for rep in ("table", "prose"):
+    """The concise mechanism preamble is prepended to EVERY representation,
+    only when the switch is on; keep/project order follows the facet."""
+    for rep in ("table", "prose", "list"):
         off = _build_payoff_block(make_pgg_config(representation=rep))
         on = _build_payoff_block(
             make_pgg_config(representation=rep, game_description=True))
         assert on == DESCRIPTION + off
-    rule_on = _build_payoff_block(
-        make_pgg_config(representation="rule", game_description=True))
-    assert rule_on == _build_payoff_block(make_pgg_config(representation="rule"))
-    # mention-order facet applies to the preamble too
     on2 = _build_payoff_block(make_pgg_config(
         representation="table", game_description=True, matrix_layout=2))
     assert on2.startswith("If you choose action1, your 10 points go into")
+    with pytest.raises(ValueError):
+        _build_payoff_block(make_pgg_config(representation="rule"))
 
 
-def test_pgg_rule_is_parameter_generated():
-    # (E=10, s=7, N=4): r = 2.8; (E=10, s=6, N=5): r = 3 — one uniform
-    # "multiplied by r ... divided by N" construction for every setup.
-    block = _build_payoff_block(make_pgg_config(representation="rule", share=7))
-    assert "multiplied by 2.8 and then split equally" in block
-    assert "divided by 4" in block
-    five = _build_payoff_block(make_pgg_config(
-        representation="list", n_players=5, share=6))
-    assert "Each of the 5 players" in five
-    assert "multiplied by 3 and then split equally" in five
-    assert "divided by 5" in five
-    # enumerated prose at N=5: 5 sentences, k = 0..4
+def test_pgg_text_is_parameter_generated():
+    # (E=10, s=7, N=4): r = 2.8 in the preamble; N=5 prose has k = 0..4.
+    desc = _build_payoff_block(make_pgg_config(
+        representation="prose", share=7, game_description=True))
+    assert "multiplied by 2.8 and shared equally among all 4 players" in desc
     prose5 = _build_payoff_block(make_pgg_config(
         representation="prose", n_players=5, share=4))
     assert "If 4 of the other 4 players choose action1" in prose5
+    assert "If 0 of the other 4 players choose action1, you get 4 points" in prose5
 
 
 def test_opener_group_wording_and_no_game_name():
-    for rep in ("table", "prose", "rule", "list"):
+    for rep in ("table", "prose", "list"):
         prompt = build_prompt(make_pgg_config(representation=rep), [], [])
         assert prompt.startswith(
             "You are playing a game in a group with 3 other players.")

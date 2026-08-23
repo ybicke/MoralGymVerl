@@ -398,7 +398,7 @@ def build_parser() -> argparse.ArgumentParser:
                              "round-1 history (Tennant); 'nohist' starts round 1 "
                              "fresh. Used for off-training-protocol eval.")
     parser.add_argument("--representation", type=str, default=None,
-                        choices=["matrix", "prose", "list", "table", "rule"],
+                        choices=["matrix", "prose", "list", "table"],
                         help="Override prompt.representation: how the payoff "
                              "block is rendered. 'matrix' = markdown table "
                              "(default); 'prose' = the four outcomes as one "

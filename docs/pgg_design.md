@@ -453,31 +453,31 @@ Gächter (2000) AER; LLM phrasing sensitivity: arXiv 2512.07462,
 
 ### §9.4 Prose = enumerated outcomes; mechanism text as a switch (2026-08-21)
 
-The rule-based prose (v2 "common pool", v5 operations-only, and its
-list rendering) all failed the gemma-2-9b comprehension audit: under v5
-the model read keep as "a guaranteed 10 regardless of the others"
-(discarding the non-excludability clause) and double-counted kept
-points while contributing — cooperation rose to 75% *because* the
-misreading made contributing look like the only way to earn from the
-project. Conclusion: a mechanism rule measures the model's arithmetic
-and schema priors, not representation.
+The rule-based prose (v2 "common pool", v5 operations-only, and a
+bulleted rendering) all failed the gemma-2-9b comprehension audit: under
+v5 the model read keep as "a guaranteed 10 regardless of the others"
+(discarding the non-excludability clause) and double-counted kept points
+while contributing — cooperation rose to 75% *because* the misreading
+made contributing look like the only way to earn from the project.
+Conclusion: a mechanism rule standing alone measures the model's
+arithmetic and schema priors, not representation. The rule-only cells
+were removed.
 
-Decision: the **prose screen cell = the table's outcomes as sentences**
+Decision: the representation axis means the same as in the 2×2 games —
+`table` / `prose` / `list` = the outcomes as grid / sentences / bullets
 ("If k of the other 3 players choose X, you get a points for X and b
-points for Y"), exactly the 2×2 prose convention — same information as
-the table, format the only difference; facets mirror the table (k order
-↔ row order, action order ↔ column order). The mechanism text survives
-as `representation: rule` (flowing) / `list` (bullets) — comprehension
-probes, not screen cells.
+points for Y"); facets mirror the table (k order ↔ row order, action
+order ↔ column order). Same information, format the only difference.
 
 **game_description switch** (`prompt.game_description`,
-`--game-description on|off`, sweep axis GAME_DESCRIPTION): prepends the
-mechanism preamble (keep / project / multiplied by r, split equally
-among all N whether or not they put in / score = kept + received) to
-the table AND prose cells — never only one — so "does knowing it is a
-shared project change behavior or value binding" is a measured cell.
-Default off (2×2 protocol parity: bare numbers). Rationale for testing
-it: commons values (free-riding on others' contributions) may need the
+`--game-description on|off`, sweep axis GAME_DESCRIPTION): prepends a
+concise two-sentence mechanism preamble to EVERY representation ("If you
+choose Q, you keep your 10 points. If you choose J, your 10 points go
+into a group project that is multiplied by 2 and shared equally among
+all 4 players.") — the enumeration beneath carries all arithmetic and
+non-excludability, so the preamble only conveys the concept. Default
+off (2×2 protocol parity: bare numbers). Rationale for testing it:
+commons values (free-riding on others' contributions) may need the
 concept of a shared project to bind to; the 2×2 prompts have no
-narrative. First screen model: Qwen3-8B (thinking off), cells table /
-prose / prose+description.
+narrative. First screen model: Qwen3-8B (thinking off); smoke cells
+table / prose / prose+description.

@@ -161,23 +161,26 @@ def _build_pgg_table(config: EpisodeConfig) -> str:
     )
 
 
-def _multiplier_text(config: EpisodeConfig) -> str:
-    r = config.share * config.n_players / config.endowment
-    return f"{int(r)}" if r == int(r) else f"{r:g}"
-
-
 def _build_pgg_prose(config: EpisodeConfig) -> str:
     """PGG payoff block, "prose" representation: the SAME outcomes as the
-    table, enumerated as sentences — one per k, both actions per sentence
-    — exactly the convention of the 2x2 prose cell (outcome sentences, not
-    a mechanism). Restored 2026-08-21 after the rule-based v2/v5 smokes
-    showed the model's arithmetic/excludability errors dominating the
-    cell (docs §9.4): table vs prose must isolate FORMAT, same information.
-    Facets mirror the table: matrix_layout bit 0 reverses the k order of
-    the sentences (row order), bit 1 swaps the action order within each
-    sentence (column order). Agent-perspective only (no single opponent
-    whose points could be named).
-    """
+    table, enumerated as sentences — exactly the convention of the 2x2
+    prose cell (outcome sentences, not a mechanism). Restored 2026-08-21
+    after the rule-based smokes showed the model's arithmetic/
+    excludability errors dominating the cell (docs §9.4): table vs prose
+    must isolate FORMAT, same information. Agent-perspective only (no
+    single opponent whose points could be named)."""
+    return (
+        "The points are awarded as follows: "
+        + " ".join(_pgg_outcome_sentences(config)) + "\n\n"
+    )
+
+
+def _pgg_outcome_sentences(config: EpisodeConfig) -> List[str]:
+    """The table's outcomes as sentences, one per k, both actions per
+    sentence — shared by prose (flowing) and list (bullets), the 2x2
+    convention. Facets mirror the table: matrix_layout bit 0 reverses the
+    k order (row order), bit 1 swaps the action order within each
+    sentence (column order)."""
     n_others = config.n_players - 1
     actions = [config.coop_label, config.defect_label]
     if config.matrix_layout & 2:
@@ -196,85 +199,45 @@ def _build_pgg_prose(config: EpisodeConfig) -> str:
             f"If {k} of the other {n_others} players {verb} "
             f"{config.coop_label}, you get {outcomes}."
         )
-    return "The points are awarded as follows: " + " ".join(sentences) + "\n\n"
-
-
-def _pgg_rule_sentences(config: EpisodeConfig) -> List[str]:
-    """The PGG mechanism as five sentences — the "rule"/"list"
-    representations (flowing paragraph / one step per bullet). NOT a
-    screen cell: the 2026-08-21 smokes showed gemma-2-9b discarding the
-    non-excludability clause under this wording (keep read as "a
-    guaranteed 10 regardless of others") — kept as a comprehension probe
-    and documented in docs §9.3-9.4. Operations only, no derived number,
-    generated from (N, E, s). matrix_layout bit 1 swaps the keep/project
-    sentences (the mention-order facet).
-    """
-    n, E = config.n_players, config.endowment
-    r_text = _multiplier_text(config)
-    keep = f"If you choose {config.defect_label}, you keep your {_pts(E)}."
-    project = (
-        f"If you choose {config.coop_label}, your {_pts(E)} go into a "
-        f"group project."
-    )
-    first, second = (
-        (project, keep) if config.matrix_layout & 2 else (keep, project)
-    )
-    return [
-        f"Each of the {n} players starts the round with {_pts(E)} and "
-        f"chooses one of the two actions at the same time.",
-        first,
-        second,
-        f"The project total is multiplied by {r_text} and then split "
-        f"equally: every player — whether or not they put points in — "
-        f"receives the multiplied project total divided by {n}.",
-        "Your final score is the points you kept plus what you received "
-        "from the project.",
-    ]
-
-
-def _build_pgg_rule(config: EpisodeConfig) -> str:
-    sentences = _pgg_rule_sentences(config)
-    sentences[0] = sentences[0][0].lower() + sentences[0][1:]
-    return (
-        "The points are awarded as follows: " + " ".join(sentences) + "\n\n"
-    )
+    return sentences
 
 
 def _build_pgg_list(config: EpisodeConfig) -> str:
+    """PGG payoff block, "list" representation: the outcome sentences as
+    bullets (same content as prose; the 2x2 list convention)."""
     return (
         "The points are awarded as follows:\n\n"
-        + "\n".join(f"- {s}" for s in _pgg_rule_sentences(config)) + "\n\n"
+        + "\n".join(f"- {s}" for s in _pgg_outcome_sentences(config))
+        + "\n\n"
     )
 
 
 def _pgg_description(config: EpisodeConfig) -> str:
     """Optional mechanism preamble (config.game_description), placed before
-    the payoff block of the table AND prose cells — never only one, so the
+    the payoff block in EVERY representation — never only one, so the
     representation axis keeps isolating format. A separate switch so its
     effect on behavior / value binding is a measured result (docs §9.4):
-    in the 2x2 games the prompt has no narrative at all, but commons
-    values (free-riding on others' contributions) may need the concept of
-    a shared project to bind to. Wording = the v5 rule sentences minus
-    the score definition duplicate; numbers stay verifiable against the
-    enumeration that follows ("multiplied by 2", not "a factor").
+    the 2x2 prompts have no narrative, but commons values (free-riding on
+    others' contributions) may need the concept of a shared project to
+    bind to. Deliberately concise: the enumerated outcomes beneath carry
+    all arithmetic and non-excludability, so the preamble only conveys
+    the concept (keep vs a shared, multiplied, equally shared project).
+    Numbers are generated from (N, E, s); keep/project order follows the
+    mention-order facet.
     """
     n, E = config.n_players, config.endowment
-    r_text = _multiplier_text(config)
+    r = config.share * n / E
+    r_text = f"{int(r)}" if r == int(r) else f"{r:g}"
     keep = f"If you choose {config.defect_label}, you keep your {_pts(E)}."
     project = (
         f"If you choose {config.coop_label}, your {_pts(E)} go into a "
-        f"group project."
+        f"group project that is multiplied by {r_text} and shared equally "
+        f"among all {n} players."
     )
     first, second = (
         (project, keep) if config.matrix_layout & 2 else (keep, project)
     )
-    return (
-        f"{first} {second} The project total is multiplied by {r_text} "
-        f"and then split equally among the {n} players: every player — "
-        f"whether or not they put points in — receives the multiplied "
-        f"project total divided by {n}. Your final score is the points "
-        f"you kept plus what you received from the project. "
-    )
+    return f"{first} {second} "
 
 
 # ---------------------------------------------------------------------------
@@ -394,27 +357,23 @@ class PublicGoodsGame(Game):
 
     def payoff_block(self, config: EpisodeConfig) -> str:
         # "table" is the canonical name (docs/pgg_design.md §3.5) with
-        # "matrix" as a compatibility alias; "prose" = the same outcomes as
-        # sentences (the screen's second cell); "rule"/"list" = the
-        # mechanism text (comprehension probes, not screen cells).
-        # config.game_description prepends the mechanism preamble to the
-        # two screen cells (see _pgg_description).
+        # "matrix" as a compatibility alias; prose/list = the same outcomes
+        # as sentences/bullets (the 2x2 axis). config.game_description
+        # prepends the concise mechanism preamble to every representation
+        # (see _pgg_description).
         if config.representation in ("table", "matrix"):
             block = _build_pgg_table(config)
         elif config.representation == "prose":
             block = _build_pgg_prose(config)
-        elif config.representation == "rule":
-            block = _build_pgg_rule(config)
         elif config.representation == "list":
             block = _build_pgg_list(config)
         else:
             raise ValueError(
                 f"Unsupported representation for public_goods: "
                 f"{config.representation!r} (expected 'table', 'prose', "
-                f"'rule', or 'list')"
+                f"or 'list')"
             )
-        if config.game_description and config.representation in (
-                "table", "matrix", "prose"):
+        if config.game_description:
             return _pgg_description(config) + block
         return block
 
