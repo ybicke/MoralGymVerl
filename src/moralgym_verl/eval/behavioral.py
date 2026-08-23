@@ -566,6 +566,10 @@ def build_metadata(
         "eval_max_new_tokens": eval_block.get("max_new_tokens", 10),
         "minimal_parsing": cfg.get("prompt", {}).get("minimal_parsing", False),
         "reasoning": cfg.get("prompt", {}).get("reasoning", False),
+        # Hybrid-thinking switch (Qwen3) and the PGG mechanism preamble:
+        # both change what the model sees, so a result file must say.
+        "enable_thinking": cfg.get("prompt", {}).get("enable_thinking"),
+        "game_description": cfg.get("prompt", {}).get("game_description", False),
         "show_horizon": cfg.get("prompt", {}).get("show_horizon", False),
         # Multi-round rules-retention arm; inert at num_rounds=1 (no round >= 2),
         # but recorded unconditionally so cells stay distinguishable.
