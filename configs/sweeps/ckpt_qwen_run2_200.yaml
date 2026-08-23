@@ -8,13 +8,13 @@
 # No probes (nothing to contrast without teacher text).
 #
 # Submit (adapter lives on iopsstor — the eval container does not mount
-# /capstor/store). Results: eval_results/post_training/<run>/.
+# /capstor/store). Results: eval_results/post_training/qwen3-8b-pd-sdpo-deon-repair-gen/.
 #   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
 #       configs/sweeps/ckpt_qwen_run2_single.yaml --dry-run
 #
 # 4 cells, 1 node.
 name: ckpt_qwen_run2_200
-eval_group: qwen_run2_200
+eval_group: qwen3-8b-pd-sdpo-deon-repair-gen   # <model>-<game>-<algo>-<principle>; training run = qwen_run2_200
 results_dir: post_training   # eval_results/post_training/<run>, apart from the pre-training screens
 config: configs/eval/teacher_signal_qwen3_8b.yaml
 

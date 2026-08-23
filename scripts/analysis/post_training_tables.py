@@ -19,10 +19,12 @@ Optional sections, same document: the training trajectory from the
 run's rollout dumps (training_trajectory.py) and the reasoning-trace
 statistics at the evaluated steps (trace_comparison.py).
 
-Output: <ckpt group>/analysis/results_<run>.md (+ tex/), mirroring the
-screen layout. Login node, stdlib only:
+Output: <group>/analysis/results_<group>.md (+ tex/), mirroring the
+screen layout; the group is the experiment name
+(<model>-<game>-<algo>-<principle>), the training run is recorded in
+the header and the manifest. Login node, stdlib only:
     /usr/bin/python3.11 scripts/analysis/post_training_tables.py \
-        eval_results/post_training/qwen_run2_200 \
+        eval_results/post_training/qwen3-8b-pd-sdpo-deon-repair-gen \
         --reference eval_results/teacher_signal/single_turn_screen_qwen3-8b \
         --reference eval_results/teacher_signal/generosity_arm_qwen3-8b \
         --principle deontological+repair+generosity \
@@ -143,8 +145,9 @@ def header(run: str, group: Path, trained, refs: Dict[str, Path],
     steps = ", ".join(str(s) for s, _ in trained)
     ck = meta.get("checkpoint", "")
     return "\n".join([
-        f"# Post-training eval: {run}",
+        f"# Post-training eval: {group.name}",
         "",
+        f"Training run `{run}`. ",
         f"{meta['base_model'].rsplit('/', 1)[-1]}, protocol "
         f"`{meta['protocol']}` (fabricated history, balanced states), prose, "
         f"fixed presentation, T = {meta['eval_temperature']}, "
@@ -204,7 +207,7 @@ def main() -> None:
     for t in tables:
         (tex_dir / f"{t.key.replace('-', '_')}.tex").write_text(to_latex(t))
         md.append(to_markdown(t))
-    path = out_dir / f"results_{run}.md"
+    path = out_dir / f"results_{args.group.name}.md"   # named by experiment (group), like the screen names by model
     path.write_text("\n".join(md))
     print(f"saved -> {path}")
     print("\n".join(md[1:2]))

@@ -27,7 +27,7 @@ Login node, stdlib only (the principle text comes from moral_values.py):
         --rollouts ~/logs_verl/runs/qwen_run2_200 --steps 60,120,200 \
         --rollouts ~/logs_verl/runs/grpo_deon_tft_200 --steps 60,120,180 \
         --principle deontological+repair+generosity \
-        --out eval_results/post_training/qwen_run2_200/analysis/traces.md
+        --out eval_results/post_training/qwen3-8b-pd-sdpo-deon-repair-gen/analysis/results_traces_qwen3-8b-pd-sdpo-deon-repair-gen.md
 """
 from __future__ import annotations
 

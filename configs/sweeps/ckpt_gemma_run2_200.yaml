@@ -6,13 +6,13 @@
 # question for a trained model); RUN_PROBES=off restates that.
 #
 # Submit (adapters on iopsstor — the eval container does not mount
-# /capstor/store). Results: eval_results/post_training/<run>/.
+# /capstor/store). Results: eval_results/post_training/gemma-2-9b-pd-sdpo-deon-repair-gen/.
 #   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
 #       configs/sweeps/ckpt_gemma_run2_200.yaml --dry-run
 #
 # 3 cells, 1 node.
 name: ckpt_gemma_run2_200
-eval_group: gemma_run2_200
+eval_group: gemma-2-9b-pd-sdpo-deon-repair-gen   # <model>-<game>-<algo>-<principle>; training run = gemma_run2_200
 results_dir: post_training   # eval_results/post_training/<run>, apart from the pre-training screens
 config: configs/eval/teacher_signal_9b.yaml
 
