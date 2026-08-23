@@ -1,0 +1,52 @@
+# PGG single-turn screen — Qwen3-8B, prose-only dilemma block
+# (docs/pgg_design.md §9.4: prose = the table's outcomes as sentences;
+# game_description off — the preamble re-opens the comprehension channel).
+#
+# Qwen smoke 2026-08-23 (none arm, n=8/state): table and prose agree
+# (2% vs 5% contribute, 8/8 traces read keep=25/contribute=20 correctly),
+# baseline is a near-pure single-shot maximizer with flat k-slopes — the
+# null the value arms are read against. Headline = k_slope within own_prev
+# (behavioral.json -> "pgg" block), never pooled P(C).
+#
+# Value set (2x2 screen carry-over): deontological (anchor, predicted
+# positive k-slope), universalization (native habitat, unconditional
+# lift), utilitarian (the r-tracking arm; the regime nulls are a
+# follow-up block), deontological+repair+generosity (the combined 2x2
+# arm, as a reference for what training distilled). virtue dropped
+# (redundant-weaker twin of deon in the 2x2 screen).
+#
+# Budget: Qwen at the 2048-token reasoning budget runs ~33 s/episode
+# (smoke), so 400 eps (50 per fabricated state) ~ 3.7 h/cell inside the
+# 5 h pack wall; 800 would not fit.
+#
+# Submit:
+#   /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/sweeps/pgg_single_turn_qwen3.yaml --dry-run
+#
+# 1 x 1 x 5 x 1 = 5 cells.
+name: pgg_single_turn_qwen3
+eval_group: pgg_single_turn_qwen3-8b
+config: configs/eval/pgg_screen_qwen3_8b.yaml
+
+num_episodes: 400
+
+axes:
+  game: [public_goods]
+
+  representation: [prose]
+
+  moral_value:
+    - none
+    - deontological
+    - universalization
+    - utilitarian
+    - deontological+repair+generosity
+
+  protocol: [single_round]
+
+env:
+  RUN_PROBES: "off"            # probes are P2 (PROBE_STATES generalization)
+  RUN_PROBE_B_EPISODE: "off"
+  GAME_DESCRIPTION: "off"
+
+extra_args: ["--temperature", "0.7"]
