@@ -7,10 +7,9 @@
 # k-slope within own_prev (behavioral.json -> "pgg" block), never pooled
 # P(C). Value arms wrap the prompt exactly as in the 2x2 screen.
 #
-# Presentation: labels + label_order + layout randomized (facets: k-row
-# order x column/mention order); role is undefined for PGG (would raise);
-# payoffs FIXED canonical — sampled (E,s) and the compliance/waste regime
-# cells are follow-up blocks per §9.2.
+# Presentation FIXED (matches the 2x2 moral screens); surface
+# randomization, sampled (E,s) and the compliance/waste regime cells are
+# follow-up blocks per §9.2.
 #
 # Sweep driver: scripts/slurm/submit_sweep.py configs/sweeps/pgg_single_turn.yaml
 # =============================================================================
@@ -45,10 +44,15 @@ evaluation:
   opponents: [conditional_contributor]
   temperature: 0.7
   max_new_tokens: 512
-  labels: randomize
-  label_order: randomize
-  layout: randomize
-  # role: fixed (MUST stay fixed for public_goods); payoffs: fixed.
+  # Presentation FIXED (Tennant-exact labels action3/action4, identity
+  # layout/order) to match the 2x2 moral screens' protocol; surface
+  # randomization is a follow-up robustness block (docs §9.2), as it was
+  # for the 2x2 games. role must stay fixed for public_goods.
+  labels: fixed
+  label_order: fixed
+  layout: fixed
+  role: fixed
+  payoffs: fixed
 
 # Rewards don't drive anything at eval; kept for metric parity with training.
 reward:
