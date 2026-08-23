@@ -147,7 +147,7 @@ def header(run: str, group: Path, trained, refs: Dict[str, Path],
     return "\n".join([
         f"# Post-training eval: {group.name}",
         "",
-        f"Training run `{run}`. ",
+        f"Training run `{run}`. "
         f"{meta['base_model'].rsplit('/', 1)[-1]}, protocol "
         f"`{meta['protocol']}` (fabricated history, balanced states), prose, "
         f"fixed presentation, T = {meta['eval_temperature']}, "
