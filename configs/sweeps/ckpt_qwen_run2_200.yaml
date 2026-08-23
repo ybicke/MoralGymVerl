@@ -13,8 +13,8 @@
 #       configs/sweeps/ckpt_qwen_run2_single.yaml --dry-run
 #
 # 4 cells, 1 node.
-name: ckpt_qwen_run2_single
-eval_group: ckpt_qwen_run2_200_single
+name: ckpt_qwen_run2_200
+eval_group: ckpt_qwen_run2_200
 config: configs/eval/teacher_signal_qwen3_8b.yaml
 
 num_episodes: 400          # 100 decisions per fabricated state
