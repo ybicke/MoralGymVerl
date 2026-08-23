@@ -179,41 +179,64 @@ def test_pgg_representation_names():
     assert _build_payoff_block(make_pgg_config(representation="matrix")) == \
         _build_payoff_block(make_pgg_config(representation="table"))
     with pytest.raises(ValueError):
-        _build_payoff_block(make_pgg_config(representation="list"))
+        _build_payoff_block(make_pgg_config(representation="bogus"))
+
+
+RULE_SENTENCES = [
+    "Each of the 4 players starts the round with 10 points and chooses one "
+    "of the two actions at the same time.",
+    "If you choose action2, you keep your 10 points.",
+    "If you choose action1, your 10 points go into a group project.",
+    "The project total is multiplied by 2 and then split equally: every "
+    "player — whether or not they put points in — receives the multiplied "
+    "project total divided by 4.",
+    "Your final score is the points you kept plus what you received from "
+    "the project.",
+]
 
 
 def test_pgg_prose_rule():
-    """Canonical Fehr-Gachter structure (docs §9.3): multiply-then-divide
-    narrated, per-contributor return stated for EVERY player with the
-    non-excludability clause, score defined as a sum. No 'common pool'."""
+    """v5 rule (docs §9.3): operations only — no derived per-contributor
+    number, no 'pool', no examples; non-excludability in the split
+    sentence; score = kept + received. Prose = flowing paragraph."""
     block = _build_payoff_block(make_pgg_config(representation="prose"))
-    assert ("each of the 4 players starts the round with 10 points and "
-            "chooses one of the two actions") in block
-    assert "If you choose action1, your 10 points go into a group project." in block
-    assert "If you choose action2, you keep your 10 points." in block
-    assert ("The total points in the project are doubled and then divided "
-            "equally among all 4 players.") in block
-    assert ("So for every player who chooses action1, every player receives "
-            "5 points — no matter which action they chose themselves.") in block
-    assert ("Your final score is the points you kept plus your share from "
-            "the project.") in block
-    assert "pool" not in block
-    # mention-order facet (bit 1): keep clause first
-    swapped = _build_payoff_block(
-        make_pgg_config(representation="prose", matrix_layout=2))
-    assert swapped.index("action2") < swapped.index("action1")
+    expected = "The points are awarded as follows: " + " ".join(
+        [RULE_SENTENCES[0][0].lower() + RULE_SENTENCES[0][1:]]
+        + RULE_SENTENCES[1:]) + "\n\n"
+    assert block == expected
+    assert "pool" not in block and "5 points" not in block
 
 
-def test_pgg_prose_non_integer_multiplier():
-    # (E=10, s=7, N=4): r = 2.8 — shown as-is; the per-contributor return
-    # (the number the model actually needs) stays an integer.
+def test_pgg_list_rule():
+    block = _build_payoff_block(make_pgg_config(representation="list"))
+    expected = ("The points are awarded as follows:\n\n"
+                + "\n".join(f"- {x}" for x in RULE_SENTENCES) + "\n\n")
+    assert block == expected
+
+
+def test_pgg_rule_mention_order_facet():
+    # bit 1: project clause before keep clause, in both renderings
+    for rep in ("prose", "list"):
+        swapped = _build_payoff_block(
+            make_pgg_config(representation=rep, matrix_layout=2))
+        assert swapped.index("action1") < swapped.index("action2")
+
+
+def test_pgg_rule_is_parameter_generated():
+    # (E=10, s=7, N=4): r = 2.8; (E=10, s=6, N=5): r = 3 — one uniform
+    # "multiplied by r ... divided by N" construction for every setup.
     block = _build_payoff_block(make_pgg_config(representation="prose", share=7))
-    assert "multiplied by 2.8 and then divided equally" in block
-    assert "every player receives 7 points" in block
+    assert "multiplied by 2.8 and then split equally" in block
+    assert "divided by 4" in block
+    five = _build_payoff_block(make_pgg_config(
+        representation="list", n_players=5, share=6))
+    assert "Each of the 5 players" in five
+    assert "multiplied by 3 and then split equally" in five
+    assert "divided by 5" in five
 
 
 def test_opener_group_wording_and_no_game_name():
-    for rep in ("table", "prose"):
+    for rep in ("table", "prose", "list"):
         prompt = build_prompt(make_pgg_config(representation=rep), [], [])
         assert prompt.startswith(
             "You are playing a game in a group with 3 other players.")
