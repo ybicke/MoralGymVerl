@@ -51,6 +51,16 @@ from moralgym_verl.eval.config import PROTOCOL_PRESETS, resolve_presentation
 LAUNCHER = "scripts/slurm/eval_teacher_signal.sh"
 PACK_LAUNCHER = "scripts/slurm/eval_pack.sh"
 MANIFEST_NAME = "sweep_manifest.json"
+# Results root under eval_results/: the sweep's `results_dir` key.
+# teacher_signal = pre-training screens (base models, principle in
+# context); post_training = checkpoint evals of trained models. Keeping
+# them apart is the point -- one folder answers "what does the base model
+# do with the wording", the other "what did training install".
+DEFAULT_RESULTS_DIR = "teacher_signal"
+
+
+def results_dir(spec: Dict) -> str:
+    return str(spec.get("results_dir", DEFAULT_RESULTS_DIR))
 # Cells per packed job. 4 = one per GPU on a GH200 node. Clariden is
 # OverSubscribe=EXCLUSIVE, so a 1-GPU job is billed for all 4 GPUs; packing
 # cuts billed node-hours (and the fairshare hit that follows them) ~4x.
@@ -131,7 +141,8 @@ def cell_submission(spec: Dict, cell: Dict) -> Tuple[Dict[str, str], List[str]]:
     Everything routes through the existing launcher so a sweep cell is
     byte-identical to a hand-submitted job with the same settings.
     """
-    env = {"EVAL_GROUP": str(spec["eval_group"])}
+    env = {"EVAL_GROUP": str(spec["eval_group"]),
+           "RESULTS_DIR": results_dir(spec)}
     for key, value in (spec.get("env") or {}).items():
         env[str(key)] = str(value)
 
@@ -207,11 +218,13 @@ def batch_payload(spec: Dict, batch: List[Dict]) -> Dict:
         # argv = [sbatch, launcher, game, moral_value, num_episodes, *args]
         payload.append({
             "eval_group": str(spec["eval_group"]),
+            "results_dir": results_dir(spec),
             "run_dir_stem": run_dir_stem(cell),
             "game": str(cell["game"]),
             "moral_value": str(cell["moral_value"]),
             "num_episodes": int(spec.get("num_episodes", 25)),
-            "env": {k: v for k, v in env.items() if k != "EVAL_GROUP"},
+            "env": {k: v for k, v in env.items()
+                    if k not in ("EVAL_GROUP", "RESULTS_DIR")},
             "args": argv[5:],
             "axes": {k: str(v) for k, v in cell.items()},
         })

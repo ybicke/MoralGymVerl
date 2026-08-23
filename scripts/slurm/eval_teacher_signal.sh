@@ -82,7 +82,8 @@ if [ "${PROTOCOL:-}" = "single_round" ] && [ "${RUN_PROBE_B_EPISODE:-off}" = "on
     echo "       episode probe is multi-round only. Unset one of them." >&2
     exit 1
 fi
-RUN_DIR="${PROJECT_ROOT}/eval_results/teacher_signal/${EVAL_GROUP}/cells/${GAME}__${MORAL_VALUE}_${SLURM_JOB_ID}"
+RESULTS_DIR="${RESULTS_DIR:-teacher_signal}"   # post_training for checkpoint evals
+RUN_DIR="${PROJECT_ROOT}/eval_results/${RESULTS_DIR}/${EVAL_GROUP}/cells/${GAME}__${MORAL_VALUE}_${SLURM_JOB_ID}"
 OUTPUT="${RUN_DIR}/behavioral.json"
 mkdir -p "${RUN_DIR}"
 
@@ -202,7 +203,7 @@ fi
 
 # Stage out the whole run directory to $STORE (tape-backed) for durability.
 if [ -n "${STORE_BASE:-}" ] && [ -d "${RUN_DIR}" ]; then
-    STORE_EVAL_DIR="${STORE_BASE}/eval_results/teacher_signal/${EVAL_GROUP}"
+    STORE_EVAL_DIR="${STORE_BASE}/eval_results/${RESULTS_DIR}/${EVAL_GROUP}/cells"
     mkdir -p "${STORE_EVAL_DIR}"
     cp -r "${RUN_DIR}" "${STORE_EVAL_DIR}/"
     echo "Backed up run dir: ${EVAL_GROUP}/$(basename "${RUN_DIR}")"

@@ -5,7 +5,9 @@ Usage (login node, from the repo root):
     /usr/bin/python3.11 scripts/slurm/submit_sweep.py configs/sweeps/<name>.yaml
     ... --dry-run     # print the expansion without submitting
 
-Writes eval_results/teacher_signal/<eval_group>/sweep_manifest.json:
+Writes eval_results/<results_dir>/<eval_group>/sweep_manifest.json
+(results_dir: teacher_signal for base-model screens, post_training for
+checkpoint evals):
 the sweep spec, submission timestamp, git commit, and the job id + run
 dir of every cell — the experiment's own record of what was launched.
 """
@@ -27,7 +29,7 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 from moralgym_verl.eval.config import git_provenance          # noqa: E402
 from moralgym_verl.eval.sweep import (                        # noqa: E402
     MANIFEST_NAME, PACK_LAUNCHER, PACK_SIZE, batch_payload, cell_submission,
-    expand_cells, load_sweep, pack_batches, run_dir_stem,
+    expand_cells, load_sweep, pack_batches, results_dir, run_dir_stem,
 )
 
 
@@ -48,7 +50,7 @@ def main() -> None:
 
     spec = load_sweep(str(args.spec))
     cells = expand_cells(spec)
-    group_dir = REPO_ROOT / "eval_results" / "teacher_signal" / spec["eval_group"]
+    group_dir = REPO_ROOT / "eval_results" / results_dir(spec) / spec["eval_group"]
 
     if args.no_pack:
         return _submit_unpacked(spec, cells, group_dir, args.dry_run)

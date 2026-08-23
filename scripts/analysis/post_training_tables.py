@@ -22,7 +22,7 @@ statistics at the evaluated steps (trace_comparison.py).
 Output: <ckpt group>/analysis/results_<run>.md (+ tex/), mirroring the
 screen layout. Login node, stdlib only:
     /usr/bin/python3.11 scripts/analysis/post_training_tables.py \
-        eval_results/teacher_signal/ckpt_qwen_run2_200 \
+        eval_results/post_training/qwen_run2_200 \
         --reference eval_results/teacher_signal/single_turn_screen_qwen3-8b \
         --reference eval_results/teacher_signal/generosity_arm_qwen3-8b \
         --principle deontological+repair+generosity \

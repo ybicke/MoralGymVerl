@@ -6,13 +6,14 @@
 # question for a trained model); RUN_PROBES=off restates that.
 #
 # Submit (adapters on iopsstor — the eval container does not mount
-# /capstor/store):
+# /capstor/store). Results: eval_results/post_training/<run>/.
 #   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
 #       configs/sweeps/ckpt_gemma_run2_200.yaml --dry-run
 #
 # 3 cells, 1 node.
 name: ckpt_gemma_run2_200
-eval_group: ckpt_gemma_run2_200
+eval_group: gemma_run2_200
+results_dir: post_training   # eval_results/post_training/<run>, apart from the pre-training screens
 config: configs/eval/teacher_signal_9b.yaml
 
 num_episodes: 400          # 100 decisions per fabricated state

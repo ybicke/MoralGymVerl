@@ -91,7 +91,8 @@ cells = json.load(open(batch_path))["cells"]
 for i, c in enumerate(cells):
     # cells/ keeps the machine-readable results in one place, so the group
     # root holds only the manifest, the batch payloads and analysis/.
-    run_dir = f"{root}/eval_results/teacher_signal/{c['eval_group']}/cells/{c['run_dir_stem']}_$SLURM_JOB_ID"
+    results = c.get("results_dir", "teacher_signal")
+    run_dir = f"{root}/eval_results/{results}/{c['eval_group']}/cells/{c['run_dir_stem']}_$SLURM_JOB_ID"
     env = c.get("env", {})
     args = [str(a) for a in c.get("args", [])]
     # A sweep's `config:` key travels in the cell env (sweep.cell_submission).
@@ -194,10 +195,14 @@ if [ -n "${STORE_BASE:-}" ]; then
 import json, os, shutil, sys
 batch_path, root, job_id, store = sys.argv[1:5]
 for c in json.load(open(batch_path))["cells"]:
-    src = f"{root}/eval_results/teacher_signal/{c['eval_group']}/{c['run_dir_stem']}_{job_id}"
+    results = c.get("results_dir", "teacher_signal")
+    # cells/ subdir, matching where the cell scripts write (a missing
+    # /cells/ here made every packed stage-out a silent no-op before
+    # 2026-08-24).
+    src = f"{root}/eval_results/{results}/{c['eval_group']}/cells/{c['run_dir_stem']}_{job_id}"
     if not os.path.isdir(src):
         continue
-    dst = f"{store}/eval_results/teacher_signal/{c['eval_group']}"
+    dst = f"{store}/eval_results/{results}/{c['eval_group']}/cells"
     os.makedirs(dst, exist_ok=True)
     shutil.copytree(src, f"{dst}/{os.path.basename(src)}", dirs_exist_ok=True)
     print(f"staged {os.path.basename(src)}")
