@@ -183,15 +183,33 @@ def test_pgg_representation_names():
 
 
 def test_pgg_prose_rule():
+    """Canonical Fehr-Gachter structure (docs §9.3): multiply-then-divide
+    narrated, per-contributor return stated for EVERY player with the
+    non-excludability clause, score defined as a sum. No 'common pool'."""
     block = _build_payoff_block(make_pgg_config(representation="prose"))
-    assert "each of the 4 players starts the round with 10 points" in block
-    assert "causes each of the 4 players to receive 5 points" in block
-    assert ("If you choose action1, you put your 10 points into a common "
-            "pool.") in block
+    assert ("each of the 4 players starts the round with 10 points and "
+            "chooses one of the two actions") in block
+    assert "If you choose action1, your 10 points go into a group project." in block
+    assert "If you choose action2, you keep your 10 points." in block
+    assert ("The total points in the project are doubled and then divided "
+            "equally among all 4 players.") in block
+    assert ("So for every player who chooses action1, every player receives "
+            "5 points — no matter which action they chose themselves.") in block
+    assert ("Your final score is the points you kept plus your share from "
+            "the project.") in block
+    assert "pool" not in block
     # mention-order facet (bit 1): keep clause first
     swapped = _build_payoff_block(
         make_pgg_config(representation="prose", matrix_layout=2))
     assert swapped.index("action2") < swapped.index("action1")
+
+
+def test_pgg_prose_non_integer_multiplier():
+    # (E=10, s=7, N=4): r = 2.8 — shown as-is; the per-contributor return
+    # (the number the model actually needs) stays an integer.
+    block = _build_payoff_block(make_pgg_config(representation="prose", share=7))
+    assert "multiplied by 2.8 and then divided equally" in block
+    assert "every player receives 7 points" in block
 
 
 def test_opener_group_wording_and_no_game_name():

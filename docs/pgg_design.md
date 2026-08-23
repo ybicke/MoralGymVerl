@@ -416,3 +416,37 @@ Axis-by-axis transfer from the 2×2 screen protocol:
   "is it reading the payoffs" probe is the compliance/waste regime
   cells, which flip/deflate the payoff-rational action — sharper than
   jittering (E, s).
+
+### §9.3 Prose wording revision (2026-08-21, after the first GPU smokes)
+
+Two 64-episode gemma-2-9b smokes (table / prose, none arm, n=8/state)
+surfaced a representation-specific comprehension failure in EACH cell:
+- **table**: phantom payoffs at (D,0) — 5/8 CoTs claim "25" where all
+  four players earned 10; the 62.5% contribute rate there was partly
+  confabulation (prose (D,0) CoTs cite the correct 10/5 and the rate
+  drops to 37.5%, the economically sensible ordering).
+- **prose (v1, "common pool")**: the model reads a CLUB good — "if you
+  keep, you miss out on the 15 points", "to get points from the pool
+  at least 2 others need to choose it as well" — i.e. only contributors
+  are paid out. Under that wrong game, contributing at high k is
+  maximization, which manufactured the monotone C-row (0.25→0.88) and
+  k_slope 0.19. NOT reciprocity: reciprocity = matching the group's
+  cooperation under a correct payoff model.
+
+Revision (v2) anchored on the canonical Fehr–Gächter / CORE Econ
+participant instructions (verbatim: "the total amount of tokens
+contributed to the group's project is multiplied by 1.6 and distributed
+equally among all four members"; "each player receives 0.4 tokens for
+each token contributed to the project by any member"; they also give the
+formula "income = (20 − contributed) + 0.4 × total"). v2: "group
+project" (neutral destination noun, replaces the pool/club schema),
+multiply-then-divide narrated, per-contributor return stated for every
+player "no matter which action they chose themselves", score defined as
+kept + share. The formula line is deliberately omitted (the prose cell
+must still measure rule-composition); it is the literature-sanctioned
+escalation if the excludability misreading persists in the v2 smoke.
+Lesson recorded: k-slopes must be read with CoT audits at k∈{0,1} and
+for the excludability error — a slope can be manufactured by a wrong
+game model. Sources: CORE Econ experiment 4 instructions; Fehr &
+Gächter (2000) AER; LLM phrasing sensitivity: arXiv 2512.07462,
+2305.07970; Akata et al. NHB 2025.

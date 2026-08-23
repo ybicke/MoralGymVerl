@@ -164,28 +164,47 @@ def _build_pgg_table(config: EpisodeConfig) -> str:
 def _build_pgg_prose(config: EpisodeConfig) -> str:
     """PGG payoff block, "prose" representation: the mechanism rule —
     intensional, the model must derive the consequences (the GovSim-shaped
-    representation). Stated in the s-form ("every contributor causes each
-    player to receive s points") rather than "multiplied by r": all prompt
-    arithmetic stays integer for any sampled (E, s), so the prose cell
-    measures rule-composition, not fraction arithmetic (2026-08-20
-    verification of docs/pgg_design.md §3.5). matrix_layout bit 1 picks
-    the contribute/keep clause order — the mention-order facet, mirroring
-    its column-swap role in the table.
+    representation).
+
+    Wording anchored on the canonical Fehr-Gachter / CORE Econ participant
+    instructions ("the total contributed to the group's project is
+    multiplied by r and distributed equally among all members"; "each
+    player receives s for each token contributed by any member"), after
+    the 2026-08-21 prose smoke showed gemma-2-9b misreading the earlier
+    "common pool" wording as a CLUB good (only contributors paid out).
+    Three explicit guards against that misreading: the multiply-then-
+    divide is narrated (s stops being magic), the per-contributor return
+    is stated for EVERY player "no matter which action they chose
+    themselves", and the score is defined as a sum (kept + share). The
+    literature's formula line ("income = kept + s x contributions") is
+    deliberately omitted so the cell still measures rule-composition —
+    it is the sanctioned escalation if misreading persists (docs
+    §9.3). Integer-safe: the per-contributor return s is always an
+    integer; the multiplier r = s*N/E is shown as-is (2 for canonical).
+    matrix_layout bit 1 picks the project/keep clause order — the
+    mention-order facet, mirroring its column-swap role in the table.
     """
-    n, E = config.n_players, config.endowment
-    contribute = (
-        f"If you choose {config.coop_label}, you put your {_pts(E)} "
-        f"into a common pool."
+    n, E, s = config.n_players, config.endowment, config.share
+    r = s * n / E
+    r_text = f"{int(r)}" if r == int(r) else f"{r:g}"
+    multiplied = "doubled" if r == 2 else f"multiplied by {r_text}"
+    project = (
+        f"If you choose {config.coop_label}, your {_pts(E)} go into a "
+        f"group project."
     )
     keep = f"If you choose {config.defect_label}, you keep your {_pts(E)}."
     first, second = (
-        (keep, contribute) if config.matrix_layout & 2 else (contribute, keep)
+        (keep, project) if config.matrix_layout & 2 else (project, keep)
     )
     return (
         f"The points are awarded as follows: each of the {n} players "
-        f"starts the round with {_pts(E)}. {first} {second} Every player "
-        f"who puts their points into the pool causes each of the {n} "
-        f"players to receive {_pts(config.share)}.\n\n"
+        f"starts the round with {_pts(E)} and chooses one of the two "
+        f"actions. {first} {second} The total points in the project are "
+        f"{multiplied} and then divided equally among all {n} players. "
+        f"So for every player who chooses {config.coop_label}, every "
+        f"player receives {_pts(s)} — no matter which action they chose "
+        f"themselves. Your final score is the points you kept plus your "
+        f"share from the project.\n\n"
     )
 
 
