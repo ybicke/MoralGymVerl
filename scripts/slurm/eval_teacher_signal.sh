@@ -139,6 +139,7 @@ srun --environment=moralgym_verl \
         ${MODEL:+--model "${MODEL}"} \
         ${PROTOCOL:+--protocol "${PROTOCOL}"} \
         ${REPRESENTATION:+--representation "${REPRESENTATION}"} \
+        ${GAME_DESCRIPTION:+--game-description "${GAME_DESCRIPTION}"} \
         --save-raw-responses \
         --output "${OUTPUT}" \
         "${@:4}"

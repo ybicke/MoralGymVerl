@@ -161,29 +161,56 @@ def _build_pgg_table(config: EpisodeConfig) -> str:
     )
 
 
-def _pgg_rule_sentences(config: EpisodeConfig) -> List[str]:
-    """The PGG mechanism as five sentences (v5, 2026-08-21), shared by the
-    prose (flowing) and list (one step per bullet) representations.
+def _multiplier_text(config: EpisodeConfig) -> str:
+    r = config.share * config.n_players / config.endowment
+    return f"{int(r)}" if r == int(r) else f"{r:g}"
 
-    Wording arrived at with the Fehr-Gachter / CORE Econ participant
-    instructions as anchor and two gemma-2-9b smokes as evidence (docs
-    §9.3): the earlier "common pool" text was read as a CLUB good, and a
-    stated per-contributor return ("every player receives 5 points") was
-    ambiguous about scaling with the number of contributors even to an
-    expert reader. v5 therefore names NO derived number: the reader gets
-    the operations — project total, multiplied (doubled for r=2), then
-    "divided by N" — with non-excludability in the same sentence as the
-    split, and the score defined as kept + received. No examples, no
-    formula (those are the documented escalation). Everything is
-    generated from (N, E, s); "divided by N" is used instead of fraction
-    words so any N reads the same way.
 
-    matrix_layout bit 1 swaps the keep/project sentences (the
-    mention-order facet, mirroring its column-swap role in the table).
+def _build_pgg_prose(config: EpisodeConfig) -> str:
+    """PGG payoff block, "prose" representation: the SAME outcomes as the
+    table, enumerated as sentences — one per k, both actions per sentence
+    — exactly the convention of the 2x2 prose cell (outcome sentences, not
+    a mechanism). Restored 2026-08-21 after the rule-based v2/v5 smokes
+    showed the model's arithmetic/excludability errors dominating the
+    cell (docs §9.4): table vs prose must isolate FORMAT, same information.
+    Facets mirror the table: matrix_layout bit 0 reverses the k order of
+    the sentences (row order), bit 1 swaps the action order within each
+    sentence (column order). Agent-perspective only (no single opponent
+    whose points could be named).
     """
-    n, E, s = config.n_players, config.endowment, config.share
-    r = s * n / E
-    r_text = f"{int(r)}" if r == int(r) else f"{r:g}"
+    n_others = config.n_players - 1
+    actions = [config.coop_label, config.defect_label]
+    if config.matrix_layout & 2:
+        actions.reverse()
+    ks = list(range(n_others + 1))
+    if config.matrix_layout & 1:
+        ks.reverse()
+    sentences = []
+    for k in ks:
+        verb = "chooses" if k == 1 else "choose"
+        outcomes = " and ".join(
+            f"{_pts(get_score_pgg(config.move_for(a), k, config))} for {a}"
+            for a in actions
+        )
+        sentences.append(
+            f"If {k} of the other {n_others} players {verb} "
+            f"{config.coop_label}, you get {outcomes}."
+        )
+    return "The points are awarded as follows: " + " ".join(sentences) + "\n\n"
+
+
+def _pgg_rule_sentences(config: EpisodeConfig) -> List[str]:
+    """The PGG mechanism as five sentences — the "rule"/"list"
+    representations (flowing paragraph / one step per bullet). NOT a
+    screen cell: the 2026-08-21 smokes showed gemma-2-9b discarding the
+    non-excludability clause under this wording (keep read as "a
+    guaranteed 10 regardless of others") — kept as a comprehension probe
+    and documented in docs §9.3-9.4. Operations only, no derived number,
+    generated from (N, E, s). matrix_layout bit 1 swaps the keep/project
+    sentences (the mention-order facet).
+    """
+    n, E = config.n_players, config.endowment
+    r_text = _multiplier_text(config)
     keep = f"If you choose {config.defect_label}, you keep your {_pts(E)}."
     project = (
         f"If you choose {config.coop_label}, your {_pts(E)} go into a "
@@ -205,10 +232,7 @@ def _pgg_rule_sentences(config: EpisodeConfig) -> List[str]:
     ]
 
 
-def _build_pgg_prose(config: EpisodeConfig) -> str:
-    """PGG payoff block, "prose" representation: the mechanism rule as one
-    flowing paragraph (intensional — the model derives the consequences;
-    the GovSim-shaped representation). Sentences: _pgg_rule_sentences."""
+def _build_pgg_rule(config: EpisodeConfig) -> str:
     sentences = _pgg_rule_sentences(config)
     sentences[0] = sentences[0][0].lower() + sentences[0][1:]
     return (
@@ -217,12 +241,39 @@ def _build_pgg_prose(config: EpisodeConfig) -> str:
 
 
 def _build_pgg_list(config: EpisodeConfig) -> str:
-    """PGG payoff block, "list" representation: the same rule sentences,
-    one step per bullet — the structured intermediate between the table
-    (enumeration) and the prose paragraph, mirroring the 2x2 list cell."""
     return (
         "The points are awarded as follows:\n\n"
         + "\n".join(f"- {s}" for s in _pgg_rule_sentences(config)) + "\n\n"
+    )
+
+
+def _pgg_description(config: EpisodeConfig) -> str:
+    """Optional mechanism preamble (config.game_description), placed before
+    the payoff block of the table AND prose cells — never only one, so the
+    representation axis keeps isolating format. A separate switch so its
+    effect on behavior / value binding is a measured result (docs §9.4):
+    in the 2x2 games the prompt has no narrative at all, but commons
+    values (free-riding on others' contributions) may need the concept of
+    a shared project to bind to. Wording = the v5 rule sentences minus
+    the score definition duplicate; numbers stay verifiable against the
+    enumeration that follows ("multiplied by 2", not "a factor").
+    """
+    n, E = config.n_players, config.endowment
+    r_text = _multiplier_text(config)
+    keep = f"If you choose {config.defect_label}, you keep your {_pts(E)}."
+    project = (
+        f"If you choose {config.coop_label}, your {_pts(E)} go into a "
+        f"group project."
+    )
+    first, second = (
+        (project, keep) if config.matrix_layout & 2 else (keep, project)
+    )
+    return (
+        f"{first} {second} The project total is multiplied by {r_text} "
+        f"and then split equally among the {n} players: every player — "
+        f"whether or not they put points in — receives the multiplied "
+        f"project total divided by {n}. Your final score is the points "
+        f"you kept plus what you received from the project. "
     )
 
 
@@ -343,18 +394,29 @@ class PublicGoodsGame(Game):
 
     def payoff_block(self, config: EpisodeConfig) -> str:
         # "table" is the canonical name (docs/pgg_design.md §3.5) with
-        # "matrix" as a compatibility alias; "prose" and "list" share the
-        # v5 rule sentences (flowing paragraph vs one step per bullet).
+        # "matrix" as a compatibility alias; "prose" = the same outcomes as
+        # sentences (the screen's second cell); "rule"/"list" = the
+        # mechanism text (comprehension probes, not screen cells).
+        # config.game_description prepends the mechanism preamble to the
+        # two screen cells (see _pgg_description).
         if config.representation in ("table", "matrix"):
-            return _build_pgg_table(config)
-        if config.representation == "prose":
-            return _build_pgg_prose(config)
-        if config.representation == "list":
-            return _build_pgg_list(config)
-        raise ValueError(
-            f"Unsupported representation for public_goods: "
-            f"{config.representation!r} (expected 'table', 'prose', or 'list')"
-        )
+            block = _build_pgg_table(config)
+        elif config.representation == "prose":
+            block = _build_pgg_prose(config)
+        elif config.representation == "rule":
+            block = _build_pgg_rule(config)
+        elif config.representation == "list":
+            block = _build_pgg_list(config)
+        else:
+            raise ValueError(
+                f"Unsupported representation for public_goods: "
+                f"{config.representation!r} (expected 'table', 'prose', "
+                f"'rule', or 'list')"
+            )
+        if config.game_description and config.representation in (
+                "table", "matrix", "prose"):
+            return _pgg_description(config) + block
+        return block
 
     def history_sentence(
         self, config: EpisodeConfig, agent_history: List[str],

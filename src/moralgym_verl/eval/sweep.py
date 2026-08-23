@@ -61,6 +61,7 @@ _POSITIONAL_AXES = ("game", "moral_value")
 # to behavioral only, so anything that defines what the cell IS (which model,
 # which turn structure, how the payoff block is rendered) travels by env.
 _ENV_AXES = {"representation": "REPRESENTATION",
+             "game_description": "GAME_DESCRIPTION",
              "model": "MODEL",
              "protocol": "PROTOCOL",
              # Trained-adapter cells: "base", an absolute adapter dir, or

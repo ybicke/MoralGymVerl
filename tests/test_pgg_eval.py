@@ -166,3 +166,13 @@ def test_random_alias_maps_to_random_contributor():
     # game; the PGG registry must accept it.
     assert CONTRIBUTION_REGISTRY["random"] is \
         CONTRIBUTION_REGISTRY["random_contributor"]
+
+
+def test_build_eval_config_game_description_passthrough():
+    cfg_dict = {**PGG_EVAL_CFG,
+                "prompt": {**PGG_EVAL_CFG["prompt"], "game_description": True}}
+    cfg = build_eval_config(cfg_dict, "conditional_contributor",
+                            rng=_random.Random(0))
+    assert cfg.game_description is True
+    assert build_eval_config(PGG_EVAL_CFG, "conditional_contributor",
+                             rng=_random.Random(0)).game_description is False

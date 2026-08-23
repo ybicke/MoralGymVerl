@@ -220,6 +220,7 @@ def build_eval_config(
             n_players=game["n_players"],
             endowment=endowment,
             share=share,
+            game_description=prompt_cfg.get("game_description", False),
         )
 
     if eval_cfg.get("payoffs", "fixed") == "sample":

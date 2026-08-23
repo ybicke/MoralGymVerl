@@ -58,6 +58,7 @@ CFG_OVERRIDES = [
     ("game_design", "prompt", "game_design"),
     ("representation", "prompt", "representation"),
     ("restate_rules", "prompt", "restate_rules_per_round"),
+    ("game_description", "prompt", "game_description"),
     ("temperature", "evaluation", "temperature"),
     ("max_new_tokens", "evaluation", "max_new_tokens"),
     ("eval_labels", "evaluation", "labels"),
@@ -397,7 +398,7 @@ def build_parser() -> argparse.ArgumentParser:
                              "round-1 history (Tennant); 'nohist' starts round 1 "
                              "fresh. Used for off-training-protocol eval.")
     parser.add_argument("--representation", type=str, default=None,
-                        choices=["matrix", "prose", "list", "table"],
+                        choices=["matrix", "prose", "list", "table", "rule"],
                         help="Override prompt.representation: how the payoff "
                              "block is rendered. 'matrix' = markdown table "
                              "(default); 'prose' = the four outcomes as one "
@@ -405,6 +406,10 @@ def build_parser() -> argparse.ArgumentParser:
                              "bulleted. Everything outside the payoff block is "
                              "identical across the three. Distinct from "
                              "--eval-label-order (opener/closer label order).")
+    parser.add_argument("--game-description", type=_bool_arg, default=None,
+                        help="public_goods only: prepend the mechanism "
+                             "preamble to the table/prose payoff block "
+                             "(docs/pgg_design.md §9.4). on|off.")
     parser.add_argument("--restate-rules", type=_bool_arg, default=None,
                         metavar="true|false",
                         help="Override prompt.restate_rules_per_round "

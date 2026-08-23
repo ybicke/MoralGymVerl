@@ -125,6 +125,7 @@ for i, c in enumerate(cells):
         'echo "[cell %d] CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES start $(date +%%T)"' % i,
         # --- behavioral ---
         f'python3 -m moralgym_verl.eval.behavioral {common} '
+        f'{flag("game-description", "GAME_DESCRIPTION")} '
         f'--num-episodes {int(c["num_episodes"])} --save-raw-responses '
         f'--output "${{RUN_DIR}}/behavioral.json" {" ".join(shlex.quote(a) for a in args)} '
         f'|| {{ echo "[cell {i}] BEHAVIORAL FAILED"; exit 1; }}',

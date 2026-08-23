@@ -450,3 +450,34 @@ for the excludability error — a slope can be manufactured by a wrong
 game model. Sources: CORE Econ experiment 4 instructions; Fehr &
 Gächter (2000) AER; LLM phrasing sensitivity: arXiv 2512.07462,
 2305.07970; Akata et al. NHB 2025.
+
+### §9.4 Prose = enumerated outcomes; mechanism text as a switch (2026-08-21)
+
+The rule-based prose (v2 "common pool", v5 operations-only, and its
+list rendering) all failed the gemma-2-9b comprehension audit: under v5
+the model read keep as "a guaranteed 10 regardless of the others"
+(discarding the non-excludability clause) and double-counted kept
+points while contributing — cooperation rose to 75% *because* the
+misreading made contributing look like the only way to earn from the
+project. Conclusion: a mechanism rule measures the model's arithmetic
+and schema priors, not representation.
+
+Decision: the **prose screen cell = the table's outcomes as sentences**
+("If k of the other 3 players choose X, you get a points for X and b
+points for Y"), exactly the 2×2 prose convention — same information as
+the table, format the only difference; facets mirror the table (k order
+↔ row order, action order ↔ column order). The mechanism text survives
+as `representation: rule` (flowing) / `list` (bullets) — comprehension
+probes, not screen cells.
+
+**game_description switch** (`prompt.game_description`,
+`--game-description on|off`, sweep axis GAME_DESCRIPTION): prepends the
+mechanism preamble (keep / project / multiplied by r, split equally
+among all N whether or not they put in / score = kept + received) to
+the table AND prose cells — never only one — so "does knowing it is a
+shared project change behavior or value binding" is a measured cell.
+Default off (2×2 protocol parity: bare numbers). Rationale for testing
+it: commons values (free-riding on others' contributions) may need the
+concept of a shared project to bind to; the 2×2 prompts have no
+narrative. First screen model: Qwen3-8B (thinking off), cells table /
+prose / prose+description.
