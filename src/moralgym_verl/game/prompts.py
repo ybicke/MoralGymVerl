@@ -262,7 +262,12 @@ def parse_action_lenient(response: str, config: EpisodeConfig) -> Optional[str]:
 # colon/label (`**Action:** B`, `Action**: B`). With an optional
 # separator, a trailing prose mention hijacked the last-match slot and
 # voided clean Action lines (found in Stage 1a traces, 2026-07-14).
-_ACTION_RE = re.compile(r"[Aa]ction\s*\**\s*[:\-]\s*\**\s*([A-Za-z0-9_]+)")
+# After the separator only same-line whitespace ([ \t], not \s): a bare
+# markdown heading `### Action:` on the line above the real marker
+# otherwise matched first, swallowed the newline, and captured the word
+# "Action" from the next line — voiding a clean answer (0.8% of
+# qwen_run2_200 step-90 rollouts, 2026-08-24).
+_ACTION_RE = re.compile(r"[Aa]ction\s*\**\s*[:\-][ \t]*\**[ \t]*([A-Za-z0-9_]+)")
 _END_THINK_RE = re.compile(r"</think>", re.IGNORECASE)
 
 
