@@ -12,8 +12,9 @@
 # positive k-slope), universalization (native habitat, unconditional
 # lift), utilitarian (the r-tracking arm; the regime nulls are a
 # follow-up block), deontological+repair+generosity (the combined 2x2
-# arm, as a reference for what training distilled). virtue dropped
-# (redundant-weaker twin of deon in the 2x2 screen).
+# arm, as a reference for what training distilled), virtue (the
+# second node has the capacity; the project is about moral values, so
+# the full comparison set is worth the free slot).
 #
 # Budget: Qwen at the 2048-token reasoning budget runs ~33 s/episode
 # (smoke), so 400 eps (50 per fabricated state) ~ 3.7 h/cell inside the
@@ -23,7 +24,7 @@
 #   /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
 #       configs/sweeps/pgg_single_turn_qwen3.yaml --dry-run
 #
-# 1 x 1 x 5 x 1 = 5 cells.
+# 1 x 1 x 6 x 1 = 6 cells (2 packed nodes).
 name: pgg_single_turn_qwen3
 eval_group: pgg_single_turn_qwen3-8b
 config: configs/eval/pgg_screen_qwen3_8b.yaml
@@ -41,6 +42,7 @@ axes:
     - universalization
     - utilitarian
     - deontological+repair+generosity
+    - virtue
 
   protocol: [single_round]
 
