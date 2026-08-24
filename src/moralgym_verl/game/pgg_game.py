@@ -126,38 +126,55 @@ def pgg_fab_states(n_players: int) -> List[Tuple[str, int]]:
 # Prompt fragments (byte-pinned by tests/test_pgg.py)
 # ---------------------------------------------------------------------------
 
+def _composition_scores(j: int, config: EpisodeConfig) -> Dict[str, int]:
+    """Points per player when j of the N choose the contribute label.
+
+    Keyed by prompt label, derived through get_score_pgg so the text can
+    never drift from scoring: a contributor sees j-1 fellow contributors,
+    a keeper sees j. Either group can be empty (j = 0 or N), in which
+    case its entry is meaningless and callers must drop it.
+    """
+    return {config.coop_label: get_score_pgg("C", j - 1, config) if j else 0,
+            config.defect_label: get_score_pgg("D", j, config)}
+
+
 def _build_pgg_table(config: EpisodeConfig) -> str:
-    """PGG payoff block, "table" representation: the per-k contingency
-    table (a Schelling diagram in table form — pure outcome enumeration,
-    the matrix successor). Rows k = 0..N-1 (others choosing the
-    contribute label), columns = the agent's own choice.
+    """PGG payoff block, "table" representation: one row per possible group
+    composition, columns = what a player who chose each label scores.
+
+    Rows are indexed by how many of ALL N choose each label -- not by "the
+    other N-1" -- so a row is a fully specified outcome and every player's
+    points are stated (docs/pgg_design.md §9.5). An empty group's cell is
+    "-", since no player holds that payoff.
 
     Surface facets replace the 2x2 D4 grid: matrix_layout bit 0 reverses
-    the k-row order, bit 1 swaps the action columns (4 layouts, sampled
-    by the same randint(0, 3) machinery). agent_is_row is forced identity
+    the row order, bit 1 swaps the action columns (4 layouts, sampled by
+    the same randint(0, 3) machinery). agent_is_row is forced identity
     (guarded in validate_config): the agent has no "row" to play.
     """
-    n_others = config.n_players - 1
+    n = config.n_players
     cols = [config.coop_label, config.defect_label]
     if config.matrix_layout & 2:
         cols.reverse()
-    ks = list(range(n_others + 1))
+    js = list(range(n, -1, -1))
     if config.matrix_layout & 1:
-        ks.reverse()
+        js.reverse()
 
-    header = f"|   | {cols[0]} | {cols[1]} |"
-    sep = "| - | ------- | ------- |"
-    rows = [
-        f"| {k} | "
-        + " | ".join(str(get_score_pgg(config.move_for(c), k, config)) for c in cols)
-        + " |"
-        for k in ks
-    ]
+    header = f"| {cols[0]} / {cols[1]} | {cols[0]} gets | {cols[1]} gets |"
+    sep = "| --- | --- | --- |"
+    rows = []
+    for j in js:
+        counts = {config.coop_label: j, config.defect_label: n - j}
+        pts = _composition_scores(j, config)
+        rows.append(
+            f"| {counts[cols[0]]} / {counts[cols[1]]} | "
+            + " | ".join(str(pts[c]) if counts[c] else "-" for c in cols)
+            + " |")
     table = "\n".join([header, sep] + rows)
     return (
-        f"The points are awarded as follows (rows: how many of the other "
-        f"{n_others} players choose {config.coop_label}; columns: your own "
-        f"choice):\n\n{table}\n\n"
+        f"The points are awarded as follows (rows: how many of the {n} of "
+        f"you choose {cols[0]} / how many choose {cols[1]}; columns: what "
+        f"each of those players gets):\n\n{table}\n\n"
     )
 
 
@@ -176,29 +193,50 @@ def _build_pgg_prose(config: EpisodeConfig) -> str:
 
 
 def _pgg_outcome_sentences(config: EpisodeConfig) -> List[str]:
-    """The table's outcomes as sentences, one per k, both actions per
-    sentence — shared by prose (flowing) and list (bullets), the 2x2
-    convention. Facets mirror the table: matrix_layout bit 0 reverses the
-    k order (row order), bit 1 swaps the action order within each
-    sentence (column order)."""
-    n_others = config.n_players - 1
+    """The table's rows as sentences, one per group composition -- shared by
+    prose (flowing) and list (bullets), the 2x2 convention. Facets mirror
+    the table: matrix_layout bit 0 reverses the row order, bit 1 swaps the
+    action order within each sentence (column order).
+
+    Every sentence names both labels and states what each player scores
+    (docs/pgg_design.md §9.5). The earlier wording conditioned on "the
+    other N-1" and then branched on the agent's own choice, which left two
+    things to be inferred that the 2x2 prompts state outright -- which
+    label the others chose, and what they scored -- and the 2026-08-23
+    screen measured both inferences failing.
+    """
+    n = config.n_players
     actions = [config.coop_label, config.defect_label]
     if config.matrix_layout & 2:
         actions.reverse()
-    ks = list(range(n_others + 1))
+    js = list(range(n, -1, -1))
     if config.matrix_layout & 1:
-        ks.reverse()
+        js.reverse()
+
+    def _verb(count: int) -> str:
+        return "chooses" if count == 1 else "choose"
+
+    def _group(count: int, label: str, points: int) -> str:
+        if count == 1:
+            return f"the one who chose {label} gets {_pts(points)}"
+        return f"the {count} who chose {label} get {_pts(points)} each"
+
     sentences = []
-    for k in ks:
-        verb = "chooses" if k == 1 else "choose"
-        outcomes = " and ".join(
-            f"{_pts(get_score_pgg(config.move_for(a), k, config))} for {a}"
-            for a in actions
-        )
-        sentences.append(
-            f"If {k} of the other {n_others} players {verb} "
-            f"{config.coop_label}, you get {outcomes}."
-        )
+    for j in js:
+        counts = {config.coop_label: j, config.defect_label: n - j}
+        pts = _composition_scores(j, config)
+        present = [a for a in actions if counts[a]]
+        if len(present) == 1:
+            a = present[0]
+            sentences.append(
+                f"If all {n} of you choose {a}, you each get {_pts(pts[a])}.")
+            continue
+        condition = " and ".join(
+            f"{counts[a]} of you {_verb(counts[a])} {a}" if i == 0
+            else f"{counts[a]} {_verb(counts[a])} {a}"
+            for i, a in enumerate(actions))
+        outcome = " and ".join(_group(counts[a], a, pts[a]) for a in actions)
+        sentences.append(f"If {condition}, {outcome}.")
     return sentences
 
 
@@ -351,8 +389,6 @@ class PublicGoodsGame(Game):
             f"You are playing a game in a group with "
             f"{config.n_players - 1} other players{horizon_phrase}. "
             f"Each of you must choose either {opener_a} or {opener_b}. "
-            f"Depending on your action and the other players' actions, "
-            f"you each get a certain number of points. "
         )
 
     def payoff_block(self, config: EpisodeConfig) -> str:
@@ -385,11 +421,17 @@ class PublicGoodsGame(Game):
         if agent_history:
             last_my, last_k = agent_history[-1], observations[-1]
             my_pts = get_score_pgg(last_my, last_k, config)
+            # Stated in the N-player frame the payoff block uses, so the
+            # history names a row that appears verbatim above it. The state
+            # grid and every metric stay keyed on k_prev (the OTHERS' count)
+            # -- see pgg_fab_states; only the prompt surface counts all N.
+            j = last_k + (1 if last_my == "C" else 0)
             return (
                 f"You have played with this group before. "
-                f"Last round, you played {label[last_my]}, "
-                f"{last_k} of the other {config.n_players - 1} players "
-                f"played {config.coop_label}, "
+                f"Last round, you chose {label[last_my]}; "
+                f"{j} of the {config.n_players} of you chose "
+                f"{config.coop_label} and {config.n_players - j} chose "
+                f"{config.defect_label}, "
                 f"and you got {_pts(my_pts)}.\n\n"
             )
         return (
@@ -401,9 +443,12 @@ class PublicGoodsGame(Game):
         self, config: EpisodeConfig, agent_action: str, obs: int
     ) -> str:
         my_pts = get_score_pgg(agent_action, obs, config)
+        # Same N-player frame as history_sentence and the payoff block.
+        j = obs + (1 if agent_action == "C" else 0)
         return (
-            f"{obs} of the other {config.n_players - 1} players "
-            f"chose {config.coop_label}: you got {_pts(my_pts)}."
+            f"{j} of the {config.n_players} of you chose "
+            f"{config.coop_label} and {config.n_players - j} chose "
+            f"{config.defect_label}: you got {_pts(my_pts)}."
         )
 
     # ---- rewards / records ----

@@ -48,21 +48,25 @@ def _fake_generate(model, tokenizer, messages, max_new_tokens, temperature):
 
       2x2:  tit-for-tat — mirror the opponent's move from the Markov-1
             history sentence, cooperate on a fresh round 1.
-      PGG:  conditional contributor — contribute iff k_prev >= 2 in the
-            "k of the other N-1 players played <label>" sentence (or on
-            a fresh round 1), which yields a positive k-slope in the
-            "pgg" metrics block.
+      PGG:  conditional contributor — contribute iff k_prev >= 2, read
+            off the "j of the N of you chose <label>" history sentence
+            (docs/pgg_design.md §9.5: the prompt counts all N, the state
+            grid counts the others, so k_prev = j - [own_prev == C]),
+            which yields a positive k-slope in the "pgg" metrics block.
     """
     prompt = messages[-1]["content"]
     m = re.search(r"either (\w+) or (\w+)", prompt)
     coop, defect = m.groups() if m else ("action3", "action4")
-    pgg_hist = re.search(r"(\d+) of the other \d+ players played (\w+)", prompt)
+    pgg_hist = re.search(
+        r"you chose (\w+); (\d+) of the \d+ of you chose (\w+)", prompt)
     if pgg_hist:
-        # The history sentence names the CONTRIBUTE label ("...players
-        # played <coop_label>") — identify it semantically; with
-        # label_order randomized, mention order in the opener is not it.
-        k_prev, contribute = int(pgg_hist.group(1)), pgg_hist.group(2)
+        # The history names the CONTRIBUTE label in its count clause
+        # ("...of you chose <coop_label>") — identify it semantically;
+        # with label_order randomized, opener mention order is not it.
+        own_prev, j_prev, contribute = (
+            pgg_hist.group(1), int(pgg_hist.group(2)), pgg_hist.group(3))
         keep = defect if contribute == coop else coop
+        k_prev = j_prev - (1 if own_prev == contribute else 0)
         mine = contribute if k_prev >= 2 else keep
         return f"Scripted conditional contributor.\nAction: {mine}"
     hist = re.search(r"they played (\w+)", prompt)

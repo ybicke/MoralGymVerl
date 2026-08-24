@@ -481,3 +481,106 @@ commons values (free-riding on others' contributions) may need the
 concept of a shared project to bind to; the 2×2 prompts have no
 narrative. First screen model: Qwen3-8B (thinking off); smoke cells
 table / prose / prose+description.
+
+### §9.5 Wording rewritten to group compositions (2026-08-24, after the qwen3-8b screen)
+
+The 2026-08-23 screen (`eval_results/teacher_signal/pgg_single_turn_qwen3-8b/`,
+7 arms, 2800 decisions, 0 parse failures) exposed two things the prompt left
+to be inferred that the 2x2 prompts state outright. Both were measured in the
+traces, not suspected.
+
+**Only the contribute label was ever counted.** The payoff sentences and the
+history counted players choosing the coop label and never named the
+complement ("1 of the other 3 players played action3" -- never "and 2 played
+action4"); the defect label appeared only as one of the agent's own two
+options. The deontological family is phrased over the *others'* conduct ("do
+not exploit those who act in good faith"), so with neutral labels and
+`game_description` off the agent had to guess which label was the good-faith
+act. ~23% of deontological-family traces attached exploitation to the
+*contribute* label -- 46% at (own_prev = D, k = 0), falling to 26% at k = 3,
+against ~10% in the own_prev = C rows where the agent's own last move
+supplied the anchor. Part of the own = D trend was therefore the label
+becoming identifiable as k rises, not conditional cooperation alone (the
+trend does survive within correctly-oriented traces).
+
+**Only the agent's own payoff row was given.** The others' payoffs had to be
+derived, and the derivation failed in one specific way: the agent's own
+payoff row for the observed k was applied to every player, ignoring that a
+fellow contributor sees only k-1 co-contributors and that the agent's own
+contribution raises everyone else by s. At k = 3, 43/100 utilitarian traces
+stated the impossible group total 85 (25 + 3x20) against 5 stating the true
+70. That read reverses the welfare ranking at *every* k, and P(C) was 2%
+among those traces vs 40% among the correct ones -- so the utilitarian
+near-null (16.8% pooled) is an arithmetic artifact, not evidence about
+utilitarian binding. It is also why the identical wording is a maximal
+cooperator in the 2x2 games, whose prose states both players' payoffs.
+
+Decision: fix the wording rather than add switches -- the old text was
+under-specified, not a comparison arm worth carrying. The enumeration now
+runs over the **group's composition** (how many of all N chose each label)
+rather than over "the other N-1" crossed with the agent's own choice. Each
+row is one fully specified outcome stating what every player scores:
+
+> The points are awarded as follows: If all 4 of you choose action3, you each
+> get 20 points. If 3 of you choose action3 and 1 chooses action4, the 3 who
+> chose action3 get 15 points each and the one who chose action4 gets 25
+> points. If 2 of you choose action3 and 2 choose action4, the 2 who chose
+> action3 get 10 points each and the 2 who chose action4 get 20 points each.
+> If 1 of you chooses action3 and 3 choose action4, the one who chose action3
+> gets 5 points and the 3 who chose action4 get 15 points each. If all 4 of
+> you choose action4, you each get 10 points.
+
+Why compositions rather than a longer agent-centric sentence. An
+agent-centric form that also states the others' points needs six numbers per
+k (1148 characters, 24 numbers for N=4); the composition form needs two per
+row (565 characters, 8 numbers) and says the same thing. It is also
+structurally immune to the misread above: a row is a complete group state, so
+there is no "others" left to hold fixed. Per-player points, not a group total
+-- the 2x2 prose states the opponent's points, so this keeps information
+content matched across games and leaves aggregation to the model; stating the
+total would hand the utilitarian arm its answer and turn a reasoning test
+into a compliance test.
+
+**Frame alignment.** The history and the multi-round outcome line now count
+all N as well ("Last round, you chose action3; 2 of the 4 of you chose
+action3 and 2 chose action4, and you got 10 points"), so the history names a
+row that appears verbatim in the payoff block and no frame-mapping step
+remains. The redundant opener clause ("Depending on your action and the other
+players' actions, you each get a certain number of points") was dropped as
+the enumeration says it.
+
+**Frames, kept distinct.** Only the prompt surface counts all N. The state
+grid, the fabricated-history cycle and every metric stay keyed on `k_prev`,
+the OTHERS' count -- `pgg_fab_states`, `cond_contribution_curve`,
+`sucker_rate_kprev`, the `(own, k)` state labels. `history_sentence` and
+`outcome_line` convert with `j = k + [own == C]` and carry a comment at the
+seam.
+
+**All three representations again carry identical information**, restoring
+the §9.4 constraint that the previous iteration broke (it had added the
+others' points to prose/list but not to table). `table` is the same five rows
+as a grid, with `-` where a group is empty:
+
+> | action3 / action4 | action3 gets | action4 gets |
+> | --- | --- | --- |
+> | 4 / 0 | 20 | - |
+> | 3 / 1 | 15 | 25 |
+> | 2 / 2 | 10 | 20 |
+> | 1 / 3 | 5 | 15 |
+> | 0 / 4 | - | 10 |
+
+Facets keep their meaning: `matrix_layout` bit 0 reverses the row order, bit
+1 swaps the action order (columns in the table; both the condition clause and
+the outcome clause in the sentences).
+
+**Invariants.** `_composition_scores` derives every stated number through
+`get_score_pgg`. `test_pgg_wording_states_every_players_points` pins the
+group total each row implies to N*E + j(sN - E) across three (N, E, s)
+settings -- the identity the misread violated -- and checks the agent's own
+payoff is a row of the same table;
+`test_pgg_both_actions_are_counted` and
+`test_pgg_history_frame_matches_payoff_rows` pin the other two properties.
+
+**Consequence for existing results.** The 2026-08-23 qwen screen is on the
+old wording; its cells record `git_commit`, so old-vs-new is a checkout, not
+a config flag. Any new PGG cell is not comparable to it.
