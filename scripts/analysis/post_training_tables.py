@@ -47,7 +47,8 @@ from publication_tables import (  # noqa: E402
 )
 from training_trajectory import load_decisions, trajectory_table, windows  # noqa: E402
 from trace_comparison import (  # noqa: E402
-    from_cells, from_rollouts, principle_ngrams, stats, stats_table,
+    compact_stats_tables, from_cells, principle_ngrams, stats,
+    vocab_windows,
 )
 from moralgym_verl.game.moral_values import get_moral_value  # noqa: E402
 
@@ -123,42 +124,138 @@ def post_training_table(run: str, trained: List[Tuple[int, Path]],
         title=f"Table P1 — post-training: state-conditioned cooperation ({run})",
         caption=(
             f"Cooperation rate (\\%) of {model} by fabricated previous "
-            "state, prose, fixed presentation, "
-            f"$T={meta['eval_temperature']}$, {meta['num_episodes']} "
-            "episodes per cell = 100 decisions per state (binomial s.e.\\ "
-            "$\\leq$5 points; differences under $\\approx$14 points are "
-            "not distinguishable). Trained rows carry NO moral text in "
-            "the prompt. Pooled = mean of the four states. "
-            f"{D_OPP} = P(C$\\mid$C$_O$) $-$ P(C$\\mid$D$_O$), the "
-            "opponent-conditioning gap (reciprocity signature). Reference "
-            "rows are the screen's own cells, same protocol."),
+            "state; 100 decisions per state (binomial s.e.\\ $\\leq$5 "
+            "points; differences under $\\approx$14 points are not "
+            "distinguishable). P(C) = mean of the four state rates, "
+            "which the balanced design makes equal to the cell's overall "
+            f"cooperation rate. {D_OPP} = P(C$\\mid$C$_O$) $-$ "
+            "P(C$\\mid$D$_O$), the opponent-conditioning gap "
+            "(reciprocity signature)."),
         stub="Policy",
         col_groups=[(None, [f"P(C$\\mid${state_label(s)})"]) for s in STATES4]
-        + [(None, ["pooled"]), (None, [D_OPP])],
+        + [(None, ["P(C)"]), (None, [D_OPP])],
         panels=[(None, rows)],
     )
 
 
-def header(run: str, group: Path, trained, refs: Dict[str, Path],
-           ref_groups: List[Path]) -> str:
+# Presentation fields carried in each rollout's dumped ground truth.
+# The eval's resolved choices live in behavioral.json ->
+# opponents[0]["presentation"], so the two are directly comparable.
+SURFACE_KEYS = ("coop_label", "defect_label", "matrix_layout",
+                "agent_is_row", "opener_order")
+
+
+def train_surface(run_dir: Path) -> Dict[str, set]:
+    """Value sets of the presentation fields across training rollouts, so
+    the training chapter can state what was randomized from the data."""
+    values: Dict[str, set] = {k: set() for k in SURFACE_KEYS}
+    n = 0
+    for f in sorted((run_dir / "rollouts").glob("*.jsonl"),
+                    key=lambda q: int(q.stem)):
+        for line in open(f):
+            g = json.loads(json.loads(line)["gts"])
+            for k in SURFACE_KEYS:
+                values[k].add(json.dumps(g.get(k)))
+            n += 1
+    values["_n"] = {n}
+    return values
+
+
+def checkpoint_chapter_spec(pres: Dict, meta: Dict) -> str:
+    """Stated once; everything in chapter 1 uses it."""
+    return "\n".join([
+        "## 1. Checkpoint evaluation",
+        "",
+        "**Specification — applies to every table in this chapter.** The "
+        "trained LoRA adapters re-run under the pre-training screen's "
+        "protocol, so the rows are directly comparable with the screen's "
+        "own cells. FIXED presentation: labels "
+        f"`{pres.get('coop_label')}`/`{pres.get('defect_label')}`, "
+        f"matrix_layout {pres.get('matrix_layout')}, agent_is_row "
+        f"{pres.get('agent_is_row')}, opener order fixed. "
+        f"{meta['game_type']} / {meta['representation']} / "
+        f"{meta['protocol']} (fabricated history), balanced states, "
+        f"{meta['num_episodes']} episodes per cell = 100 decisions per "
+        f"state, T = {meta['eval_temperature']}, vs. random opponent. "
+        "Trained rows carry NO moral text in the prompt.",
+        "", "",
+    ])
+
+
+def training_chapter_spec(values: Dict[str, set], window: int) -> str:
+    """Stated once; everything in chapter 2 uses it."""
+    coop = json.loads(sorted(values["coop_label"])[0])
+    defect = json.loads(sorted(values["defect_label"])[0])
+    layouts = ", ".join(sorted(json.loads(x).__str__()
+                               for x in values["matrix_layout"]))
+    n = next(iter(values["_n"]))
+    return "\n".join([
+        "## 2. Training-time metrics (online rollouts)",
+        "",
+        "**Specification — applies to every table in this chapter.** "
+        "Computed from the rollouts the policy generated while training "
+        f"({n} rollouts, 256 per step); no model is re-run. RANDOMIZED "
+        f"presentation: matrix_layout over {{{layouts}}}, role and "
+        f"opener order randomized; labels `{coop}`/`{defect}` are NEVER "
+        "randomized — the policy never saw chapter 1's label pair "
+        "during training. Fabricated states are sampled at random, so "
+        "they are UNBALANCED. Sampling T = 0.7.",
+        "",
+        "**Not comparable cell-by-cell with chapter 1** — different "
+        "presentation surface and different state balance. Read this "
+        "chapter for the SHAPE of learning over time; take behavioural "
+        "numbers from chapter 1.",
+        "", "",
+    ])
+
+
+def reference_provenance(refs: Dict[str, Path]) -> str:
+    """Name the two reference cells exactly. Protocol is NOT restated
+    here -- it is the surface line under Table P1, which these cells
+    share."""
+    lines = ["**Reference rows.** Table P1's four trained rows are the "
+             "checkpoints, evaluated for this experiment. Its other two "
+             "rows are UNTRAINED base-model cells taken from the "
+             "pre-training screen, not re-run here:", "",
+             "| Table P1 row | group | cell directory | job |",
+             "|---|---|---|---|"]
+    labels = {"base": "`base, no context`",
+              "teacher": "`base + <principle> in context`"}
+    for key in ("base", "teacher"):
+        run_dir = refs.get(key)
+        if run_dir is None:
+            lines.append(f"| {labels[key]} | — | MISSING | — |")
+            continue
+        meta = load_json(run_dir, "behavioral.json")["metadata"]
+        lines.append(f"| {labels[key]} | `{run_dir.parent.parent.name}` | "
+                     f"`{run_dir.name}` | {meta.get('slurm_job_id', '—')} |")
+    lines += ["", "They share Table P1's surface exactly; the rows differ "
+              "only in `checkpoint` and `moral_value`. Verified "
+              "key-by-key, but note `check_comparability` machine-checks "
+              "the trained cells against each other only, not against "
+              "these two."]
+    return "\n".join(lines)
+
+
+def header(run: str, group: Path, trained, refs: Dict[str, Path]) -> str:
+    """Identity of the run only. The protocol lives in each table's
+    surface line, so it is stated once per table and never here."""
     meta = load_json(trained[0][1], "behavioral.json")["metadata"]
     steps = ", ".join(str(s) for s, _ in trained)
     ck = meta.get("checkpoint", "")
     return "\n".join([
         f"# Post-training eval: {group.name}",
         "",
-        f"Training run `{run}`. "
-        f"{meta['base_model'].rsplit('/', 1)[-1]}, protocol "
-        f"`{meta['protocol']}` (fabricated history, balanced states), prose, "
-        f"fixed presentation, T = {meta['eval_temperature']}, "
-        f"{meta['num_episodes']} episodes/cell, vs. random opponent. "
-        f"Checkpoints: steps {steps} (LoRA adapters merged from "
-        f"`{ck.rsplit('/global_step_', 1)[0]}`). Reference rows from: "
-        + ", ".join(p.name for p in ref_groups) + ".",
+        f"Training run `{run}` on "
+        f"{meta['base_model'].rsplit('/', 1)[-1]}; checkpoints at steps "
+        f"{steps}, LoRA adapters merged from "
+        f"`{ck.rsplit('/global_step_', 1)[0]}`.",
+        "",
+        reference_provenance(refs),
         "",
         "States are the fabricated previous round, subscripted A (agent) "
-        f"and O (opponent): {plain(state_label('CD'))} = agent cooperated, "
-        "opponent defected; C = cooperate. Generated by "
+        f"and O (opponent): {plain(state_label('CD'))} = agent "
+        "cooperated, opponent defected; C = cooperate. Generated by "
         "`scripts/analysis/post_training_tables.py` (LaTeX in `tex/`).",
         "", "",
     ])
@@ -191,22 +288,40 @@ def main() -> None:
         if k not in refs:
             print(f"WARNING: no {k} reference cell found in --reference groups")
 
-    tables = [post_training_table(run, trained, refs, args.principle)]
-    sections = []
-    if args.rollouts:
-        rows = windows(load_decisions(args.rollouts), args.window)
-        tables.append(trajectory_table(run, rows, args.window))
-        grams = principle_ngrams(get_moral_value(args.principle))
-        traces = from_rollouts(args.rollouts, [s for s, _ in trained])
-        tables.append(stats_table(stats(traces, grams), args.principle))
+    meta = load_json(trained[0][1], "behavioral.json")["metadata"]
+    eval_pres = behavioral(trained[0][1]).get("presentation") or {}
 
     out_dir = args.out or (args.group / "analysis")
     tex_dir = out_dir / "tex"
     tex_dir.mkdir(parents=True, exist_ok=True)
-    md = [header(run, args.group, trained, refs, args.reference)]
-    for t in tables:
-        (tex_dir / f"{t.key.replace('-', '_')}.tex").write_text(to_latex(t))
-        md.append(to_markdown(t))
+
+    def emit(table) -> str:
+        (tex_dir / f"{table.key.replace('-', '_')}.tex").write_text(
+            to_latex(table))
+        return to_markdown(table)
+
+    md = [header(run, args.group, trained, refs)]
+
+    # --- chapter 1: the checkpoint eval (the publishable numbers) ---
+    md.append(checkpoint_chapter_spec(eval_pres, meta))
+    md.append(emit(post_training_table(run, trained, refs, args.principle)))
+    # Trace statistics are reported ONCE, on the checkpoint-eval traces:
+    # same policy, same surface and same episodes as Table P1, so the
+    # rates line up with the behaviour directly above them.
+    grams = principle_ngrams(get_moral_value(args.principle))
+    for t in compact_stats_tables(stats(from_cells(args.group), grams),
+                                  args.principle):
+        md.append(emit(t))
+
+    # --- chapter 2: what the training rollouts show ---
+    if args.rollouts:
+        md.append(training_chapter_spec(train_surface(args.rollouts),
+                                        args.window))
+        md.append(emit(trajectory_table(
+            run, windows(load_decisions(args.rollouts), args.window),
+            args.window,
+            vocab=vocab_windows(args.rollouts, args.window, grams))))
+
     path = out_dir / f"results_{args.group.name}.md"   # named by experiment (group), like the screen names by model
     path.write_text("\n".join(md))
     print(f"saved -> {path}")

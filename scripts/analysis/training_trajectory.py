@@ -6,7 +6,7 @@ Training already generated 256 rollouts per step and wrote them to
 files -- no model is run, no GPU -- and reports, per window of W steps,
 the cooperation rate in each fabricated previous-round state:
 
-    steps     P(C|CC)  P(C|CD)  P(C|DC)  P(C|DD)  pooled  illegal   n
+    steps   P(C|CC)  P(C|CD)  P(C|DC)  P(C|DD)  mean P(C|state)  illegal  n
 
 Dense (every step, ~640 decisions per state per 20-step window) but
 measured under TRAINING conditions (surface-randomized prompts, T=0.7
@@ -59,8 +59,14 @@ def load_decisions(run_dir: Path) -> List[Tuple[int, str, str]]:
 
 def windows(decisions, window: int) -> List[Dict]:
     """Per window: p_C per state (illegal excluded from the denominator),
-    pooled = mean over the four states (balanced design), illegal rate,
-    n decisions."""
+    the mean of the four state rates, illegal rate, n decisions.
+
+    NOTE the mean is unweighted: training samples the fabricated state
+    at random, so the four states are NOT equally represented in a
+    window (181-200 of qwen_run2_200: n = 1407/1211/1449/1038). Weighting
+    them equally is deliberate -- it is what makes the row comparable to
+    the balanced checkpoint eval -- but it is not the pooled cooperation
+    rate of the window, which the unequal denominators would tilt."""
     acc: Dict[int, Dict] = defaultdict(
         lambda: {"c": defaultdict(int), "t": defaultdict(int),
                  "illegal": 0, "n": 0})
@@ -85,30 +91,44 @@ def windows(decisions, window: int) -> List[Dict]:
     return rows
 
 
-def trajectory_table(run_name: str, rows: List[Dict], window: int) -> Table:
+def trajectory_table(run_name: str, rows: List[Dict], window: int,
+                     vocab: Dict[int, Dict] = None) -> Table:
+    """vocab (optional): window index -> {n, vocab, overlap}, appended as
+    two columns so the vocabulary's onset can be read against the
+    behaviour in the same row."""
     body = []
-    for r in rows:
+    for i, r in enumerate(rows):
         cells = [Cell(pct(r["p"][s])) if r["p"][s] is not None
                  else Cell(MISSING) for s in STATES]
-        cells += [Cell(pct(r["pooled"])),
-                  Cell(f"{100 * r['illegal']:.1f}"), Cell(str(r["n"]))]
+        cells += [Cell(pct(r["pooled"]))]
+        if vocab is not None:
+            v = vocab.get(i)
+            cells += ([Cell(f"{100 * v['vocab'] / v['n']:.0f}"),
+                       Cell(f"{100 * v['overlap'] / v['n']:.0f}")]
+                      if v and v["n"] else [Cell(MISSING), Cell(MISSING)])
+        cells += [Cell(f"{100 * r['illegal']:.1f}"), Cell(str(r["n"]))]
         body.append((f"{r['first']}–{r['last']}", cells))
     return Table(
         key=f"trajectory-{run_name}",
         title=f"Training trajectory — {run_name}",
         caption=(
-            f"Cooperation rate (\\%) by fabricated previous state over "
-            f"training, from the rollouts the policy generated while "
-            f"training ({window}-step windows, all 256 rollouts per "
-            "step; surface-randomized prompts, sampling $T=0.7$). "
-            "Illegal (unparseable) moves are excluded from the state "
-            "denominators and reported as a rate. Pooled = mean of the "
-            "four states (balanced design). Training-time measurement: "
-            "read for the shape of learning, take the numbers from the "
-            "checkpoint eval."),
+            "Cooperation rate (\\%) by fabricated previous state over "
+            f"training, in {window}-step windows ({256 * window} "
+            "decisions per window). Illegal (unparseable) moves are "
+            "excluded from the state denominators and reported as a "
+            "rate. mean P(C$\\mid$state) = UNWEIGHTED mean of the four "
+            "state rates -- the states are unbalanced here, so this is "
+            "a mean of rates, NOT the window's pooled cooperation "
+            "rate. normative \\% and recites \\% are the trace measures "
+            "defined in chapter 1, computed over EVERY rollout in the "
+            "window: they put the onset of the moral vocabulary next to "
+            "the behaviour it accompanies."),
         stub="Steps",
         col_groups=[(None, [f"P(C$\\mid${state_label(s)})"]) for s in STATES]
-        + [(None, ["pooled"]), (None, ["illegal \\%"]), (None, ["n"])],
+        + [(None, ["mean P(C$\\mid$state)"])]
+        + ([(None, ["normative \\%"]), (None, ["recites \\%"])]
+           if vocab is not None else [])
+        + [(None, ["illegal \\%"]), (None, ["n"])],
         panels=[(None, body)],
     )
 

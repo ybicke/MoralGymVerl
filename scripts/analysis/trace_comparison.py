@@ -42,7 +42,9 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parents[2] / "src"))
-from publication_tables import Cell, Table, plain, state_label, to_markdown  # noqa: E402
+from publication_tables import (  # noqa: E402
+    MISSING, Cell, Table, plain, state_label, to_markdown,
+)
 from moralgym_verl.game.moral_values import get_moral_value  # noqa: E402
 from moralgym_verl.game.prompts import find_action_marker  # noqa: E402
 
@@ -142,6 +144,28 @@ def from_cells(group: Path) -> List[Trace]:
 
 # -------------------------------------------------------------------- stats
 
+def vocab_windows(run_dir: Path, window: int, grams: set) -> Dict[int, Dict]:
+    """Per W-step window over ALL training rollouts: normative-language
+    and verbatim-recitation counts.
+
+    Dense counterpart to stats(): every step, every rollout, so the
+    ONSET of the vocabulary is visible against the behaviour curve in
+    the same row of the trajectory table. Streams the files -- the
+    traces are never all held in memory at once.
+    """
+    acc: Dict[int, Dict] = {}
+    for f in sorted((run_dir / "rollouts").glob("*.jsonl"),
+                    key=lambda q: int(q.stem)):
+        a = acc.setdefault((int(f.stem) - 1) // window,
+                           {"n": 0, "vocab": 0, "overlap": 0})
+        for line in open(f):
+            text = json.loads(line)["output"]
+            a["n"] += 1
+            a["vocab"] += normative_hit(text)
+            a["overlap"] += principle_overlap(text, grams)
+    return acc
+
+
 def stats(traces: List[Trace], grams: set) -> Dict[Tuple[str, int, str], Dict]:
     acc: Dict[Tuple[str, int, str], Dict] = defaultdict(
         lambda: {"n": 0, "vocab": 0, "overlap": 0, "c": 0, "legal": 0})
@@ -156,30 +180,146 @@ def stats(traces: List[Trace], grams: set) -> Dict[Tuple[str, int, str], Dict]:
     return acc
 
 
-def stats_table(acc: Dict, principle_name: str) -> Table:
-    rows = []
-    for (source, step, state) in sorted(acc):
-        a = acc[(source, step, state)]
-        p_c = a["c"] / a["legal"] if a["legal"] else float("nan")
-        rows.append((f"{source} s{step} {plain(state_label(state))}", [
-            Cell(str(a["n"])), Cell(f"{100 * p_c:.0f}"),
-            Cell(f"{100 * a['vocab'] / a['n']:.0f}"),
-            Cell(f"{100 * a['overlap'] / a['n']:.0f}")]))
+def _stats_caption(principle_name: str, compact: bool) -> str:
+    """Column definitions, shared by both table shapes."""
+    parts = ["Per training step and fabricated previous state, over ALL "
+             "traces at that step. The principle text is never in these "
+             "prompts."]
+    if compact:
+        parts[0] += (" Both blocks are percentages of traces; columns "
+                     "are the evaluated checkpoints (s60 = step 60) and "
+                     "rows the four states, so a row reads as that "
+                     "state's time course and a column as the "
+                     "across-state gradient at that step.")
+    else:
+        parts += [
+            "n = every trace generated at that step; the panel heading "
+            "gives the total, the n column its split across the four "
+            "states. Per step, NOT cumulative across steps.",
+            "P(C) = cooperation rate of the parsed decisions, illegal "
+            "moves excluded from the denominator."]
+    parts += [
+        "normative \\% = share of traces containing at least one of "
+        + str(len(NORMATIVE_VOCAB)) + " reviewed word stems ("
+        + ", ".join(NORMATIVE_VOCAB) + ") anywhere in the trace, matched "
+        "on word boundaries (`fair` excludes `fairly`); one hit marks "
+        "the whole trace. It measures whether the trace reaches for "
+        "moral VOCABULARY at all, NOT whether the norm is applied "
+        "correctly -- a trace arguing AGAINST the norm still counts. "
+        "Base rate in untrained payoff talk is roughly 2-6\\%, mostly "
+        "`exploit`.",
+        f"recites principle \\% = the `{principle_name}` wording is split "
+        f"into words and all of its {OVERLAP_WORDS}-word n-grams "
+        "collected; a trace counts if it reproduces ANY "
+        f"{OVERLAP_WORDS} consecutive words of it. VERBATIM only, so a "
+        "faithful paraphrase scores 0 -- the two columns separate "
+        "quoting from paraphrasing, not understanding from not."]
+    return "\n\n".join(parts)
+
+
+def compact_stats_tables(acc: Dict, principle_name: str) -> List[Table]:
+    """Two small tables, one per metric, in Table P1's own orientation:
+    steps down, states across.
+
+    Reading them beside the behaviour table is the point -- a step's
+    vocabulary row lines up column-for-column with the same step's
+    cooperation row. The metrics get a table each because they behave
+    differently (one saturates early, the other is flat then jumps), and
+    because each caption then defines only its own measure.
+    """
+    steps = sorted({st for _, st, _ in acc})
+    src = next(iter({sc for sc, _, _ in acc}))
+    lead = ("Share of reasoning traces (\\%) by training step and "
+            "fabricated previous state, over ALL traces at that step; "
+            "same episodes as Table P1, so a row here lines up with the "
+            "same step's row there. The principle text is never in "
+            "these prompts.")
+    specs = [
+        ("normative", "vocab",
+         "Reasoning traces — normative language",
+         "A trace counts if it contains at least one of "
+         + str(len(NORMATIVE_VOCAB)) + " reviewed word stems ("
+         + ", ".join(NORMATIVE_VOCAB) + ") anywhere in it, matched on "
+         "word boundaries (`fair` excludes `fairly`); one hit marks the "
+         "whole trace. This measures whether the trace reaches for moral "
+         "VOCABULARY at all, NOT whether the norm is applied correctly "
+         "-- a trace arguing AGAINST the norm still counts. Base rate in "
+         "untrained payoff talk is roughly 2-6\\%, mostly `exploit`."),
+        ("recites", "overlap",
+         "Reasoning traces — verbatim recitation of the principle",
+         f"The `{principle_name}` wording is split into words and all of "
+         f"its {OVERLAP_WORDS}-word n-grams collected; a trace counts if "
+         f"it reproduces ANY {OVERLAP_WORDS} consecutive words of it. "
+         "VERBATIM only, so a faithful paraphrase scores 0: against the "
+         "table above, the difference between the two is quoting vs. "
+         "paraphrasing, not understanding vs. not."),
+    ]
+    tables = []
+    for key, metric, title, definition in specs:
+        rows = []
+        for st in steps:
+            cells = []
+            for state in STATES:
+                a = acc.get((src, st, state))
+                cells.append(Cell(f"{100 * a[metric] / a['n']:.0f}")
+                             if a and a["n"] else Cell(MISSING))
+            rows.append((f"step {st}", cells))
+        tables.append(Table(
+            key=f"trace-stats-{key}",
+            title=title,
+            caption=f"{lead}\n\n{definition}",
+            stub="Checkpoint",
+            col_groups=[(None, [state_label(x)]) for x in STATES],
+            panels=[(None, rows)],
+        ))
+    return tables
+
+
+def stats_table(acc: Dict, principle_name: str,
+                compact: bool = False) -> Table:
+    """One panel per (source, step); the source is named once in the
+    panel heading instead of being repeated on every state row.
+
+    compact=True drops the n and P(C) columns, for a document that
+    already states the episode count once (n per state is then fixed)
+    and already carries the cooperation rates in its own behaviour
+    table -- repeating either here is duplication. Standalone callers
+    keep them: they may mix sources whose n genuinely differs.
+    """
+    panels: List = []
+    by_panel: Dict[Tuple[str, int], List] = defaultdict(list)
+    for (source, step, state) in sorted(acc, key=lambda k: (k[0], k[1], k[2])):
+        by_panel[(source, step)].append((state, acc[(source, step, state)]))
+
+    def panel_order(item):
+        (source, step), _ = item
+        return (0 if source.endswith("(train)") else 1, source, step)
+
+    one_source = len({src for src, _ in by_panel}) == 1
+
+    for (source, step), entries in sorted(by_panel.items(), key=panel_order):
+        rows, total = [], sum(a["n"] for _, a in entries)
+        for state, a in entries:
+            cells = []
+            if not compact:
+                p_c = a["c"] / a["legal"] if a["legal"] else float("nan")
+                cells += [Cell(str(a["n"])), Cell(f"{100 * p_c:.0f}")]
+            cells += [Cell(f"{100 * a['vocab'] / a['n']:.0f}"),
+                      Cell(f"{100 * a['overlap'] / a['n']:.0f}")]
+            rows.append((state_label(state), cells))
+        title = f"Step {step}" if one_source else f"{source}, step {step}"
+        panels.append((title if compact else f"{title} (n = {total})", rows))
+
+    caption = _stats_caption(principle_name, compact)
     return Table(
         key="trace-stats",
         title="Reasoning-trace statistics",
-        caption=(
-            "Per source, step and fabricated state, over ALL traces: "
-            "cooperation rate of the parsed decisions (\\%), share of "
-            "traces using normative language (any of: "
-            + ", ".join(NORMATIVE_VOCAB) + "; \\%), and share reproducing "
-            f"$\\geq${OVERLAP_WORDS} consecutive words of the "
-            f"`{principle_name}` wording (\\%). The principle text is "
-            "never in these prompts."),
-        stub="Source, step, state",
-        col_groups=[(None, ["n"]), (None, ["P(C)"]),
-                    (None, ["normative"]), (None, ["principle overlap"])],
-        panels=[(None, rows)],
+        caption=caption,
+        stub="State",
+        col_groups=([] if compact
+                    else [(None, ["n"]), (None, ["P(C)"])])
+        + [(None, ["normative \\%"]), (None, ["recites principle \\%"])],
+        panels=panels,
     )
 
 

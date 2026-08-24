@@ -135,6 +135,11 @@ class Table:
     stub: str                                  # header of the row-label column
     col_groups: List[Tuple[str, List[str]]]    # (group title, column names)
     panels: List[Tuple[Optional[str], List[Tuple[str, List[Cell]]]]]
+    # One-line statement of the measurement surface (what was randomized,
+    # which action labels, which protocol). Rendered under the heading in
+    # markdown and folded into the caption in LaTeX, so a reader can tell
+    # at a glance which regime a table belongs to.
+    subtitle: str = ""
     notes: List[str] = field(default_factory=list)
     # Markdown-only: panel title -> paragraph printed between the panel
     # heading and its grid, so a reader meets the game (or the metric)
@@ -150,11 +155,12 @@ class Table:
 
 def to_latex(t: Table) -> str:
     ncols = sum(len(cols) for _, cols in t.col_groups)
+    caption = f"{t.subtitle} {t.caption}".strip() if t.subtitle else t.caption
     lines = [
         "% Requires \\usepackage{booktabs} in the preamble.",
         "\\begin{table}[t]",
         "\\centering",
-        f"\\caption{{{t.caption}}}",
+        f"\\caption{{{caption}}}",
         f"\\label{{tab:{t.key}}}",
         "\\small",
         "\\setlength{\\tabcolsep}{3.5pt}",
@@ -235,10 +241,13 @@ def to_markdown(t: Table) -> str:
                                    for title, cols in t.col_groups
                                    for c in cols]
     names = [n.replace("|", "\\|") for n in names]   # bare | breaks the grid
-    out = [f"### {plain(t.title)}", "", plain(t.caption), ""]
+    out = [f"### {plain(t.title)}", ""]
+    if t.subtitle:
+        out += [f"*{plain(t.subtitle)}*", ""]
+    out += [plain(t.caption), ""]
     for panel, rows in t.panels:
         if panel:
-            out += [f"**{panel}**", ""]
+            out += [f"**{plain(panel)}**", ""]
             if t.panel_notes.get(panel):
                 out += [plain(t.panel_notes[panel]), ""]
         out.append("| " + " | ".join(names) + " |")
@@ -252,7 +261,9 @@ def to_markdown(t: Table) -> str:
                     rendered.append(" \\| ".join(map(_md_cell, group)))
             else:
                 rendered = [_md_cell(c) for c in cells]
-            out.append("| " + " | ".join([label] + rendered) + " |")
+            # Row labels are stored in LaTeX form (to_latex emits them
+            # verbatim); convert here so the .tex stays free of HTML.
+            out.append("| " + " | ".join([plain(label)] + rendered) + " |")
         out.append("")
     out += [f"*{plain(n)}*" for n in t.notes] + [""]
     return "\n".join(out)
