@@ -151,6 +151,10 @@ class Table:
     # join the group's values with a divider ("94 | 95"), so paired
     # matrix/prose entries sit side by side. LaTeX keeps real subcolumns.
     pair_groups: bool = False
+    # Untitled panels drawn as ruled blocks of ONE grid: LaTeX puts a
+    # \midrule between them, markdown (which has no rule syntax) an
+    # empty spacer row. For a table whose rows come in short groups.
+    ruled_blocks: bool = False
 
 
 def to_latex(t: Table) -> str:
@@ -183,7 +187,7 @@ def to_latex(t: Table) -> str:
     lines.append("\\midrule")
     for i, (panel, rows) in enumerate(t.panels):
         if i:
-            lines.append("\\addlinespace")
+            lines.append("\\midrule" if t.ruled_blocks else "\\addlinespace")
         if panel:
             lines.append(f"\\multicolumn{{{ncols + 1}}}{{l}}"
                          f"{{\\emph{{{panel}}}}} \\\\")
@@ -205,6 +209,7 @@ _MD_SUBS = (
     ("$\\Delta_{opp}$", "Δ<sub><small>opp</small></sub>"),
     ("$\\Delta_{surf}$", "Δ<sub><small>surf</small></sub>"),
     ("$\\Delta_{self}$", "Δ<sub><small>self</small></sub>"),
+    ("$k_O$", "k<sub><small>O</small></sub>"),
     ("$\\Delta$", "Δ"), ("\\%", "%"),
     ("$\\mid$", "|"),
     ("$_A$", "<sub><small>A</small></sub>"),
@@ -228,8 +233,11 @@ def plain(s: str) -> str:
 
 def _md_cell(c: Cell) -> str:
     text = ("—" if c.text == MISSING
-            else f"**{c.text}**" if c.bold else c.text)
-    return text + (f"\\{c.marker}" if c.marker else "")
+            else f"**{plain(c.text)}**" if c.bold else plain(c.text))
+    # Only "*" needs escaping -- a bare one would open emphasis. Other
+    # markers (†, ‡) are literal characters and must not gain a
+    # backslash, which markdown would render verbatim.
+    return text + (("\\*" if c.marker == "*" else c.marker) if c.marker else "")
 
 
 def to_markdown(t: Table) -> str:
@@ -245,13 +253,16 @@ def to_markdown(t: Table) -> str:
     if t.subtitle:
         out += [f"*{plain(t.subtitle)}*", ""]
     out += [plain(t.caption), ""]
-    for panel, rows in t.panels:
+    for i, (panel, rows) in enumerate(t.panels):
         if panel:
             out += [f"**{plain(panel)}**", ""]
             if t.panel_notes.get(panel):
                 out += [plain(t.panel_notes[panel]), ""]
-        out.append("| " + " | ".join(names) + " |")
-        out.append("|" + "---|" * len(names))
+        if t.ruled_blocks and i:
+            out.append("|" + " |" * len(names))
+        else:
+            out.append("| " + " | ".join(names) + " |")
+            out.append("|" + "---|" * len(names))
         for label, cells in rows:
             if t.pair_groups:
                 rendered, i = [], 0
@@ -264,6 +275,9 @@ def to_markdown(t: Table) -> str:
             # Row labels are stored in LaTeX form (to_latex emits them
             # verbatim); convert here so the .tex stays free of HTML.
             out.append("| " + " | ".join([plain(label)] + rendered) + " |")
+        if not t.ruled_blocks:
+            out.append("")
+    if t.ruled_blocks:
         out.append("")
     out += [f"*{plain(n)}*" for n in t.notes] + [""]
     return "\n".join(out)

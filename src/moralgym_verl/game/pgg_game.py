@@ -250,6 +250,46 @@ def _build_pgg_list(config: EpisodeConfig) -> str:
     )
 
 
+def _build_pgg_decision(config: EpisodeConfig) -> str:
+    """PGG payoff block, "decision" representation: the agent-centric lookup
+    table alone -- rows = how many of the OTHERS choose the contribute label,
+    columns = the agent's own choice.
+
+    The 2x2 matrix is a counterfactual table: every cell is a fully specified
+    joint outcome, so the model READS its payoff instead of projecting one.
+    Indexing PGG by total composition removed that -- to use the list the
+    agent must add its own choice to a count, and base traces miscounted in
+    both directions (adding itself twice at the even split, forgetting itself
+    when all four chose alike, inventing two extra contributors after mutual
+    keeping). Pairing this table WITH the composition list was worse still:
+    two blocks indexed differently, and traces indexed the k-table with the
+    total.
+
+    So: one frame throughout. Own payoff by k here; everyone else's payoffs
+    come from the history sentence, which states both groups' points
+    (docs/pgg_design.md §9.7).
+    """
+    n_others = config.n_players - 1
+    cols = [config.coop_label, config.defect_label]
+    if config.matrix_layout & 2:
+        cols.reverse()
+    ks = list(range(n_others + 1))
+    if config.matrix_layout & 1:
+        ks.reverse()
+    header = f"|   | {cols[0]} | {cols[1]} |"
+    sep = "| --- | --- | --- |"
+    rows = [f"| {k} | "
+            + " | ".join(str(get_score_pgg(config.move_for(c), k, config))
+                         for c in cols) + " |"
+            for k in ks]
+    table = "\n".join([header, sep] + rows)
+    return (
+        f"The points YOU get are as follows (rows: how many of the other "
+        f"{n_others} players choose {config.coop_label}; columns: your own "
+        f"choice):\n\n{table}\n\n"
+    )
+
+
 def _pgg_description(config: EpisodeConfig) -> str:
     """Optional mechanism preamble (config.game_description), placed before
     the payoff block in EVERY representation — never only one, so the
@@ -281,6 +321,60 @@ def _pgg_description(config: EpisodeConfig) -> str:
 # ---------------------------------------------------------------------------
 # Game implementation
 # ---------------------------------------------------------------------------
+
+def _outcome_clause(j: int, own_move: str, config: EpisodeConfig) -> str:
+    """Last round's composition and what each group scored.
+
+    Two parts, each earning its place against a measured failure:
+
+    census      "2 of the 4 of you chose X and 2 chose Y" -- states the
+                composition instead of leaving it to be derived. Dropping it
+                broke the 2-2 state outright: with only the other group named
+                ("the 2 who chose action4"), 4/4 base traces fell back on the
+                "other 3 players" prior and 2/4 declared the prompt
+                self-contradictory (2026-08-24 smoke).
+
+    payoffs     what BOTH groups scored. The 2x2 history states both sides'
+                points ("you got 0 and they got 4"), which is what makes an
+                exploitation asymmetry visible rather than inferred; PGG's
+                history used to give the agent's alone.
+
+    Outcome numbers only, no mechanism vocabulary -- that lives in the
+    optional game_description (docs/pgg_design.md §9.7).
+    """
+    n = config.n_players
+    n_others = n - 1
+    pts = _composition_scores(j, config)
+    mine = config.coop_label if own_move == "C" else config.defect_label
+    k = j - (1 if own_move == "C" else 0)      # others who contributed
+    # The others are the projection base, so k is stated as THEIR count and
+    # never includes the agent. Composition-framed wording ("2 of the 4 of
+    # you", "you and 1 other") reads correctly but leaves the agent unsure
+    # whether its own choice is already in the total: 3/4 base traces at the
+    # even split then double-counted themselves and one flipped its decision
+    # (2026-08-24). Both groups' points are still stated -- that is the 2x2
+    # anchor for who gained at whose expense (docs/pgg_design.md §9.7).
+    def _grp(count: int, label: str, points: int, only: bool) -> str:
+        who = (f"all {n_others} chose {label}" if only
+               else f"{count} chose {label}")
+        got = (f"got {_pts(points)}" if count == 1
+               else f"got {_pts(points)} each")
+        return f"{who} and {got}"
+
+    head = f"you chose {mine} and got {_pts(pts[mine])}"
+    if k == 0:
+        rest = _grp(n_others, config.defect_label,
+                    pts[config.defect_label], True)
+    elif k == n_others:
+        rest = _grp(n_others, config.coop_label,
+                    pts[config.coop_label], True)
+    else:
+        rest = (_grp(k, config.coop_label, pts[config.coop_label], False)
+                + ", and "
+                + _grp(n_others - k, config.defect_label,
+                       pts[config.defect_label], False))
+    return f"{head}. Of the other {n_others} players, {rest}"
+
 
 class _PGGOpponents(OpponentSide):
     """The N-1 scripted group members; observations == k_others per round."""
@@ -403,11 +497,13 @@ class PublicGoodsGame(Game):
             block = _build_pgg_prose(config)
         elif config.representation == "list":
             block = _build_pgg_list(config)
+        elif config.representation == "decision":
+            block = _build_pgg_decision(config)
         else:
             raise ValueError(
                 f"Unsupported representation for public_goods: "
                 f"{config.representation!r} (expected 'table', 'prose', "
-                f"or 'list')"
+                f"'list', or 'decision')"
             )
         if config.game_description:
             return _pgg_description(config) + block
@@ -420,19 +516,13 @@ class PublicGoodsGame(Game):
         label = {"C": config.coop_label, "D": config.defect_label}
         if agent_history:
             last_my, last_k = agent_history[-1], observations[-1]
-            my_pts = get_score_pgg(last_my, last_k, config)
-            # Stated in the N-player frame the payoff block uses, so the
-            # history names a row that appears verbatim above it. The state
-            # grid and every metric stay keyed on k_prev (the OTHERS' count)
-            # -- see pgg_fab_states; only the prompt surface counts all N.
+            # N-player frame, so the history names a row of the payoff block.
+            # The state grid and every metric stay keyed on k_prev (the
+            # OTHERS' count) -- see pgg_fab_states; only the surface counts N.
             j = last_k + (1 if last_my == "C" else 0)
             return (
                 f"You have played with this group before. "
-                f"Last round, you chose {label[last_my]}; "
-                f"{j} of the {config.n_players} of you chose "
-                f"{config.coop_label} and {config.n_players - j} chose "
-                f"{config.defect_label}, "
-                f"and you got {_pts(my_pts)}.\n\n"
+                f"Last round, {_outcome_clause(j, last_my, config)}.\n\n"
             )
         return (
             "This is the first round. "
@@ -442,14 +532,10 @@ class PublicGoodsGame(Game):
     def outcome_line(
         self, config: EpisodeConfig, agent_action: str, obs: int
     ) -> str:
-        my_pts = get_score_pgg(agent_action, obs, config)
-        # Same N-player frame as history_sentence and the payoff block.
+        # Same frame and the same per-group payoffs as history_sentence.
         j = obs + (1 if agent_action == "C" else 0)
-        return (
-            f"{j} of the {config.n_players} of you chose "
-            f"{config.coop_label} and {config.n_players - j} chose "
-            f"{config.defect_label}: you got {_pts(my_pts)}."
-        )
+        clause = _outcome_clause(j, agent_action, config)
+        return f"{clause[0].upper()}{clause[1:]}."
 
     # ---- rewards / records ----
 

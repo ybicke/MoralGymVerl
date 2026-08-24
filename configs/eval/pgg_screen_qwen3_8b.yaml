@@ -36,7 +36,14 @@ prompt:
   # Qwen3 hybrid thinking OFF (see teacher_signal_qwen3_8b.yaml: thinking
   # ON hits the token cap and parses 1/16).
   enable_thinking: false
-  # game_description: false   # --game-description on|off (docs §9.4)
+  # The mechanism preamble is the ONLY place the prompt says which label is
+  # the cooperative act. Without it the deontological family -- phrased over
+  # the OTHERS' conduct -- has to infer that mapping from the payoffs, and
+  # the 2026-08-24 list smoke measured 33% of its traces inferring it
+  # backwards (docs/pgg_design.md §9.6). On by default for PGG.
+  game_description: false     # docs/pgg_design.md §9.7: the preamble fixed
+                              # the anchor but flattened the k-slope; the
+                              # history now carries the anchor instead.
 
 evaluation:
   # 800 = 100 eps per fabricated state (8 states; num_episodes must be

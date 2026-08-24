@@ -584,3 +584,57 @@ payoff is a row of the same table;
 **Consequence for existing results.** The 2026-08-23 qwen screen is on the
 old wording; its cells record `git_commit`, so old-vs-new is a checkout, not
 a config flag. Any new PGG cell is not comparable to it.
+
+### §9.6 The label anchor is the description, not the counts (2026-08-24)
+
+§9.5 claimed the composition wording would address the label-valence
+problem. **It does not.** A 64-episode list smoke on the new wording
+(`eval_results/_debug/pgg_list_smoke_list_*`, job 3173418) measured, with
+`scripts/analysis/pgg_label_valence.py`:
+
+| wording | n | inverted | correct | both | silent |
+|---|---|---|---|---|---|
+| old (prose, agent-centric) | 400 | 22% | 34% | 4% | 41% |
+| new (list, composition) | 64 | 33% | 41% | 3% | 23% |
+
+The rewrite makes the model engage the moral question far more (silent
+41% -> 23%) but inversions rise with correct readings; the error rate
+*conditional on reasoning about exploitation at all* is 39% vs 45%, which
+at n = 64 is not a difference. The composition wording's real gain is the
+arithmetic channel (§9.5), not this one.
+
+Why, from the traces: the model settles on the wrong good-faith act and
+then applies the principle consistently to it -- "Choosing action3 again
+would be exploiting their good faith (they are still choosing action4)".
+Naming both counts tells it *who chose what*. It never says which choice
+*is* good faith. Only `_pgg_description` does:
+
+> If you choose action4, you keep your 10 points. If you choose action3,
+> your 10 points go into a group project that is multiplied by 2 and
+> shared equally among all 4 players.
+
+Decision: `game_description` ON for PGG, set explicitly in
+`configs/eval/pgg_screen_*.yaml` and `GAME_DESCRIPTION: "on"` in the PGG
+sweeps. The §9.4 rationale for defaulting it off was 2x2 protocol parity
+(the 2x2 prompts carry no narrative); that parity is not worth buying at
+the price of ~1 in 5 traces applying the principle backwards, and the 2x2
+games do not need it because their two actions are symmetric in the
+prompt -- neither is a "count of others" the way PGG's is. The dataclass
+default in `EpisodeConfig` stays False so historical configs keep their
+recorded meaning; PGG configs set it explicitly.
+
+Open: whether the description also perturbs the *level* of contribution
+(§9.4's original worry was that a mechanism preamble re-opens the
+comprehension channel that the rule-based prose failed on). The v5 smokes
+that motivated that worry were rule-only representations, now deleted --
+the preamble sits on top of a full outcome enumeration, so the arithmetic
+is never left to it. Untested against the composition wording; the next
+smoke should carry a `game_description on|off` pair.
+
+**Measurement note.** The inversion rates above come from
+`pgg_label_valence.py`, validated against 20 hand-labelled traces after
+two earlier regexes were found to miscount (bullet-spanning windows,
+"avoid exploiting" read as exploiting, and the victims' conduct
+attributed to the agent). Any earlier figure in this document or in the
+screen analysis that was not produced by that script should be treated as
+superseded.

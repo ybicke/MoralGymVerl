@@ -28,6 +28,7 @@ game:
   num_rounds: 5                # single_round protocol overrides to 1
 
 prompt:
+  game_description: false     # docs/pgg_design.md §9.7
   game_design: hist            # protocol preset also pins this
   representation: table        # swept via REPRESENTATION (table | prose)
   reasoning: true              # CoT + "Action: <label>" — screen regime

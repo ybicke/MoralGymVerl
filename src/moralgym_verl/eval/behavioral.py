@@ -398,14 +398,21 @@ def build_parser() -> argparse.ArgumentParser:
                              "round-1 history (Tennant); 'nohist' starts round 1 "
                              "fresh. Used for off-training-protocol eval.")
     parser.add_argument("--representation", type=str, default=None,
-                        choices=["matrix", "prose", "list", "table"],
+                        choices=["matrix", "prose", "list", "table",
+                                 "decision"],
                         help="Override prompt.representation: how the payoff "
-                             "block is rendered. 'matrix' = markdown table "
-                             "(default); 'prose' = the four outcomes as one "
+                             "block is rendered. 'matrix'/'table' = markdown "
+                             "table (default); 'prose' = the outcomes as one "
                              "flowing paragraph; 'list' = same sentences "
-                             "bulleted. Everything outside the payoff block is "
-                             "identical across the three. Distinct from "
-                             "--eval-label-order (opener/closer label order).")
+                             "bulleted -- these three carry identical "
+                             "information and isolate FORMAT. 'decision' "
+                             "(public_goods only) additionally prepends the "
+                             "agent-centric lookup table indexed by the "
+                             "OTHERS' count, so the agent's own payoff is read "
+                             "rather than projected (docs/pgg_design.md §9.7); "
+                             "it is an information change, not a format one. "
+                             "Distinct from --eval-label-order (opener/closer "
+                             "label order).")
     parser.add_argument("--game-description", type=_bool_arg, default=None,
                         help="public_goods only: prepend the mechanism "
                              "preamble to the table/prose payoff block "

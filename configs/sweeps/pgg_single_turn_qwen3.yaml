@@ -1,6 +1,6 @@
 # PGG single-turn screen — Qwen3-8B, prose-only dilemma block
 # (docs/pgg_design.md §9.4: prose = the table's outcomes as sentences;
-# game_description off — the preamble re-opens the comprehension channel).
+# game_description off — the history now carries the label anchor (§9.7).
 # Protocol matched to single_turn_screen_qwen3.yaml wherever the game
 # allows: single_round (1 round, hist, opponents=random), FIXED presentation
 # (action3/action4, identity layout), seed/model/thinking-off/T=0.7/2048
