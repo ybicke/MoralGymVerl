@@ -1,27 +1,40 @@
-# PGG single-turn screen — Qwen3-8B, prose-only dilemma block
-# (docs/pgg_design.md §9.4: prose = the table's outcomes as sentences;
-# game_description off — the history now carries the label anchor (§9.7).
+# PGG single-turn screen — Qwen3-8B, "decision" dilemma block
+# (docs/pgg_design.md §9.7: the agent-centric lookup table, rows = how many
+# of the OTHERS choose the contribute label, so the agent's own payoff is
+# READ rather than projected; the history states k as the others' count and
+# gives both groups' points. game_description stays off — it fixes the label
+# anchor but drives deontological to 100% at every k, erasing the k-slope.
 # Protocol matched to single_turn_screen_qwen3.yaml wherever the game
 # allows: single_round (1 round, hist, opponents=random), FIXED presentation
 # (action3/action4, identity layout), seed/model/thinking-off/T=0.7/2048
 # tokens/teacher template identical, 400 episodes (= 50/state over 8
 # states vs 100/state over 4 — inherent to the 2N-state grid).
 #
-# Qwen smoke 2026-08-23 (none arm, n=8/state): table and prose agree
-# (2% vs 5% contribute, 8/8 traces read keep=25/contribute=20 correctly),
-# baseline is a near-pure single-shot maximizer with flat k-slopes — the
-# null the value arms are read against. Headline = k_slope within own_prev
+# Qwen smoke 2026-08-24 (n=4/state, 64 traces over none + deontological):
+# 0 parse failures, 0 table-transcription errors, 0 traces claiming the
+# contribute label pays more, and the base arm at a 3% defection floor —
+# every intermediate wording sat at 12-19%, where miscounting was producing
+# wrong decisions rather than cooperation. The k-response survives
+# (deontological own=D: 0, 0, 50, 100). Headline = k_slope within own_prev
 # (behavioral.json -> "pgg" block), never pooled P(C).
 #
-# Value set (2x2 screen carry-over): deontological (anchor, predicted
-# positive k-slope), universalization (native habitat, unconditional
-# lift), utilitarian (the r-tracking arm; the regime nulls are a
-# follow-up block), deontological+repair+generosity (the combined 2x2
-# arm) and deontological+repair (the 2x2 screen's own composite) —
-# so the value set is exactly the 2x2 screen's set plus the generosity
-# arm; virtue (the
-# second node has the capacity; the project is about moral values, so
-# the full comparison set is worth the free slot).
+# NOT comparable to the 2026-08-23 run under this same eval_group: that one
+# used the row-0 wording, confounded on the arithmetic and label channels
+# (see the appendix in the screen's results doc). Old-vs-new is a checkout
+# of c7e5f4e, not a config flag.
+#
+# Value set, chosen so the representation axis is actually discriminating.
+# Two arms should separate the representations, because their principles
+# refer to OTHERS' welfare and "decision" states only the agent's payoff:
+# utilitarian (needs group welfare per option) and universalization ("would
+# leave everyone worse off"). Two are controls that both representations
+# already handle -- none (the defection floor) and deontological (phrased
+# over conduct, not payoffs). deontological+repair+generosity carries the
+# riders, expected inert single-shot (repair cited in 0/400 traces of the
+# 2026-08-23 screen) but worth confirming under a prompt the model reads
+# correctly, before the multi-round work. virtue and deontological+repair
+# are dropped: neither is representation-sensitive and both duplicate
+# information the retained arms give.
 #
 # Budget: Qwen at the 2048-token reasoning budget runs ~33 s/episode
 # (smoke), so 400 eps (50 per fabricated state) ~ 3.7 h/cell inside the
@@ -31,9 +44,20 @@
 #   /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
 #       configs/sweeps/pgg_single_turn_qwen3.yaml --dry-run
 #
-# 1 x 1 x 7 x 1 = 7 cells (2 packed nodes: 4 + 3).
+# Both representations are swept, deliberately. "decision" is validated on
+# none + deontological only -- arms that never need the OTHERS' payoffs. It
+# gives the agent its own payoff by lookup and leaves everyone else's to the
+# history, which reports last round, not the counterfactual; so utilitarian,
+# which must weigh group welfare under each of its own options, may have to
+# re-derive what a co-contributor scores (row j-1 from their seat while it
+# sits at row j) -- exactly the step that failed at 43% under the row-0
+# wording and that "list" fixes by stating it outright. Universalization is
+# safe either way: all-contribute vs all-keep are two cells of its own table
+# (row 3/action3 = 20, row 0/action4 = 10). Rather than guess, sweep both.
+#
+# 1 x 2 x 5 x 1 = 10 cells (3 packed nodes: 4 + 4 + 2).
 name: pgg_single_turn_qwen3
-eval_group: pgg_single_turn_qwen3-8b
+eval_group: pgg_single_turn_qwen3-8b_v2
 config: configs/eval/pgg_screen_qwen3_8b.yaml
 
 num_episodes: 400
@@ -41,16 +65,14 @@ num_episodes: 400
 axes:
   game: [public_goods]
 
-  representation: [prose]
+  representation: [list, decision]
 
   moral_value:
     - none
     - deontological
     - universalization
     - utilitarian
-    - deontological+repair
     - deontological+repair+generosity
-    - virtue
 
   protocol: [single_round]
 
