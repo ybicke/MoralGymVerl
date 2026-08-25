@@ -1,3 +1,4 @@
+import re
 """Public-goods game layer (P0): payoffs, policies, prompts, parity.
 
 The N=2 binary PGG is a PD with T=E+s, R=2s, P=E, S=s (strict iff
@@ -546,3 +547,45 @@ def test_pgg_fab_sampling_bounds():
     assert traj.fab_agent in ("C", "D")
     assert 0 <= traj.fab_k <= 3
     assert HISTORY_MARKER in traj.per_round[0]["prompt"]
+
+def test_pgg_decision_full_representation():
+    """"decision_full" = the "decision" k-table with every other player's
+    points inside each cell. Own payoff = get_score_pgg(own, k); a fellow
+    contributor sees k-1+[own==C] others, a keeper sees k+[own==C]."""
+    cfg = make_pgg_config(representation="decision_full")
+    block = _build_payoff_block(cfg)
+    assert "rows: how many of the other 3 players choose action1" in block
+    assert "of you choose" not in block                  # one frame only
+    n_o = cfg.n_players - 1
+    for k in range(n_o + 1):
+        cells = []
+        for own in ("C", "D"):
+            e = 1 if own == "C" else 0
+            parts = [f"you {get_score_pgg(own, k, cfg)}"]
+            if k == n_o:
+                parts.append(f"each other player (action1) {get_score_pgg('C', k - 1 + e, cfg)}")
+            elif k == 0:
+                parts.append(f"each other player (action2) {get_score_pgg('D', k + e, cfg)}")
+            else:
+                c = "the action1 player" if k == 1 else "each action1 player"
+                d = "the action2 player" if n_o - k == 1 else "each action2 player"
+                parts.append(f"{c} {get_score_pgg('C', k - 1 + e, cfg)}, "
+                             f"{d} {get_score_pgg('D', k + e, cfg)}")
+            cells.append("; ".join(parts[:1]) + "; " + parts[1])
+        assert f"| {k} | {cells[0]} | {cells[1]} |" in block, (k, block)
+    # canonical numbers, (E=10, s=5, N=4): row 1 / contribute
+    assert "| 1 | you 10; the action1 player 10, each action2 player 20 | you 15; the action1 player 5, each action2 player 15 |" in block
+    # group totals per cell obey N*E + j(sN - E), j = k + [own == C]
+    for m in re.finditer(r"\| (\d) \| you (\d+); (.*?) \| you (\d+); (.*?) \|$", block, re.M):
+        k = int(m.group(1))
+        for own, mine, rest in (("C", m.group(2), m.group(3)), ("D", m.group(4), m.group(5))):
+            j = k + (own == "C")
+            tot = int(mine)
+            for lab, cnt in ((cfg.coop_label, k), (cfg.defect_label, n_o - k)):
+                mm = re.search(rf"(?:the|each|each other player \()?{lab}\)? ?(?:player )?(\d+)", rest)
+                if cnt:
+                    tot += cnt * int(mm.group(1))
+            assert tot == cfg.n_players * cfg.endowment + j * (cfg.share * cfg.n_players - cfg.endowment), (k, own, rest)
+    # layout facets: bit 1 swaps the columns
+    swapped = _build_payoff_block(make_pgg_config(representation="decision_full", matrix_layout=2))
+    assert "| you choose action2 | you choose action1 |" in swapped

@@ -290,6 +290,70 @@ def _build_pgg_decision(config: EpisodeConfig) -> str:
     )
 
 
+def _build_pgg_decision_full(config: EpisodeConfig) -> str:
+    """PGG payoff block, "decision_full" representation: the agent-centric
+    lookup table of "decision" (rows = how many of the OTHERS choose the
+    contribute label, columns = the agent's own choice) with every other
+    player's points stated inside each cell.
+
+    Closes the two comprehension channels the 2026-08-25 screen split
+    between "list" and "decision": indexing by the others' count leaves
+    nothing for the agent to count itself into (the "list" self-count
+    error), and stating what each other player scores under each of the
+    agent's options leaves nothing to derive (the "decision" fixed-others
+    error, where traces froze the others' points at the history's values).
+    One frame throughout, no mechanism text -- the dilemma lives only in
+    the numbers.
+
+    Facets as in "decision": matrix_layout bit 0 reverses the row order,
+    bit 1 swaps the action columns.
+    """
+    n_others = config.n_players - 1
+    coop, keep = config.coop_label, config.defect_label
+    cols = [coop, keep]
+    if config.matrix_layout & 2:
+        cols.reverse()
+    ks = list(range(n_others + 1))
+    if config.matrix_layout & 1:
+        ks.reverse()
+
+    def cell(own_label: str, k: int) -> str:
+        own = config.move_for(own_label)
+        mine = get_score_pgg(own, k, config)
+        # Among the others, k chose coop and n_others - k chose keep. A
+        # fellow contributor sees the agent plus k - 1 others contributing;
+        # a keeper sees the agent plus k others.
+        extra = 1 if own == "C" else 0
+        parts = []
+        groups = [(coop, k, get_score_pgg("C", k - 1 + extra, config)),
+                  (keep, n_others - k, get_score_pgg("D", k + extra, config))]
+        if config.matrix_layout & 2:
+            groups.reverse()
+        for label, count, pts in groups:
+            if count == 0:
+                continue
+            if count == n_others:
+                parts.append(f"each other player ({label}) {pts}")
+            elif count == 1:
+                parts.append(f"the {label} player {pts}")
+            else:
+                parts.append(f"each {label} player {pts}")
+        return f"you {mine}; " + ", ".join(parts)
+
+    header = f"| others choosing {coop} | you choose {cols[0]} | you choose {cols[1]} |"
+    sep = "| --- | --- | --- |"
+    rows = [f"| {k} | " + " | ".join(cell(c, k) for c in cols) + " |"
+            for k in ks]
+    table = "\n".join([header, sep] + rows)
+    return (
+        f"Your points depend on your own choice and on how many of the "
+        f"other {n_others} players choose {coop}. The table gives, for each "
+        f"case, the points YOU get and the points EACH OTHER PLAYER gets "
+        f"(rows: how many of the other {n_others} players choose {coop}; "
+        f"columns: your own choice):\n\n{table}\n\n"
+    )
+
+
 def _pgg_description(config: EpisodeConfig) -> str:
     """Optional mechanism preamble (config.game_description), placed before
     the payoff block in EVERY representation — never only one, so the
@@ -499,11 +563,13 @@ class PublicGoodsGame(Game):
             block = _build_pgg_list(config)
         elif config.representation == "decision":
             block = _build_pgg_decision(config)
+        elif config.representation == "decision_full":
+            block = _build_pgg_decision_full(config)
         else:
             raise ValueError(
                 f"Unsupported representation for public_goods: "
                 f"{config.representation!r} (expected 'table', 'prose', "
-                f"'list', or 'decision')"
+                f"'list', 'decision', or 'decision_full')"
             )
         if config.game_description:
             return _pgg_description(config) + block

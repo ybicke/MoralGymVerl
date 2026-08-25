@@ -399,7 +399,7 @@ def build_parser() -> argparse.ArgumentParser:
                              "fresh. Used for off-training-protocol eval.")
     parser.add_argument("--representation", type=str, default=None,
                         choices=["matrix", "prose", "list", "table",
-                                 "decision"],
+                                 "decision", "decision_full"],
                         help="Override prompt.representation: how the payoff "
                              "block is rendered. 'matrix'/'table' = markdown "
                              "table (default); 'prose' = the outcomes as one "
@@ -411,6 +411,9 @@ def build_parser() -> argparse.ArgumentParser:
                              "OTHERS' count, so the agent's own payoff is read "
                              "rather than projected (docs/pgg_design.md §9.7); "
                              "it is an information change, not a format one. "
+                             "'decision_full' (public_goods only) is the same "
+                             "table with every other player's points stated "
+                             "in each cell, so nothing is counted or derived. "
                              "Distinct from --eval-label-order (opener/closer "
                              "label order).")
     parser.add_argument("--game-description", type=_bool_arg, default=None,
