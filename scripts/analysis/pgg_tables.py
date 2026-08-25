@@ -58,6 +58,7 @@ from typing import Dict, List, Optional, Tuple
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parents[2] / "src"))
 from eval_cells import check_comparability, discover_run_dirs, load_json  # noqa: E402
+from pgg_label_valence import valence  # noqa: E402
 from publication_tables import (  # noqa: E402
     MISSING, VALUES, Cell, Table, moral_values_section, pct, to_latex,
     to_markdown,
@@ -77,25 +78,45 @@ ARM_ORDER = (
     "universalization",
 )
 
-# The fabricated history sentence built by pgg_game._history_sentence.
-# Group 3 is the label whose count is reported -- always the contribute
-# label, which is exactly the asymmetry `label inversion` is about.
+# The fabricated history sentence built by pgg_game.history_sentence, in
+# both wordings the screens have used. Pre-2026-08-24 it reported only the
+# contribute label's count -- the asymmetry `label inversion` is about.
+# Since 699b27f it states k as the OTHERS' count and gives both groups'
+# payoffs (docs/pgg_design.md s9.7).
 STATE_RE = re.compile(
     r"Last round, you played (\w+), (\d+) of the other \d+ players "
     r"played (\w+)")
+STATE_RE_V2 = re.compile(
+    r"Last round, you chose (\w+) and got \d+ points?\. "
+    r"Of the other (\d+) players, ([^\n]*)")
+_V2_ALL = re.compile(r"all \d+ chose (\w+)")
+_V2_GROUP = re.compile(r"(\d+) chose (\w+)")
+
+
+def state_from_prompt(prompt: str, coop_label: str):
+    """(own_prev, k_prev) from either history wording, or None."""
+    m = STATE_RE.search(prompt)
+    if m is not None:
+        return ("C" if m.group(1) == coop_label else "D"), int(m.group(2))
+    m = STATE_RE_V2.search(prompt)
+    if m is None:
+        return None
+    own = "C" if m.group(1) == coop_label else "D"
+    n_others, rest = int(m.group(2)), m.group(3)
+    alike = _V2_ALL.match(rest)
+    if alike is not None:
+        return own, (n_others if alike.group(1) == coop_label else 0)
+    k = 0
+    for count, label in _V2_GROUP.findall(rest):
+        if label == coop_label:
+            k = int(count)
+    return own, k
 ACTION_RE = re.compile(r"Action:\s*\**\s*(\w+)", re.IGNORECASE)
 
 CLUB_GOOD = re.compile(
     r"miss(?:ing)? out|need others as well|need at least|threshold"
     r"|enough (?:players|others)|already (?:enough|contributed)|club good",
     re.IGNORECASE)
-
-VALENCE_SENT = re.compile(
-    r"[^.\n]*\b(?:exploit\w*|betray\w*|tak(?:e|ing) advantage)\b[^.\n]*",
-    re.IGNORECASE)
-NEGATION = re.compile(
-    r"\b(?:not|n't|never|nor|without|isn|aren|wouldn|doesn)\b", re.IGNORECASE)
-
 
 # ----------------------------------------------------------- cell loading
 
@@ -118,17 +139,18 @@ def parse_cell(run_dir: Path) -> Optional[Dict]:
     with responses.open() as f:
         for line in f:
             r = json.loads(line)
-            m = STATE_RE.search(r["prompt"])
-            if m is None:
+            st = state_from_prompt(r["prompt"], coop_label)
+            if st is None:
                 return None  # no fabricated history: not this protocol
             acts = ACTION_RE.findall(r["raw"])
             records.append({
-                "own": "C" if m.group(1) == coop_label else "D",
-                "k": int(m.group(2)),
+                "own": st[0],
+                "k": st[1],
                 "act": ("C" if acts[-1] == coop_label else "D") if acts else None,
                 "raw": r["raw"],
             })
     return {
+        "run_dir": run_dir,
         "arm": beh["metadata"]["moral_value"],
         "meta": beh["metadata"],
         "block": opp,
@@ -140,12 +162,34 @@ def parse_cell(run_dir: Path) -> Optional[Dict]:
 
 
 def load_cells(run_dirs: List[Path]) -> Dict[str, Dict]:
-    """arm -> cell, for every PGG cell among `run_dirs`."""
+    """arm -> cell, for every PGG cell among `run_dirs`.
+
+    Arms are moral values, so a group swept over a SECOND axis (e.g.
+    representation) holds several cells per arm and cannot be tabulated as
+    one table: the rows would silently be whichever cell was read last.
+    Refuse instead, naming the axis, and let the caller pass one slice at a
+    time -- `pgg_tables.py <group>/cells/*__list__*`.
+    """
     cells: Dict[str, Dict] = {}
     for run_dir in run_dirs:
         cell = parse_cell(run_dir)
-        if cell is not None:
-            cells[cell["arm"]] = cell
+        if cell is None:
+            continue
+        clash = cells.get(cell["arm"])
+        if clash is not None:
+            differing = sorted(
+                key for key in ("representation", "game_description",
+                                "base_model", "checkpoint", "protocol",
+                                "num_rounds", "eval_temperature")
+                if clash["meta"].get(key) != cell["meta"].get(key))
+            raise SystemExit(
+                f"ERROR: two cells share arm {cell['arm']!r} "
+                f"({clash['run_dir'].name} and {cell['run_dir'].name})"
+                + (f", differing in {', '.join(differing)}. "
+                   if differing else ". ")
+                + "One table cannot hold both; pass one slice at a time, "
+                  "e.g. <group>/cells/*__list__*")
+        cells[cell["arm"]] = cell
     return cells
 
 
@@ -221,32 +265,15 @@ def club_good(raw: str) -> bool:
     return bool(CLUB_GOOD.search(raw))
 
 
-def valence(raw: str) -> str:
-    """Which label the trace attaches the principle's prohibition to.
-
-    Returns inverted (the contribute label -- wrong), correct (the keep
-    label), both, or silent. The four are exhaustive, so a table over
-    them sums to the cell. Negated clauses ("would not be exploiting")
-    are skipped: they state the opposite of what they match.
-    """
-    inverted = correct = 0
-    for sentence in VALENCE_SENT.findall(raw.replace("*", "")):
-        for m in re.finditer(
-                r"action([34])(.{0,80}?)\b(?:exploit\w*|betray\w*"
-                r"|tak(?:e|ing) advantage)", sentence, re.IGNORECASE):
-            if NEGATION.search(m.group(2)):
-                continue
-            if m.group(1) == "3":
-                inverted += 1
-            else:
-                correct += 1
-    if inverted and correct:
-        return "both"
-    if inverted:
-        return "inverted"
-    return "correct" if correct else "silent"
-
-
+# Label valence comes from pgg_label_valence.py, not from a detector local
+# to this file. Three earlier regexes over this text miscounted -- windows
+# that spanned bullets, "avoid exploiting" read as exploiting, and the
+# VICTIMS' conduct attributed to the agent ("exploits those acting in good
+# faith BY CHOOSING action3") -- so the surviving one requires the label to
+# be the object of a choice verb whose subject is the agent, and is
+# validated against 20 hand-labelled traces (~85% precision on `inverted`).
+# Its residual failure is pronoun anaphora ("THIS exploits them"), which
+# costs recall on `correct`, so reported inversion is conservative.
 def stated_totals(raw: str) -> set:
     """Numbers the trace presents as a group/combined total."""
     found = set()
@@ -327,9 +354,11 @@ def contribution_table(cells: Dict[str, Dict], arms: List[str]) -> Table:
     return Table(
         key="contribution",
         title="Table 1 — behavioral: state-conditioned contribution",
-        subtitle="Fixed presentation, prose representation, protocol "
-                 "`single_round` (fabricated history, balanced states). "
-                 "Each cell: agent's previous move C$_A$ $\\mid$ D$_A$.",
+        subtitle=(f"Fixed presentation, "
+                  f"`{cells[arms[0]]['meta']['representation']}` "
+                  "representation, protocol `single_round` (fabricated "
+                  "history, balanced states). Each cell: agent's previous "
+                  "move C$_A$ $\\mid$ D$_A$."),
         caption=(
             "Contribution rate by fabricated previous round: C$_A$ / D$_A$ "
             "is the agent's own move (left / right of the divider), $k_O$ "
