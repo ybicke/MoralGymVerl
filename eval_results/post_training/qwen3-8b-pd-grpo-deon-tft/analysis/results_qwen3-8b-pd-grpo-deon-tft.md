@@ -57,6 +57,8 @@ The 'deontological+repair+generosity' wording is split into words and all of its
 | step 120 | 0 | 0 | 0 | 0 |
 | step 180 | 0 | 0 | 0 | 0 |
 
+Verbatim exemplar traces (payoff-only reasoning at every step; post-hoc flip at D<sub><small>A</small></sub>C<sub><small>O</small></sub>): `trace_snippets_qwen3-8b-pd-grpo-deon-tft.md`.
+
 
 ## 2. Training-time metrics (online rollouts)
 
