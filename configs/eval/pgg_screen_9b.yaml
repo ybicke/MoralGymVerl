@@ -28,18 +28,25 @@ game:
   num_rounds: 5                # single_round protocol overrides to 1
 
 prompt:
-  game_description: false     # docs/pgg_design.md §9.7
+  # Off: the preamble fixes the label anchor but erases the k-slope
+  # (docs/pgg_design.md §9.6).
+  game_description: false
   game_design: hist            # protocol preset also pins this
-  representation: table        # swept via REPRESENTATION (table | prose)
+  # table | prose | list | decision | decision_full; see
+  # pgg_screen_qwen3_8b.yaml for why `list` is the default.
+  representation: list         # swept via REPRESENTATION
   reasoning: true              # CoT + "Action: <label>" — screen regime
   minimal_parsing: false
   show_horizon: false
 
 evaluation:
-  # 800 = 100 eps per fabricated state (8 states; num_episodes must be
-  # divisible by 8). Design-doc primary budget, confirmed affordable by
-  # the GPU smoke: 64 eps in 9.2 min => ~115 min/cell, inside the 3h wall.
-  num_episodes: 800
+  # 400 = 50 eps per fabricated state (8 states; num_episodes must be
+  # divisible by 8), matching pgg_screen_qwen3_8b.yaml so the two models are
+  # read at the same resolution. Gemma has no measured PGG budget of its own
+  # -- its screen has never run (the 2026-08-21 submission was cancelled) --
+  # so this inherits Qwen's, where 400 took ~4 h/cell against the 5 h wall.
+  # Its 512-token cap should make it cheaper; confirm on the first cell.
+  num_episodes: 400
   # single_round protocol pins opponents: [random] (the per-paradigm
   # stochastic co-player; headline is opponent-independent single-shot).
   opponents: [conditional_contributor]
