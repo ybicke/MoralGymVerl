@@ -12,7 +12,7 @@
 # <config_name> -> configs/verl/<name>.yaml; <run_name> names the W&B
 # experiment, checkpoint dir, and log files. Trailing args become Hydra
 # overrides. Env: PARTITION (normal), TIME (12:00:00), DATASET_CONFIG
-# (=<config_name>), DATASET_SEED (42).
+# (=<config_name>, also names the W&B group), DATASET_SEED (42).
 #
 # Three execution contexts — every path below depends on which one it is in:
 #   1-4  login node, submit time   python3.11, no GPUs
@@ -33,6 +33,9 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ACCOUNT="aa004"
 PARTITION="${PARTITION:-normal}"   # e.g. PARTITION=debug for smoke runs
 TIME="${TIME:-12:00:00}"
+# Host RAM. 460 GB suits <=9B; 32B needs more (see sdpo_run2_pd_qwen3_32b.yaml).
+# GH200 nodes have 870 GB; the node is exclusive (4 GPUs), so ask for it.
+MEM="${MEM:-460000}"
 EDF_NAME="moralgym_verl"
 
 # ── 3. Per-run dataset: paths ────────────────────────────────────────────────
@@ -42,6 +45,9 @@ EDF_NAME="moralgym_verl"
 # since config + seed regenerate it bit-identically.
 DATASET_SEED="${DATASET_SEED:-42}"
 # DATASET_CONFIG decouples data from trainer, e.g. SDPO on the GRPO dataset.
+# It also names the W&B group (step 8): with one reward-agnostic trainer
+# config shared by several arms, the DATASET is the arm identity — the
+# trainer name would label every arm identically.
 DATASET_CONFIG="${DATASET_CONFIG:-${CONFIG_NAME}}"
 DATASET_DIR="${SCRATCH}/moralgym_verl_datasets/${RUN_NAME}"
 
@@ -115,8 +121,18 @@ CKPT_DIR="/iopsstor/scratch/cscs/${USER}/moralgym_verl_runs/${RUN_NAME}"
 STORE_CKPT="/capstor/store/cscs/swissai/aa004/${USER}/checkpoints/${RUN_NAME}"
 STAGEOUT_CMD="if [ -d ${CKPT_DIR} ]; then mkdir -p ${STORE_CKPT} && cp -r ${CKPT_DIR}/. ${STORE_CKPT}/ && echo Checkpoints staged to ${STORE_CKPT}; else echo No checkpoint dir at ${CKPT_DIR} — skipping stage-out; fi"
 
+# Host-memory sampler (scripts/slurm/mem_sampler.sh): runs outside the
+# container for the life of the job and writes a .mem trace next to the log.
+# sacct MaxRSS only sees the srun wrapper, so without this the host-RAM peak
+# of a run is unobservable — which cost two blind smoke rounds on Qwen3-32B
+# (2026-08-25). Cheap: one sleep loop, one line per 10s.
+MEM_LOG="${OUTPUT_DIR}/\${SLURM_JOB_ID}_${RUN_NAME}.mem"
+MEM_CMD="bash ${REPO_ROOT}/scripts/slurm/mem_sampler.sh 10 > ${MEM_LOG} 2>&1 & MEM_PID=\$!"
+
 # --environment belongs on srun, not sbatch (sbatch --environment is experimental)
-WRAPPED_CMD="srun --environment=${EDF_NAME} bash -c '${SETUP_CMDS}; ${TRAIN_CMD}' && ${STAGEOUT_CMD}"
+# Stage-out is gated on the training exit code; the sampler is always reaped
+# and its peak echoed into the main log so the number is in one place.
+WRAPPED_CMD="${MEM_CMD}; srun --environment=${EDF_NAME} bash -c '${SETUP_CMDS}; ${TRAIN_CMD}'; RC=\$?; kill \${MEM_PID} 2>/dev/null; echo \"[mem] peak: \$(tail -1 ${MEM_LOG})\"; if [ \${RC} -eq 0 ]; then ${STAGEOUT_CMD}; fi; exit \${RC}"
 
 # ── 8. Submit ────────────────────────────────────────────────────────────────
 echo "Submitting: ${RUN_NAME}"
@@ -137,9 +153,9 @@ sbatch \
     --constraint="thp_never&nvidia_vboost_enabled" \
     --ntasks-per-node=1 \
     --gpus-per-node=4 \
-    --mem=460000 \
+    --mem="${MEM}" \
     --cpus-per-task=288 \
     --output="${OUTPUT_DIR}/%j_${RUN_NAME}.log" \
     --error="${OUTPUT_DIR}/%j_${RUN_NAME}.err" \
-    --export="ALL,MORALGYM_RUN_NAME=${RUN_NAME},MORALGYM_GROUP=${CONFIG_NAME},MORALGYM_DATASET_DIR=${DATASET_DIR},WANDB_API_KEY" \
+    --export="ALL,MORALGYM_RUN_NAME=${RUN_NAME},MORALGYM_GROUP=${DATASET_CONFIG},MORALGYM_DATASET_DIR=${DATASET_DIR},WANDB_API_KEY" \
     --wrap="${WRAPPED_CMD}"
