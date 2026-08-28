@@ -232,11 +232,12 @@ def universal_corners(raw: str, payoffs: Dict, coop: str = "action3",
     n, e = payoffs["n_players"], payoffs["endowment"]
     all_c = group_total(n, payoffs) // n
     t = raw.replace("*", "")
-    pat = (r"(?:everyone|all (?:{n}|four|of you)(?: players)?|every player)"
-           r"[^.\n]{{0,40}}?(?:chose|choose|chooses|choosing|adopt\w*|switch\w* to)"
-           r"[^.\n]{{0,15}}{lab}[^.\n]{{0,80}}?(\d+)\s*points").format(n=n, lab="{lab}")
-    stated_c = [int(x) for x in re.findall(pat.format(lab=re.escape(coop)), t, re.I)]
-    stated_d = [int(x) for x in re.findall(pat.format(lab=re.escape(defect)), t, re.I)]
+    def pat(lab: str) -> str:
+        return (r"(?:everyone|all (?:" + str(n) + r"|four|of you)(?: players)?|every player)"
+                r"[^.\n]{0,40}?(?:chose|choose|chooses|choosing|adopt\w*|switch\w* to)"
+                r"[^.\n]{0,15}" + re.escape(lab) + r"[^.\n]{0,80}?(\d+)\s*points")
+    stated_c = [int(x) for x in re.findall(pat(coop), t, re.I)]
+    stated_d = [int(x) for x in re.findall(pat(defect), t, re.I)]
     if not stated_c and not stated_d:
         return "none"
     if any(v != all_c for v in stated_c) or any(v != e for v in stated_d):

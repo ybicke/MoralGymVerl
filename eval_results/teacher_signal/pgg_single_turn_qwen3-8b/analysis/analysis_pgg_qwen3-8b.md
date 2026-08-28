@@ -399,6 +399,26 @@ Two lessons from the six intermediate wordings, all found by reading traces rath
 **For training, one real limit.** Single-round PGG cannot teach repair or forgiveness: the repair rider was cited in 0/400 traces of Chapter 1, and Chapters 2-3 show `deontological+repair+generosity` tracking plain `deontological` within noise. Only conditional contribution and unconditional lift are distillable single-shot; the rest needs multi-round.
 
 
+### Cross-design comprehension table (2026-08-28)
+
+Same four base screens (400 episodes per cell), one row per payoff block, every measure computed by `scripts/analysis/measures.py` over the traces of the arm where the channel is testable. Percentages of that arm's traces; regex measures are lower bounds except `self-count`, which over-counts on the k-indexed blocks (their "N others choose action3" phrasing matches the pattern), so its floor there is ~3–8, not 0.
+
+| design | base P(C) | base self-count err | base "same payoff" | util P(C) | util fixed-others | util true total | util impossible total | deon inverted / correct | univ P(C) | univ wrong corner / correct |
+|---|---|---|---|---|---|---|---|---|---|---|
+| prose (Ch. 1) | 2 | 23 | 6 | 17 | 27 | 9 | 24 | 22 / 34 | 53 | 39 / 34 |
+| list (Ch. 2) | 12 | 40 | 7 | 85 | 3 | 81 | 21 | 28 / 41 | 77 | **7 / 84** |
+| decision (Ch. 3) | 0 | (8) | 2 | 4 | 22 | 39 | 68 | 18 / 32 | 60 | 35 / 42 |
+| decision_full (Ch. 4) | 1 | (4) | 2 | 96 | 5 | 86 | **12** | 22 / 37 | 67 | 20 / 48 |
+
+Reading per channel:
+
+- **Own payoff (base arm).** `decision` and `decision_full` are clean (0–1% contribute, ≤2% "both pay the same"); `list` is not (40% self-count claims, 12% contributions that are miscounts); `prose` is in between. Row lookup by the others' count is what removes the error.
+- **Others' payoff (utilitarian arm).** Only the blocks that *state* every player's points let the arm rank group outcomes: `list` 81% true totals, `decision_full` 86%; `decision` 39% with 22% fixed-others and 68% impossible totals (it invents the others' numbers); `prose` 9%. `decision_full` has the lowest impossible-total rate of all (12%) — the per-cell statement is the easiest to sum.
+- **Label valence (deontological arm).** 18–28% inverted in every design; representation-independent, as concluded before.
+- **Universalized corners (universalization arm) — the one channel where `list` beats `decision_full`.** `list` states the two corners as sentences ("If all 4 of you choose action3, you each get 20 … all 4 choose action4, you each get 10"), so 84% of traces quote them correctly and 7% wrong; `decision_full` requires switching to row 3 / action3 and row 0 / action4, and 20% read the current row instead. `prose` and `decision` are worst (35–39% wrong).
+
+**Verdict for training.** `decision_full` is the block whose *teacher rationales* are correct on the two channels a payoff block controls (own payoff, others' payoffs), for every arm. Its one residual is the universalization corner read (20%), which `list` avoids by stating the corners — at the cost of the base self-count channel (40%), which is worse for training because it corrupts the student's own-payoff reasoning in every arm. If the universalization arm is the training teacher, the cheap test is `decision_full` plus one sentence naming the two corners ("If all 4 choose action3 you each get 20; if all 4 choose action4 you each get 10"): two stated facts, not a second table, so it does not reopen the two-frame failure of the appendix — but it is untested and should be smoked (64 episodes, universalization + none) before use. Otherwise adopt `decision_full` as is.
+
 ### Verdict, revised (2026-08-25, after Chapter 4)
 
 **Adopt `decision_full` as the PGG payoff block** for the checkpoint evaluations and the P3 training arm. It keeps `decision`'s clean floor (1 \| 1) and `list`'s measurable utilitarian arm (96 \| 95) at once; the "projection residue" the verdict above asked to close is closed. The paragraphs above on the label channel and on single-round's limit for repair/forgiveness stand unchanged. Design record: `pgg_design.md` §9.8.
