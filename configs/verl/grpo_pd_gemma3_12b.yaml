@@ -1,0 +1,83 @@
+# =============================================================================
+# GRPO — Gemma-3-12B-IT. Everything except the model and its memory/vision
+# accommodations is grpo_pd_base.
+#
+#   DATASET_CONFIG=grpo_deon_pd_tft bash scripts/slurm/train_verl.sh \
+#       grpo_pd_gemma3_12b gemma3_deon_150
+#
+# ---------------------------------------------------------------------------
+# SMOKE-TEST THIS ONE BEFORE COMMITTING A FULL RUN — three model-specific
+# risks, none of which can be checked until the weights are local:
+#
+# 1. MULTIMODAL. gemma-3-12b-it ships a vision tower. freeze_vision_tower
+#    keeps it out of the optimizer, but `target_modules: all-linear`
+#    (inherited) may still attach LoRA adapters to vision-encoder linears —
+#    wasted rank at best, and it changes what "LoRA r=32 on all-linear"
+#    means relative to the text-only arms. If the adapter count looks
+#    inflated at init, pin target_modules to the text attention/MLP
+#    projections explicitly rather than leaving all-linear.
+#    -> The FSDP half of this bit on the first attempt (job 3203587, died at
+#       init_workers): HF's Gemma3ForConditionalGeneration DECLARES
+#       `_no_split_modules = [Gemma3DecoderLayer, SiglipVisionEmbeddings,
+#       SiglipEncoderLayer, SiglipMultiheadAttentionPoolingHead]` but never
+#       instantiates the last one, and verl's get_fsdp_wrap_policy raises
+#       ("Could not find the transformer layer class to wrap in the model")
+#       on the first name it cannot resolve instead of skipping it
+#       (fsdp_utils.py:127). Fixed below by pinning transformer_layer_cls_to_wrap
+#       explicitly, which overrides _no_split_modules entirely
+#       (fsdp_utils.py:96) — the two classes named are the ones that actually
+#       exist in the module tree. Not a Gemma-3-specific modelling problem:
+#       any verl+Gemma-3 run on this version hits it.
+# 2. KV CACHE. Gemma-3 is a 131072-context model and verl OVERWRITES
+#    rollout.max_model_len with max_position_embeddings unconditionally
+#    (vllm_async_server.py), so `max_model_len: 4096` does not restrain it.
+#    Gemma-3's interleaved sliding-window attention (5 local : 1 global)
+#    should keep KV far below the dense worst case, but 48 layers at
+#    256 head_dim is heavy, so gpu_memory_utilization is raised to 0.5
+#    here. If vLLM still raises "max seq len is larger than the maximum
+#    number of tokens that can be stored in KV cache", raise it further —
+#    max_model_len is ignored.
+# 3. CHAT TEMPLATE. custom_chat_template: null is inherited from
+#    grpo_pd_base and is REQUIRED (moralgym_user defaults it to Gemma-2's
+#    template — a different model). Gemma-3's own template must then
+#    tolerate what verl's agent loop does at init: two consecutive user
+#    messages (AgentLoopBase.initialize_system_prompt probes with them).
+#    Gemma-2's stock template hard-raised on exactly that, which is why the
+#    custom one exists at all. If Gemma-3 raises too, copy the
+#    moralgym_user pattern: its stock template minus only the raise.
+# ---------------------------------------------------------------------------
+#
+# Batch sizes: halved from the 8-9B defaults for 12B. Gemma-2-9b needed
+# param/optimizer offload at micro-batch 4 (already on in moralgym_user);
+# 12B at 4 is optimistic, so start at 2 and raise if headroom shows in the
+# .mem trace next to the log.
+# =============================================================================
+defaults:
+  - grpo_pd_base
+  - _self_
+
+actor_rollout_ref:
+  model:
+    path: google/gemma-3-12b-it
+  actor:
+    # Vision tower stays frozen: this is a text-only game, and training it
+    # would burn memory on parameters no prompt ever activates.
+    freeze_vision_tower: true
+    ppo_micro_batch_size_per_gpu: 2
+    # See risk 1 in the header. Overrides the model's _no_split_modules,
+    # which names a class HF never instantiates. Both listed classes were
+    # verified present in the instantiated module tree.
+    fsdp_config:
+      wrap_policy:
+        transformer_layer_cls_to_wrap: [Gemma3DecoderLayer, SiglipEncoderLayer]
+  ref:
+    log_prob_micro_batch_size_per_gpu: 2
+    # The ref policy is built through the same FSDP path and needs the
+    # same override.
+    fsdp_config:
+      wrap_policy:
+        transformer_layer_cls_to_wrap: [Gemma3DecoderLayer, SiglipEncoderLayer]
+  rollout:
+    log_prob_micro_batch_size_per_gpu: 2
+    # See risk 2 in the header — 128k context KV, 48 layers.
+    gpu_memory_utilization: 0.5

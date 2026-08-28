@@ -1,0 +1,46 @@
+# =============================================================================
+# GRPO — Llama-3.1-8B-Instruct. Everything except the model is
+# grpo_pd_base; 8B sits in the same memory class as Qwen3-8B, so the batch
+# and vLLM settings carry over unchanged.
+#
+#   DATASET_CONFIG=grpo_deon_pd_tft bash scripts/slurm/train_verl.sh \
+#       grpo_pd_llama31_8b llama31_deon_150
+#
+# ---------------------------------------------------------------------------
+# SMOKE-TEST THIS ONE BEFORE COMMITTING A FULL RUN.
+#
+# Llama-3-8B-Instruct on the NeMo-RL MoralGym stack produced 100% parse-fail:
+# every generation was a single `\n\n` token, reward pinned at illegal_penalty
+# -6, coop/defect both 0% (first seen 2026-05-18, job 2299956). Mistral-7B on
+# the identical recipe trained normally, so it was Llama-specific and never
+# root-caused. Two live hypotheses, both still unverified:
+#   1. a vLLM stop-string trips on Llama's leading-whitespace token;
+#   2. chat-template collision — add_generation_prompt already appends
+#      `<|start_header_id|>assistant<|end_header_id|>\n\n`, and a second
+#      newline makes the model emit `<|eot_id|>` immediately.
+# This is a DIFFERENT stack (verl, not NeMo-RL) and a different model
+# revision (3.1, not 3.0), so it may simply not reproduce — but check
+# rather than assume. Watch env/parse_fail_rate and the first rollouts in
+# ${ckpt_dir}/<run>/rollouts; a mean generation length near 1 token is the
+# tell. If it reproduces, inspect the rendered prompt and vLLM stop config
+# before touching anything else.
+# ---------------------------------------------------------------------------
+#
+# Context window: Llama-3.1 is 131072, and verl OVERWRITES
+# rollout.max_model_len with the model's max_position_embeddings
+# unconditionally (vllm_async_server.py — `self.config.max_model_len =
+# get_max_position_embeddings(...)`), so `max_model_len: 4096` above does
+# not restrain vLLM's KV sizing. At 8 KV heads / 128 head_dim / 32 layers
+# that is ~128KB per token, so a full 131072-token sequence needs ~16GB —
+# it should fit the ~38GB that gpu_memory_utilization 0.4 leaves on a
+# GH200. If vLLM raises "max seq len is larger than the maximum number of
+# tokens that can be stored in KV cache", raise gpu_memory_utilization
+# rather than max_model_len (which is ignored).
+# =============================================================================
+defaults:
+  - grpo_pd_base
+  - _self_
+
+actor_rollout_ref:
+  model:
+    path: meta-llama/Llama-3.1-8B-Instruct

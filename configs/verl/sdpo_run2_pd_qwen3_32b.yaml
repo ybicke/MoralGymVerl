@@ -1,0 +1,53 @@
+# =============================================================================
+# SDPO run 2 — Qwen3-32B. Layers the 32B memory plan on the run-2 qwen
+# entrypoint; recipe (data, lr 1e-5, 200 steps, LoRA r32) is untouched so
+# 8B -> 32B attribution stays clean. DRAFT — not yet smoke-tested.
+#
+# Memory plan (GH200, 97 GB/GPU; 32B bf16 = ~65 GB of weights):
+#   - rollout TP=4: the 8B/9B runs use 4 independent TP=1 vLLM replicas,
+#     but a 65 GB engine + FSDP-sharded actor/ref cannot share one GPU.
+#     One TP=4 engine puts ~16 GB of weights per GPU. Fewer engines =
+#     less rollout throughput; expect 3-4x slower steps than 8B.
+#   - gpu_memory_utilization 0.5: smoke job 3185958 (2026-08-25) OOMed at
+#     vLLM warm-up with 0.65 — the engine process held 66 GB (16 GB weight
+#     shard + KV sized to 0.65 x 95 GB) while the colocated FSDP actor/ref
+#     shards held ~29 GB, 298 MiB short of the 95 GB GPU. 0.4 = 38 GB
+#     engine (16 weights + ~22 KV per GPU, ample for 4096-token episodes)
+#     and ~57 GB headroom for FSDP.
+#   - HOST RAM: smoke job 3186400 (0.5) passed GPU init but was killed by
+#     the Slurm host-memory OOM killer at the first vLLMHttpServer.sleep().
+#     layered_summon forces sleep level 1, which copies engine weights
+#     (65 GB) + KV (4 x ~30 GB) to pinned CPU memory on top of the
+#     FSDP-offloaded actor params and Ray's object store -> blew the
+#     460 GB default. Submit with MEM=800000 (node has 870 GB, exclusive).
+#   - micro-batches 4 -> 2: actor/ref/rollout log-prob passes over a 32B
+#     FSDP shard per GPU (offloaded) OOM at 4 on the 8B-tuned setting.
+#   - layered_summon stays on (per-layer LoRA weight sync; the full-model
+#     gather alternative would spike ~65 GB per rank).
+#
+# Wall-clock: run-2 8B took ~6 h for 200 steps; budget 12 h (normal limit)
+# and rely on save_freq=10 + resume if it does not finish.
+#
+# Smoke test (debug partition, 5 steps) before any real submission:
+#   MEM=800000 DATASET_CONFIG=sdpo_run1_pd PARTITION=debug TIME=01:30:00 \
+#       bash scripts/slurm/train_verl.sh sdpo_run2_pd_qwen3_32b qwen32b_smoke \
+#       trainer.total_training_steps=5
+# Full run:
+#   MEM=800000 DATASET_CONFIG=sdpo_run1_pd TIME=12:00:00 bash scripts/slurm/train_verl.sh \
+#       sdpo_run2_pd_qwen3_32b qwen32b_run2_200
+# =============================================================================
+defaults:
+  - sdpo_run2_pd_qwen3
+  - _self_
+
+actor_rollout_ref:
+  model:
+    path: Qwen/Qwen3-32B
+  actor:
+    ppo_micro_batch_size_per_gpu: 2
+  ref:
+    log_prob_micro_batch_size_per_gpu: 2
+  rollout:
+    tensor_model_parallel_size: 4
+    gpu_memory_utilization: 0.4
+    log_prob_micro_batch_size_per_gpu: 2

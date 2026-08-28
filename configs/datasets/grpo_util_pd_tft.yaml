@@ -1,0 +1,75 @@
+# GRPO utilitarian-reward dataset — the moral-channel twin of
+# grpo_deon_pd_tft.yaml. (consumed by moralgym_verl.training.dataset,
+# NOT by verl/Hydra.)
+#
+# Every block below except `reward` is copied VERBATIM from
+# grpo_deon_pd_tft.yaml, and the reward block only changes values that
+# dataset.py READS into ground_truth (never samples), so at the same
+# DATASET_SEED the RNG stream is untouched and the prompts stay
+# BYTE-IDENTICAL to the deon arm, to grpo_deon_pd, and to the SDPO runs
+# (verified 2026-08-27 over all 8000 train + 256 val rows: the parquets
+# differ in exactly three fields — game_reward, intrinsic, lambda_val).
+# The arms differ in one thing only: what the scalar reward rewards.
+#
+# This is Tennant T4 (game_reward='utilitarian', intrinsic='none'), the
+# reward already defined in rewards.py:r_game_utilitarian and ported
+# unchanged from the NeMo-RL-era MoralGym/src/moralgym/rewards.py. The
+# collective payoff IS the whole reward — utilitarianism REPLACES the
+# payoff channel rather than adding a term on top of it, which is why
+# there is no intrinsic here and no utilitarian entry in
+# INTRINSIC_REGISTRY. The structural asymmetry against the deon arm
+# (normalized game + 0.75 * penalty) is a property of the two ethics,
+# not a config accident.
+#
+# Deterministic per-state scores. TFT copies fab_agent, so the opponent's
+# CURRENT action is fa, and the reward never depends on fo — utilitarianism
+# is forward-looking, nothing in it conditions on what was done to you:
+#   (fa,fo)  C    D
+#   CC      6.0  4.0
+#   CD      6.0  4.0
+#   DC      4.0  2.0
+#   DD      4.0  2.0
+# Cooperation optimal by exactly +2.0 in ALL FOUR states -> the target
+# norm is UNCONDITIONAL cooperation, against the deon arm's conditional
+# one (C optimal in CC/DC, D optimal in CD/DD). Max-coop policy = 100%.
+# That is the prediction to test, and it matches the single-turn screen's
+# read of utilitarian as flat/unconditional (docs/single_turn_screen_*).
+# The arm is exploitable by design; that is the contrast, not a bug.
+#
+# illegal_penalty -6 is kept at the deon arm's value (and the old repo's
+# convention) rather than rescaled to the raw [2, 6] band. Under
+# norm_adv_by_std_in_grpo the group std cancels any affine rescaling
+# exactly, so in all-legal groups the scale is irrelevant; it differs
+# only in groups containing a parse failure, where the C-vs-D advantage
+# gap runs ~2x the deon arm's. Second-order at the ~1% parse-fail rate
+# this stack sees — revisit only if training/parse-fail rate climbs.
+#
+# The TFT opponent is kept for the run-1 reason (grpo_deon_pd_tft header):
+# a deterministic reward makes pure groups fall silent instead of
+# injecting full-scale advantage noise. It matters even more here — with
+# a random opponent the utilitarian sum still varies with the coin flip.
+game:
+  type: prisoners_dilemma
+  payoffs: {T: 4, R: 3, P: 1, S: 0}
+  num_rounds: 1
+  sample_payoffs: false
+
+opponent:
+  types: [tit_for_tat]
+  distribution: [1.0]
+
+reward:
+  game_reward: utilitarian
+  intrinsic: none
+  lambda: 0.0
+  illegal_penalty: -6
+
+prompt:
+  game_design: hist
+  hist_coop_bias: 0.5
+  representation: prose
+  reasoning: true
+  randomize_labels: false
+  randomize_layout: true
+  randomize_label_order: true
+  randomize_role: true
