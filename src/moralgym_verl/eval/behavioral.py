@@ -37,6 +37,7 @@ from moralgym_verl.eval.config import (
 )
 from moralgym_verl.eval.generation import make_chat_policy_fn, make_policy_fn
 from moralgym_verl.eval.metrics import aggregate_rollout_metrics, per_round_breakdown
+from moralgym_verl.eval.scoring import iter_decisions
 from moralgym_verl.eval.model_loading import load_model_for_eval
 from moralgym_verl.eval.teacher_context import load_reprompt_template, wrap_prompt
 from moralgym_verl.game.moral_values import MORAL_VALUE_REGISTRY, get_moral_value
@@ -181,6 +182,7 @@ def build_policy(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] =
 
 def run_opponent(
     cfg: Dict, opponent: str, policy_fn, presentation_rng: random.Random,
+    raw_log: Optional[list] = None,
 ) -> Dict:
     """Run all episodes against one opponent; return its result block.
 
@@ -221,6 +223,7 @@ def run_opponent(
                 "the balanced design is uneven", num_episodes, len(states))
         fab_state = (states[ep_idx % len(states)]
                      if fabricate and state_design == "balanced" else None)
+        n_before = len(raw_log) if raw_log is not None else 0
         traj = run_episode(
             config, policy_fn,
             lambda_val=lambda_val,
@@ -231,6 +234,8 @@ def run_opponent(
             shaping=shaping,
         )
         trajectories.append(traj)
+        if raw_log is not None:
+            _tag_raw_records(raw_log[n_before:], traj, ep_idx, opponent)
 
     result = aggregate_rollout_metrics(trajectories, opponent, num_episodes)
     breakdown = per_round_breakdown(trajectories)
@@ -242,7 +247,8 @@ def run_opponent(
     # per-axis robustness slicing consumes); in fixed runs every episode
     # is identical, so it is written once at the result level instead.
     result["episode_moves"] = [
-        {"agent": t.agent_moves, "opp": t.opponent_moves}
+        {"agent": t.agent_moves, "opp": t.opponent_moves,
+         "fab_state": [t.fab_agent, t.fab_obs]}
         for t in trajectories
     ]
     randomized = any(
@@ -255,6 +261,39 @@ def run_opponent(
     else:
         result["presentation"] = _presentation(episode_configs[0])
     return result
+
+
+def _tag_raw_records(records: List[Dict], traj: TrajectoryResult,
+                     ep_idx: int, opponent: str) -> None:
+    """Make the (prompt, raw) trail self-describing.
+
+    generation.py appends one {prompt, raw} record per model call and
+    knows nothing about the episode; run_episode makes exactly one call
+    per round. So the records appended during this episode line up with
+    its rounds, and each gets the round's conditioning state from
+    scoring.iter_decisions -- the single state-freeze convention -- plus
+    the parsed move and the labels. Offline analysis then reads structure
+    from the record instead of re-deriving it from the prompt text.
+    """
+    decisions = list(iter_decisions(traj))
+    if len(records) != len(decisions):
+        raise RuntimeError(
+            f"episode {ep_idx}: {len(records)} generation records for "
+            f"{len(decisions)} rounds -- the one-call-per-round invariant "
+            "behind responses.jsonl tagging is broken")
+    c = traj.config
+    for rec, d in zip(records, decisions):
+        rec.update({
+            "episode": ep_idx,
+            "round": d["round_idx"],
+            "opponent": opponent,
+            "agent_prev": d["agent_prev"],
+            "obs_prev": d["opp_prev"],
+            "agent_move": d["agent_move"],
+            "obs": d["obs"],
+            "coop_label": c.coop_label,
+            "defect_label": c.defect_label,
+        })
 
 
 def _presentation(c: EpisodeConfig) -> Dict:
@@ -283,7 +322,7 @@ def evaluate(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = Non
 
     all_results = []
     for opp in opponents:
-        result = run_opponent(cfg, opp, policy_fn, presentation_rng)
+        result = run_opponent(cfg, opp, policy_fn, presentation_rng, raw_log=raw_log)
         all_results.append(result)
         _print_summary(opp, result)
     return all_results
@@ -638,8 +677,11 @@ def main():
     logger.info("Results saved to %s", output_path)
 
     if raw_log is not None:
-        # Sibling JSONL with the full (prompt, raw) trail for offline inspection.
-        # One line per generation call (= one per round across all opponents).
+        # Sibling JSONL with the full (prompt, raw) trail for offline
+        # inspection: one line per generation call (= one per round across
+        # all opponents), tagged by _tag_raw_records with episode, round,
+        # opponent, conditioning state, parsed move and labels. Cells
+        # written before this tagging carry {prompt, raw} only.
         responses_path = output_path.with_suffix(".responses.jsonl")
         with open(responses_path, "w") as f:
             for rec in raw_log:

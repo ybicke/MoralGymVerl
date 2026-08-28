@@ -57,7 +57,7 @@ from typing import Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parents[2] / "src"))
-from eval_cells import check_comparability, discover_run_dirs, load_json  # noqa: E402
+from eval_cells import check_comparability, discover_run_dirs, load_cell  # noqa: E402
 from pgg_label_valence import valence  # noqa: E402
 from publication_tables import (  # noqa: E402
     MISSING, VALUES, Cell, Table, moral_values_section, pct, to_latex,
@@ -83,36 +83,6 @@ ARM_ORDER = (
 # contribute label's count -- the asymmetry `label inversion` is about.
 # Since 699b27f it states k as the OTHERS' count and gives both groups'
 # payoffs (docs/pgg_design.md s9.7).
-STATE_RE = re.compile(
-    r"Last round, you played (\w+), (\d+) of the other \d+ players "
-    r"played (\w+)")
-STATE_RE_V2 = re.compile(
-    r"Last round, you chose (\w+) and got \d+ points?\. "
-    r"Of the other (\d+) players, ([^\n]*)")
-_V2_ALL = re.compile(r"all \d+ chose (\w+)")
-_V2_GROUP = re.compile(r"(\d+) chose (\w+)")
-
-
-def state_from_prompt(prompt: str, coop_label: str):
-    """(own_prev, k_prev) from either history wording, or None."""
-    m = STATE_RE.search(prompt)
-    if m is not None:
-        return ("C" if m.group(1) == coop_label else "D"), int(m.group(2))
-    m = STATE_RE_V2.search(prompt)
-    if m is None:
-        return None
-    own = "C" if m.group(1) == coop_label else "D"
-    n_others, rest = int(m.group(2)), m.group(3)
-    alike = _V2_ALL.match(rest)
-    if alike is not None:
-        return own, (n_others if alike.group(1) == coop_label else 0)
-    k = 0
-    for count, label in _V2_GROUP.findall(rest):
-        if label == coop_label:
-            k = int(count)
-    return own, k
-ACTION_RE = re.compile(r"Action:\s*\**\s*(\w+)", re.IGNORECASE)
-
 CLUB_GOOD = re.compile(
     r"miss(?:ing)? out|need others as well|need at least|threshold"
     r"|enough (?:players|others)|already (?:enough|contributed)|club good",
@@ -124,40 +94,30 @@ def parse_cell(run_dir: Path) -> Optional[Dict]:
     """One PGG cell as decisions keyed by (own_prev, k_prev), with traces.
 
     Returns None for a run dir that is not a fabricated-history PGG cell,
-    so a caller can point at a mixed group and keep what applies.
+    so a caller can point at a mixed group and keep what applies. State,
+    move and trace come from eval_cells.load_cell -- the one loader.
     """
-    beh = load_json(run_dir, "behavioral.json")
-    responses = run_dir / "behavioral.responses.jsonl"
-    if beh is None or not responses.exists():
+    cell = load_cell(run_dir)
+    if cell is None or cell.meta.get("game_type") != "public_goods":
         return None
-    if beh["metadata"].get("game_type") != "public_goods":
-        return None
-    opp = beh["opponents"][0]
-    coop_label = opp["presentation"]["coop_label"]
-
-    records: List[Dict] = []
-    with responses.open() as f:
-        for line in f:
-            r = json.loads(line)
-            st = state_from_prompt(r["prompt"], coop_label)
-            if st is None:
-                return None  # no fabricated history: not this protocol
-            acts = ACTION_RE.findall(r["raw"])
-            records.append({
-                "own": st[0],
-                "k": st[1],
-                "act": ("C" if acts[-1] == coop_label else "D") if acts else None,
-                "raw": r["raw"],
-            })
+    if any(d.agent_prev is None for d in cell.decisions):
+        return None  # no fabricated history: not this protocol
+    records = [{
+        "own": d.agent_prev,
+        "k": d.obs_prev,
+        "act": d.move if d.move in ("C", "D") else None,
+        "raw": d.trace,
+    } for d in cell.decisions]
+    pres = cell.presentation
     return {
         "run_dir": run_dir,
-        "arm": beh["metadata"]["moral_value"],
-        "meta": beh["metadata"],
-        "block": opp,
+        "arm": cell.arm,
+        "meta": cell.meta,
+        "block": cell.block,
         "records": records,
-        "payoffs": opp["presentation"]["payoffs"],
-        "coop_label": coop_label,
-        "defect_label": opp["presentation"]["defect_label"],
+        "payoffs": pres["payoffs"],
+        "coop_label": pres["coop_label"],
+        "defect_label": pres["defect_label"],
     }
 
 

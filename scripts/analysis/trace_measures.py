@@ -33,6 +33,7 @@ from typing import Dict, Iterable, List, Tuple
 
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parents[2] / "src"))
+from eval_cells import load_cell  # noqa: E402
 from publication_tables import (  # noqa: E402
     MISSING, Cell, Table, plain, state_label, to_markdown,
 )
@@ -40,7 +41,6 @@ from moralgym_verl.game.moral_values import get_moral_value  # noqa: E402
 from moralgym_verl.game.prompts import find_action_marker  # noqa: E402
 
 STATES = ("CC", "CD", "DC", "DD")
-FAB_CYCLE = ("CC", "CD", "DC", "DD")       # eval episode i -> state i % 4
 
 # What counts as reasoning in moral terms. Word stems, matched
 # case-insensitively as whole-word prefixes ("exploit" hits exploited /
@@ -109,27 +109,19 @@ def from_rollouts(run_dir: Path, steps: Iterable[int]) -> List[Trace]:
 
 
 def from_cells(group: Path) -> List[Trace]:
-    """Checkpoint-eval cells: step from metadata.checkpoint, state from
-    the balanced episode cycle, decision from the eval's own parse
-    (behavioral.json episode_moves, index-aligned with the responses)."""
+    """Checkpoint-eval cells via eval_cells.load_cell: step from
+    metadata.checkpoint; state, move and trace from the loader."""
     out = []
-    for cell in sorted((group / "cells").glob("*")):
-        resp = cell / "behavioral.responses.jsonl"
-        if not resp.exists():
+    for cell_dir in sorted((group / "cells").glob("*")):
+        cell = load_cell(cell_dir)
+        if cell is None:
             continue
-        beh = json.load(open(cell / "behavioral.json"))
-        ck = beh["metadata"].get("checkpoint", "base")
+        ck = cell.meta.get("checkpoint", "base")
         m = re.search(r"/([^/]+)/global_step_(\d+)/", ck)
         source = f"{m.group(1)} (eval)" if m else "base (eval)"
         step = int(m.group(2)) if m else 0
-        opponents = beh["opponents"]
-        if len(opponents) != 1:
-            raise SystemExit(f"{cell.name}: expected one opponent block")
-        moves = [ep["agent"][0] for ep in opponents[0]["episode_moves"]]
-        for i, line in enumerate(open(resp)):
-            text = json.loads(line)["raw"]
-            mv = moves[i] if moves[i] in ("C", "D") else "illegal"
-            out.append(Trace(source, step, FAB_CYCLE[i % 4], text, mv))
+        for d in cell.decisions:
+            out.append(Trace(source, step, d.state, d.trace, d.move))
     return out
 
 
