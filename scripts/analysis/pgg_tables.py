@@ -62,9 +62,9 @@ from measures import (  # noqa: E402
     arithmetic, club_good, curve_counts, diagnostic_totals, fixed_others_total,
     group_total, p_C, valence,
 )
-from publication_tables import (  # noqa: E402
-    MISSING, VALUES, Cell, Table, moral_values_section, pct, to_latex,
-    to_markdown,
+from results_doc import (  # noqa: E402
+    MISSING, VALUES, Cell, Table, exemplars_section, moral_values_section,
+    pct, prompt_design_section, to_latex, to_markdown,
 )
 
 VALUE_NAMES = dict(VALUES)
@@ -109,6 +109,7 @@ def parse_cell(run_dir: Path) -> Optional[Dict]:
     pres = cell.presentation
     return {
         "run_dir": run_dir,
+        "cell": cell,
         "arm": cell.arm,
         "meta": cell.meta,
         "block": cell.block,
@@ -442,6 +443,15 @@ def header(cells: Dict[str, Dict], arms: List[str], paths: List[Path]) -> str:
     ])
 
 
+def _trace_tags(cell, d) -> List[str]:
+    """Measure classes shown in an exemplar's header: the label-valence
+    verdict (Table 2) and the group-total arithmetic (Table 3)."""
+    payoffs = cell.presentation["payoffs"]
+    v = valence(d.trace, d.coop_label, d.defect_label)
+    a = arithmetic(d.obs_prev, d.trace, payoffs)
+    return [f"valence {v}", f"arithmetic {a}"]
+
+
 # ------------------------------------------------------------------ main
 
 def main() -> None:
@@ -455,6 +465,9 @@ def main() -> None:
                         help="build tables even when a group's cells differ "
                              "in an undeclared setting (warn instead of "
                              "refusing).")
+    parser.add_argument("--exemplars", type=int, default=1,
+                        help="example traces per arm x state appended to the "
+                             "doc (0 = none)")
     args = parser.parse_args()
 
     run_dirs = discover_run_dirs(args.paths)
@@ -476,7 +489,8 @@ def main() -> None:
     out_dir = args.out or (args.paths[0] / "analysis")
     tex_dir = out_dir / "tex"
     tex_dir.mkdir(parents=True, exist_ok=True)
-    markdown = [header(cells, arms, args.paths), moral_values_section()]
+    markdown = [header(cells, arms, args.paths), moral_values_section(),
+                prompt_design_section([cells[a]["cell"] for a in arms])]
     fig_path = out_dir / "figures" / "contribution_curves.png"
     contribution_figure(cells, arms, fig_path)
     print(f"saved -> {fig_path}")
@@ -494,6 +508,10 @@ def main() -> None:
                 "value; solid circles = agent contributed last round "
                 "(C$_A$), dashed squares = it kept (D$_A$).",
                 "", ""]).replace("$k_O$", "k_O").replace("$_A$", "_A"))
+    if args.exemplars:
+        markdown.append(exemplars_section(
+            [cells[a]["cell"] for a in arms], per_state=args.exemplars,
+            arm_order=arms, tags=_trace_tags))
     model = cells[arms[0]]["meta"]["base_model"].rsplit("/", 1)[-1].lower()
     md_path = out_dir / f"results_pgg_{model}.md"
     md_path.write_text("\n".join(markdown))

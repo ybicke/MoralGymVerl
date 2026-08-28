@@ -55,13 +55,18 @@ from __future__ import annotations
 import argparse
 import math
 import sys
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parents[2] / "src"))
 from measures import gap_pp, sign_test_p  # noqa: E402
+from results_doc import (  # noqa: E402
+    D_OPP, MISSING, STATES4, VALUES, Cell, Table, exemplars_section,
+    moral_values_section, pct, plain, prompt_design_section, state_label,
+    to_latex, to_markdown,
+)
+from eval_cells import load_cell  # noqa: E402
 from eval_cells import (  # noqa: E402
     check_comparability,
     discover_run_dirs,
@@ -74,17 +79,9 @@ from moralgym_verl.game.moral_values import get_moral_value  # noqa: E402
 GAMES = (("prisoners_dilemma", "Prisoner's Dilemma"),
          ("stag_hunt", "Stag Hunt"),
          ("chicken", "Chicken"))
-VALUES = (("none", "None (base)"),
-          ("deontological", "Deontological"),
-          ("deontological+repair", "Deontological + repair"),
-          ("deontological+repair+generosity", "Deontological + repair + generosity"),
-          ("utilitarian", "Utilitarian"),
-          ("virtue", "Virtue"),
-          ("universalization", "Universalization"))
 REPRS = (("matrix", "Matrix"), ("prose", "Prose"))
-STATES4 = ("CC", "CD", "DC", "DD")
 PROBE_STATES = ("first", "CC", "CD", "DC", "DD")
-MISSING = "--"
+
 
 
 # Gap statistics. Every gap in the document carries a subscript naming
@@ -92,7 +89,6 @@ MISSING = "--"
 # opponent-conditioning gap, D_SURF its change under surface
 # randomization. (The analysis doc adds a third, Δ_rec, the recovery gap
 # splitting the two opponent-defected states.)
-D_OPP = "$\\Delta_{opp}$"
 D_SURF = "$\\Delta_{surf}$"
 
 
@@ -108,180 +104,6 @@ def game_note(game: str) -> str:
     return (f"{GAME_NOTES[game]} Payoffs {p['T']}/{p['R']}/{p['P']}/"
             f"{p['S']} (T/R/P/S); vs the random opponent: {best} "
             f"(E[C] = {ev_c:g}, E[D] = {ev_d:g}).")
-
-
-def state_label(s: str) -> str:
-    """'CD' -> 'C$_A$D$_O$': previous moves subscripted A (agent) and
-    O (opponent). LaTeX gets real math subscripts; plain() maps them to
-    <sub><small> HTML, which renders as a true below-baseline subscript
-    a notch smaller than the letter it indexes (Unicode has no subscript
-    capitals, and its subscript glyphs are illegibly small)."""
-    return f"{s[0]}$_A${s[1]}$_O$"
-
-
-# ------------------------------------------------------------ table model
-
-@dataclass
-class Cell:
-    text: str
-    bold: bool = False
-    marker: str = ""                           # superscript, e.g. "*"
-
-
-@dataclass
-class Table:
-    key: str
-    title: str
-    caption: str
-    stub: str                                  # header of the row-label column
-    col_groups: List[Tuple[str, List[str]]]    # (group title, column names)
-    panels: List[Tuple[Optional[str], List[Tuple[str, List[Cell]]]]]
-    # One-line statement of the measurement surface (what was randomized,
-    # which action labels, which protocol). Rendered under the heading in
-    # markdown and folded into the caption in LaTeX, so a reader can tell
-    # at a glance which regime a table belongs to.
-    subtitle: str = ""
-    notes: List[str] = field(default_factory=list)
-    # Markdown-only: panel title -> paragraph printed between the panel
-    # heading and its grid, so a reader meets the game (or the metric)
-    # right where its numbers are. LaTeX has no clean way to set a
-    # paragraph inside a tabular, and in a paper this prose belongs in
-    # the body text, so to_latex ignores it -- the .tex files stay data.
-    panel_notes: Dict[str, str] = field(default_factory=dict)
-    # Markdown-only: collapse each column group into ONE column whose cells
-    # join the group's values with a divider ("94 | 95"), so paired
-    # matrix/prose entries sit side by side. LaTeX keeps real subcolumns.
-    pair_groups: bool = False
-    # Untitled panels drawn as ruled blocks of ONE grid: LaTeX puts a
-    # \midrule between them, markdown (which has no rule syntax) an
-    # empty spacer row. For a table whose rows come in short groups.
-    ruled_blocks: bool = False
-
-
-def to_latex(t: Table) -> str:
-    ncols = sum(len(cols) for _, cols in t.col_groups)
-    caption = f"{t.subtitle} {t.caption}".strip() if t.subtitle else t.caption
-    lines = [
-        "% Requires \\usepackage{booktabs} in the preamble.",
-        "\\begin{table}[t]",
-        "\\centering",
-        f"\\caption{{{caption}}}",
-        f"\\label{{tab:{t.key}}}",
-        "\\small",
-        "\\setlength{\\tabcolsep}{3.5pt}",
-        "\\begin{tabular}{l" + "r" * ncols + "}",
-        "\\toprule",
-    ]
-    if any(title for title, _ in t.col_groups):
-        header = [""]
-        rules, start = [], 2
-        for title, cols in t.col_groups:
-            header.append(f"\\multicolumn{{{len(cols)}}}{{c}}{{{title}}}")
-            end = start + len(cols) - 1
-            if title:
-                rules.append(f"\\cmidrule(lr){{{start}-{end}}}")
-            start = end + 1
-        lines.append(" & ".join(header) + " \\\\")
-        lines.append("".join(rules))
-    names = [t.stub] + [c for _, cols in t.col_groups for c in cols]
-    lines.append(" & ".join(names) + " \\\\")
-    lines.append("\\midrule")
-    for i, (panel, rows) in enumerate(t.panels):
-        if i:
-            lines.append("\\midrule" if t.ruled_blocks else "\\addlinespace")
-        if panel:
-            lines.append(f"\\multicolumn{{{ncols + 1}}}{{l}}"
-                         f"{{\\emph{{{panel}}}}} \\\\")
-        for label, cells in rows:
-            rendered = [(f"\\textbf{{{c.text}}}" if c.bold else c.text)
-                        + (f"\\textsuperscript{{{c.marker}}}"
-                           if c.marker else "")
-                        for c in cells]
-            lines.append(" & ".join([label] + rendered) + " \\\\")
-    lines += ["\\bottomrule", "\\end{tabular}", "\\end{table}"]
-    if t.notes:
-        lines.append("% " + " ".join(t.notes))
-    return "\n".join(lines) + "\n"
-
-
-# LaTeX -> plain Unicode/HTML, so the Markdown renders in any viewer
-# (order matters: subscripted deltas must precede the bare one).
-_MD_SUBS = (
-    ("$\\Delta_{opp}$", "Δ<sub><small>opp</small></sub>"),
-    ("$\\Delta_{surf}$", "Δ<sub><small>surf</small></sub>"),
-    ("$\\Delta_{self}$", "Δ<sub><small>self</small></sub>"),
-    ("$k_O$", "k<sub><small>O</small></sub>"),
-    ("$\\Delta$", "Δ"), ("\\%", "%"),
-    ("$\\mid$", "|"),
-    ("$_A$", "<sub><small>A</small></sub>"),
-    ("$_O$", "<sub><small>O</small></sub>"),
-    ("$_S$", "<sub><small>S</small></sub>"),
-    ("$_T$", "<sub><small>T</small></sub>"),
-    ("$-$", "−"), ("$\\to$", "→"), ("$\\pm$", "±"), ("$T=", "T = "),
-    ("\\ell", "ℓ"),
-    ("\\times", "×"), ("$", ""),
-    ("`", "'"), ("s.e.\\", "s.e."), ("\\leq", "≤"), ("opp.\\", "opp."),
-    ("vs.\\", "vs."), (" -- ", " — "), ("\\ ", " "), ("\\Delta", "Δ"),
-    ("\\approx", "≈"), ("~", " "),
-)
-
-
-def plain(s: str) -> str:
-    for latex, text in _MD_SUBS:
-        s = s.replace(latex, text)
-    return s
-
-
-def _md_cell(c: Cell) -> str:
-    text = ("—" if c.text == MISSING
-            else f"**{plain(c.text)}**" if c.bold else plain(c.text))
-    # Only "*" needs escaping -- a bare one would open emphasis. Other
-    # markers (†, ‡) are literal characters and must not gain a
-    # backslash, which markdown would render verbatim.
-    return text + (("\\*" if c.marker == "*" else c.marker) if c.marker else "")
-
-
-def to_markdown(t: Table) -> str:
-    if t.pair_groups:
-        names = [plain(t.stub)] + [plain(title or cols[0])
-                                   for title, cols in t.col_groups]
-    else:
-        names = [plain(t.stub)] + [plain(f"{title} {c}" if title else c)
-                                   for title, cols in t.col_groups
-                                   for c in cols]
-    names = [n.replace("|", "\\|") for n in names]   # bare | breaks the grid
-    out = [f"### {plain(t.title)}", ""]
-    if t.subtitle:
-        out += [f"*{plain(t.subtitle)}*", ""]
-    out += [plain(t.caption), ""]
-    for i, (panel, rows) in enumerate(t.panels):
-        if panel:
-            out += [f"**{plain(panel)}**", ""]
-            if t.panel_notes.get(panel):
-                out += [plain(t.panel_notes[panel]), ""]
-        if t.ruled_blocks and i:
-            out.append("|" + " |" * len(names))
-        else:
-            out.append("| " + " | ".join(names) + " |")
-            out.append("|" + "---|" * len(names))
-        for label, cells in rows:
-            if t.pair_groups:
-                rendered, i = [], 0
-                for _, cols in t.col_groups:
-                    group = cells[i:i + len(cols)]
-                    i += len(cols)
-                    rendered.append(" \\| ".join(map(_md_cell, group)))
-            else:
-                rendered = [_md_cell(c) for c in cells]
-            # Row labels are stored in LaTeX form (to_latex emits them
-            # verbatim); convert here so the .tex stays free of HTML.
-            out.append("| " + " | ".join([plain(label)] + rendered) + " |")
-        if not t.ruled_blocks:
-            out.append("")
-    if t.ruled_blocks:
-        out.append("")
-    out += [f"*{plain(n)}*" for n in t.notes] + [""]
-    return "\n".join(out)
 
 
 # ------------------------------------------------------------ data access
@@ -343,10 +165,6 @@ def behavioral(run_dir: Path) -> Dict:
         raise SystemExit(f"{run_dir.name}: expected 1 opponent, "
                          f"got {len(opponents)}")
     return opponents[0]
-
-
-def pct(p: float) -> str:
-    return f"{round(100 * p)}"
 
 
 def shared_meta(cells: Dict[CellKey, Path]) -> Dict:
@@ -733,40 +551,6 @@ GAME_NOTES = {
 }
 
 
-def moral_values_section() -> str:
-    """Verbatim teacher texts, quoted from the single source of truth
-    (game/moral_values.py) so the tables read without the codebase.
-    A composite quotes only the paragraphs it ADDS to components already
-    listed above it, so shared text appears once."""
-    lines = [
-        "### Moral value prompts",
-        "",
-        "Teacher texts of the sweep's moral principles, verbatim from "
-        "`src/moralgym_verl/game/moral_values.py` (the exact string "
-        "prepended to the prompt at eval time). `none` adds no text; "
-        "`+`-composites join their parts as separate paragraphs, and "
-        "are shown here as only the paragraphs they add to parts "
-        "already listed above.",
-        "",
-    ]
-    shown: List[str] = []
-    for value, value_name in VALUES:
-        if value == "none":
-            continue
-        parts = value.split("+")
-        base = [p for p in parts if p in shown]
-        new = [p for p in parts if p not in shown]
-        lines += [f"**{value_name}** (`{value}`)", ""]
-        if base:
-            lines += [f"`{'+'.join(base)}` plus:", ""]
-        for part in new:
-            lines += ["> " + line if line else ">"
-                      for line in get_moral_value(part).splitlines()]
-            shown.append(part)
-        lines.append("")
-    return "\n".join(lines + [""])
-
-
 # ------------------------------------------------------------------ main
 
 def main() -> None:
@@ -782,6 +566,9 @@ def main() -> None:
                         help="build tables even when a group's cells differ "
                              "in an undeclared setting (warn instead of "
                              "refusing).")
+    parser.add_argument("--exemplars", type=int, default=1,
+                        help="example traces per arm x state appended to the "
+                             "doc (0 = none); fixed-presentation cells only")
     args = parser.parse_args()
 
     cells = collect_cells(args.paths, strict=not args.allow_mixed)
@@ -802,14 +589,32 @@ def main() -> None:
     out_dir = args.out or (args.paths[0] / "analysis")
     tex_dir = out_dir / "tex"
     tex_dir.mkdir(parents=True, exist_ok=True)
+    # Fixed-presentation screen cells carry the prompt design and the
+    # exemplars; robustness/ablation cells differ only in surface.
+    loaded = [load_cell(run_dir) for (_, _, _, mode), run_dir in cells.items()
+              if mode == "fixed"]
+    loaded = [c for c in loaded if c is not None]
     markdown = [readme_header(cells, args.paths),
-                moral_values_section()]
+                moral_values_section(),
+                prompt_design_section(loaded)]
     for table in tables:
         tex_path = tex_dir / f"{table.key.replace('-', '_')}.tex"
         tex_path.write_text(to_latex(table))
         markdown.append(to_markdown(table))
         print(f"saved -> {tex_path}")
     md_path = out_dir / f"results_{model_slug(cells)}.md"
+    if args.exemplars and loaded:
+        # Three games x seven values x two representations x four states
+        # is too many traces to sit under the tables; they go beside them.
+        traces_path = out_dir / f"traces_{model_slug(cells)}.md"
+        traces_path.write_text("\n".join([
+            "# Single-turn screen: example traces", "",
+            f"Companion to `{md_path.name}` (same cells, fixed presentation).", "",
+            exemplars_section(loaded, per_state=args.exemplars,
+                              arm_order=[v for v, _ in VALUES])]))
+        print(f"saved -> {traces_path}")
+        markdown.append(f"### Example traces\n\nOne verbatim trace per arm x "
+                        f"state, fixed-presentation cells: `{traces_path.name}`.\n")
     md_path.write_text("\n".join(markdown))
     print(f"saved -> {md_path}\n")
     print("\n".join(markdown[1:]), end="")

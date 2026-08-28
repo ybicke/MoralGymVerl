@@ -40,10 +40,11 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).parent))
-from eval_cells import check_comparability, discover_run_dirs, load_json  # noqa: E402
+from eval_cells import check_comparability, discover_run_dirs, load_cell, load_json  # noqa: E402
 from measures import gap_pp  # noqa: E402
-from publication_tables import (  # noqa: E402
-    D_OPP, STATES4, Cell, Table, behavioral, pct, plain,
+from publication_tables import behavioral  # noqa: E402
+from results_doc import (  # noqa: E402
+    D_OPP, STATES4, Cell, Table, pct, plain, prompt_design_section,
     state_label, to_latex, to_markdown,
 )
 from training_trajectory import load_decisions, trajectory_table, windows  # noqa: E402
@@ -302,6 +303,8 @@ def main() -> None:
         return to_markdown(table)
 
     md = [header(run, args.group, trained, refs)]
+    loaded = [load_cell(d) for _, d in trained] + [load_cell(d) for d in refs.values()]
+    md.append(prompt_design_section([c for c in loaded if c is not None]))
 
     # --- chapter 1: the checkpoint eval (the publishable numbers) ---
     md.append(checkpoint_chapter_spec(eval_pres, meta))
