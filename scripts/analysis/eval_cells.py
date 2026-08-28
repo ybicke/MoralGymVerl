@@ -3,7 +3,7 @@
 A library, not a CLI: locating cells, loading their JSON, and the two
 reconstructions that several analyses need (which presentation facets a
 cell actually randomized, and the per-decision (move, opp_prev) stream
-behind a behavioral run). Imported by publication_tables.py.
+behind a behavioral run). Imported by the specs under specs/ via make_results.py.
 
 Stdlib only, so it runs on the login node without the container.
 """

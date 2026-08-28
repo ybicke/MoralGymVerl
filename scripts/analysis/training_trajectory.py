@@ -12,7 +12,7 @@ Dense (every step, ~640 decisions per state per 20-step window) but
 measured under TRAINING conditions (surface-randomized prompts, T=0.7
 sampling), so it shows the SHAPE of learning -- when each state moves,
 where it saturates or overshoots. The checkpoint eval
-(post_training_tables.py) is the publishable number at a few steps
+(specs/post_training.py) is the publishable number at a few steps
 under the screen protocol; this is the curve that explains it.
 
 Login node, stdlib only:
@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 sys.path.insert(0, str(Path(__file__).parent))
-from publication_tables import (  # noqa: E402
+from results_doc import (  # noqa: E402
     MISSING, Cell, Table, pct, state_label, to_markdown,
 )
 

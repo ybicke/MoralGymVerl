@@ -590,7 +590,7 @@ a config flag. Any new PGG cell is not comparable to it.
 §9.5 claimed the composition wording would address the label-valence
 problem. **It does not.** A 64-episode list smoke on the new wording
 (`eval_results/_debug/pgg_list_smoke_list_*`, job 3173418) measured, with
-`scripts/analysis/pgg_label_valence.py`:
+`measures.valence` (then `scripts/analysis/pgg_label_valence.py`, folded into `scripts/analysis/measures.py` on 2026-08-28):
 
 | wording | n | inverted | correct | both | silent |
 |---|---|---|---|---|---|

@@ -13,12 +13,12 @@ checkpoint-eval cells into Trace objects:
   from_cells           checkpoint-eval cells (behavioral.responses.jsonl)
   stats / compact_stats_tables / vocab_windows
                        per-(source, step, state) rates and their tables,
-                       used by post_training_tables.py
+                       used by specs/post_training.py
 
   render_exemplars     per-step rate tables + one verbatim trace per state
                        (shortest of K, fixed seed) + the step's longest
-                       recitation; driven by traces_training.py and
-                       traces_checkpoints.py
+                       recitation; driven by specs/post_training.py for
+                       the traces_checkpoints_*/traces_training_* docs
 """
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ from measures import (  # noqa: E402
     NORMATIVE_VOCAB, OVERLAP_WORDS, longest_overlap, normative_hit,
     principle_ngrams, principle_overlap, words as _words,
 )
-from publication_tables import (  # noqa: E402
+from results_doc import (  # noqa: E402
     MISSING, Cell, Table, plain, state_label, to_markdown,
 )
 from moralgym_verl.game.moral_values import get_moral_value  # noqa: E402

@@ -1,7 +1,7 @@
 """Measures over eval decisions and traces -- pure functions, no I/O.
 
 Every number an analysis doc reports is computed here, once, so the
-generators (pgg_tables, publication_tables, post_training_tables) and the
+generators (specs/screen_pgg, specs/screen_2x2, specs/post_training) and the
 exemplar docs agree by construction. Three families:
 
   decisions      p_C, gap_pp, sign_test_p, curve_counts
