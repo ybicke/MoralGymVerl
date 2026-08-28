@@ -60,8 +60,6 @@ The 'deontological+repair+generosity' wording is split into words and all of its
 | step 120 | 17 | 7 | 17 | 8 |
 | step 200 | 94 | 91 | 95 | 91 |
 
-Verbatim exemplar traces for each step (normative onset at s60/s90, paraphrase at s120, 21-word quotation at s200): `trace_snippets_qwen3-8b-pd-sdpo-deon-repair-gen.md`.
-
 
 ## 2. Training-time metrics (online rollouts)
 

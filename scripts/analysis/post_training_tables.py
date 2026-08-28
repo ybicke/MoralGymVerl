@@ -17,7 +17,7 @@ targets belong to the interpretation (analysis_<run>.md), not the data.
 
 Optional sections, same document: the training trajectory from the
 run's rollout dumps (training_trajectory.py) and the reasoning-trace
-statistics at the evaluated steps (trace_comparison.py).
+statistics at the evaluated steps (trace_measures.py; verbatim exemplars: traces_checkpoints.py, traces_training.py).
 
 Output: <group>/analysis/results_<group>.md (+ tex/), mirroring the
 screen layout; the group is the experiment name
@@ -46,7 +46,7 @@ from publication_tables import (  # noqa: E402
     state_label, to_latex, to_markdown,
 )
 from training_trajectory import load_decisions, trajectory_table, windows  # noqa: E402
-from trace_comparison import (  # noqa: E402
+from trace_measures import (  # noqa: E402
     compact_stats_tables, from_cells, principle_ngrams, stats,
     vocab_windows,
 )

@@ -1,44 +1,35 @@
 #!/usr/bin/env python3.11
-"""Reasoning traces as evidence: reproducible samples plus two rates.
+"""Reasoning-trace measures: normative-language and principle-overlap rates.
 
-Reading a handful of traces is an anecdote. This makes the qualitative
-comparison citable: for each (source, step, state) it computes, over ALL
-traces,
+Library for the post-training analysis scripts (no CLI). Defines, once,
+what counts as reasoning in moral terms and what counts as reciting the
+trained principle, and the loaders that turn training rollouts or
+checkpoint-eval cells into Trace objects:
 
-  normative-language rate  share of traces containing at least one term
-                           from NORMATIVE_VOCAB (reasons in moral terms
-                           at all -- a judgment call, hence the list is
-                           one constant, reviewed, not buried)
-  principle-overlap rate   share of traces reproducing >= OVERLAP_WORDS
-                           consecutive words of the trained principle's
-                           wording (verbatim recitation; keyword-free)
+  normative_hit        trace contains at least one term of NORMATIVE_VOCAB
+  principle_overlap    trace reproduces >= OVERLAP_WORDS consecutive words
+                       of the principle's wording (verbatim; keyword-free)
+  from_rollouts        rollouts/<step>.jsonl of a training run
+  from_cells           checkpoint-eval cells (behavioral.responses.jsonl)
+  stats / compact_stats_tables / vocab_windows
+                       per-(source, step, state) rates and their tables,
+                       used by post_training_tables.py
 
-and writes a fixed-seed sample of traces verbatim, so nothing is
-cherry-picked.
-
-Sources (mix freely):
-  --rollouts RUN_DIR --steps 60,120,200   training dumps (rollouts/<step>.jsonl)
-  --cells GROUP_DIR                        checkpoint-eval cells
-                                           (behavioral.responses.jsonl;
-                                           state from the balanced cycle)
-
-Login node, stdlib only (the principle text comes from moral_values.py):
-    /usr/bin/python3.11 scripts/analysis/trace_comparison.py \
-        --rollouts ~/logs_verl/runs/qwen_run2_200 --steps 60,120,200 \
-        --rollouts ~/logs_verl/runs/grpo_deon_tft_200 --steps 60,120,180 \
-        --principle deontological+repair+generosity \
-        --out eval_results/post_training/qwen3-8b-pd-sdpo-deon-repair-gen/analysis/results_traces_qwen3-8b-pd-sdpo-deon-repair-gen.md
+  render_exemplars     per-step rate tables + one verbatim trace per state
+                       (shortest of K, fixed seed) + the step's longest
+                       recitation; driven by traces_training.py and
+                       traces_checkpoints.py
 """
 from __future__ import annotations
 
-import argparse
 import json
 import random
 import re
+import statistics
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Tuple
 
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parents[2] / "src"))
@@ -274,130 +265,107 @@ def compact_stats_tables(acc: Dict, principle_name: str) -> List[Table]:
         ))
     return tables
 
+# ---------------------------------------------------------------- exemplars
 
-def stats_table(acc: Dict, principle_name: str,
-                compact: bool = False) -> Table:
-    """One panel per (source, step); the source is named once in the
-    panel heading instead of being repeated on every state row.
-
-    compact=True drops the n and P(C) columns, for a document that
-    already states the episode count once (n per state is then fixed)
-    and already carries the cooperation rates in its own behaviour
-    table -- repeating either here is duplication. Standalone callers
-    keep them: they may mix sources whose n genuinely differs.
-    """
-    panels: List = []
-    by_panel: Dict[Tuple[str, int], List] = defaultdict(list)
-    for (source, step, state) in sorted(acc, key=lambda k: (k[0], k[1], k[2])):
-        by_panel[(source, step)].append((state, acc[(source, step, state)]))
-
-    def panel_order(item):
-        (source, step), _ = item
-        return (0 if source.endswith("(train)") else 1, source, step)
-
-    one_source = len({src for src, _ in by_panel}) == 1
-
-    for (source, step), entries in sorted(by_panel.items(), key=panel_order):
-        rows, total = [], sum(a["n"] for _, a in entries)
-        for state, a in entries:
-            cells = []
-            if not compact:
-                p_c = a["c"] / a["legal"] if a["legal"] else float("nan")
-                cells += [Cell(str(a["n"])), Cell(f"{100 * p_c:.0f}")]
-            cells += [Cell(f"{100 * a['vocab'] / a['n']:.0f}"),
-                      Cell(f"{100 * a['overlap'] / a['n']:.0f}")]
-            rows.append((state_label(state), cells))
-        title = f"Step {step}" if one_source else f"{source}, step {step}"
-        panels.append((title if compact else f"{title} (n = {total})", rows))
-
-    caption = _stats_caption(principle_name, compact)
-    return Table(
-        key="trace-stats",
-        title="Reasoning-trace statistics",
-        caption=caption,
-        stub="State",
-        col_groups=([] if compact
-                    else [(None, ["n"]), (None, ["P(C)"])])
-        + [(None, ["normative \\%"]), (None, ["recites principle \\%"])],
-        panels=panels,
-    )
+SUB = {"CC": "C<sub>A</sub>C<sub>O</sub>", "CD": "C<sub>A</sub>D<sub>O</sub>",
+       "DC": "D<sub>A</sub>C<sub>O</sub>", "DD": "D<sub>A</sub>D<sub>O</sub>"}
 
 
-# ------------------------------------------------------------------- sample
+def longest_overlap(text: str, principle_words: List[str]) -> Tuple[int, int]:
+    """(length, start index in text words) of the longest word run shared
+    verbatim with the principle wording. Quadratic, fine at 256/step."""
+    w = _words(text)
+    best = (0, 0)
+    for i in range(len(w)):
+        for j in range(len(principle_words)):
+            k = 0
+            while (i + k < len(w) and j + k < len(principle_words)
+                   and w[i + k] == principle_words[j + k]):
+                k += 1
+            if k > best[0]:
+                best = (k, i)
+    return best
 
-def sample(traces: List[Trace], per_cell: int, seed: int) -> List[Trace]:
+
+def parse_steps(spec: str) -> List[int]:
+    """'20,40,...,200' expands the arithmetic progression; plain lists pass."""
+    parts = [p.strip() for p in spec.split(",")]
+    if "..." in parts:
+        i = parts.index("...")
+        a, b, end = int(parts[i - 2]), int(parts[i - 1]), int(parts[i + 1])
+        return [int(p) for p in parts[:i - 2]] + list(range(a, end + 1, b - a))
+    return [int(p) for p in parts]
+
+
+def pick(pool: List[Trace], k: int, rng: random.Random) -> Trace:
+    return min(rng.sample(pool, min(k, len(pool))), key=lambda t: len(t.text))
+
+
+def render_exemplars(title: str, surface: str, steps: List[int], traces: List[Trace],
+           principle_name: str, k: int, seed: int, max_chars: int) -> str:
+    grams = principle_ngrams(get_moral_value(principle_name))
+    pw = _words(get_moral_value(principle_name))
     rng = random.Random(seed)
-    by_cell: Dict[Tuple[str, int, str], List[Trace]] = defaultdict(list)
+    by: Dict[Tuple[int, str], List[Trace]] = defaultdict(list)
     for t in traces:
-        by_cell[(t.source, t.step, t.state)].append(t)
-    out = []
-    for key in sorted(by_cell):
-        pool = by_cell[key]
-        out += rng.sample(pool, min(per_cell, len(pool)))
-    return out
+        by[(t.step, t.state)].append(t)
 
+    md = [f"# {title}", "", surface, "",
+          f"*Normative* = trace contains ≥1 of {len(NORMATIVE_VOCAB)} reviewed stems "
+          f"({', '.join(NORMATIVE_VOCAB)}). *Recites* = reproduces ≥{OVERLAP_WORDS} "
+          f"consecutive words of the '{principle_name}' wording verbatim. "
+          f"*Overlap* = longest verbatim word run shared with that wording "
+          f"(median / max over the state's traces). The wording is never in "
+          f"these prompts (SDPO: teacher context only; GRPO: never shown).", "",
+          f"Exemplar selection: per (step, state), the shortest of {k} traces "
+          f"sampled with seed {seed}; traces longer than {max_chars} chars are "
+          f"cut with `[…]`. **Bold** in a header = the recited span. Each step "
+          f"ends with its single longest recitation, whichever state.", ""]
 
-def render_traces(chosen: List[Trace], grams: set, max_chars: int) -> str:
-    md = ["## Sampled traces", "",
-          "Fixed-seed sample, verbatim; header = source, step, fabricated "
-          "state, parsed decision, normative-language / principle-overlap "
-          "flags.", ""]
-    for t in chosen:
-        flags = (("normative " if normative_hit(t.text) else "")
-                 + ("principle-overlap" if principle_overlap(t.text, grams) else "")
-                 ).strip() or "—"
-        md += [f"### {t.source} · step {t.step} · {t.state} · move {t.move} · {flags}",
-               "", "```", t.text.strip()[:max_chars]
-               + (" […]" if len(t.text.strip()) > max_chars else ""),
-               "```", ""]
+    for step in steps:
+        md += [f"## Step {step}", "",
+               "| State | n | P(C) % | normative % | recites % | overlap median / max |",
+               "|---|---|---|---|---|---|"]
+        for st in STATES:
+            pool = by.get((step, st), [])
+            if not pool:
+                md.append(f"| {SUB[st]} | 0 | — | — | — | — |")
+                continue
+            legal = [t for t in pool if t.move != "illegal"]
+            pc = 100 * sum(t.move == "C" for t in legal) / max(1, len(legal))
+            nrm = 100 * sum(normative_hit(t.text) for t in pool) / len(pool)
+            rec = 100 * sum(principle_overlap(t.text, grams) for t in pool) / len(pool)
+            ov = [longest_overlap(t.text, pw)[0] for t in pool]
+            md.append(f"| {SUB[st]} | {len(pool)} | {pc:.0f} | {nrm:.0f} | {rec:.0f} "
+                      f"| {statistics.median(ov):.0f} / {max(ov)} |")
+        md.append("")
+        for st in STATES:
+            pool = by.get((step, st), [])
+            if not pool:
+                continue
+            t = pick(pool, k, rng)
+            L, i = longest_overlap(t.text, pw)
+            span = " ".join(_words(t.text)[i:i + L]) if L >= OVERLAP_WORDS else ""
+            flags = ("normative" if normative_hit(t.text) else "payoff-only")
+            head = f"### step {step} · {SUB[st]} · move {t.move} · {flags}"
+            if span:
+                head += f" · recites {L} words: **{span}**"
+            body = t.text.strip()
+            if len(body) > max_chars:
+                body = body[:max_chars] + " […]"
+            md += [head, "", "```", body, "```", ""]
+        allstep = [t for st in STATES for t in by.get((step, st), [])]
+        if allstep:
+            t = max(allstep, key=lambda t: longest_overlap(t.text, pw)[0])
+            L, i = longest_overlap(t.text, pw)
+            if L >= OVERLAP_WORDS:
+                span = " ".join(_words(t.text)[i:i + L])
+                body = t.text.strip()
+                if len(body) > max_chars:
+                    body = body[:max_chars] + " […]"
+                md += [f"### step {step} · longest recitation · {SUB[t.state]} · move {t.move} "
+                       f"· {L} words: **{span}**", "", "```", body, "```", ""]
+            else:
+                md += [f"*step {step}: no trace reaches {OVERLAP_WORDS} words of overlap "
+                       f"(max {L}).*", ""]
     return "\n".join(md)
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--rollouts", action="append", type=Path, default=[],
-                        help="run dir with rollouts/ (repeatable; pair each "
-                             "with a --steps)")
-    parser.add_argument("--steps", action="append", default=[],
-                        help="comma-separated steps for the matching --rollouts")
-    parser.add_argument("--cells", action="append", type=Path, default=[],
-                        help="checkpoint-eval group dir (repeatable)")
-    parser.add_argument("--principle", default="deontological+repair+generosity",
-                        help="moral value whose wording defines the overlap rate")
-    parser.add_argument("--per-cell", type=int, default=2,
-                        help="sampled traces per (source, step, state)")
-    parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--max-chars", type=int, default=4000)
-    parser.add_argument("--states", default="CC,CD,DC,DD")
-    parser.add_argument("--out", type=Path, default=None)
-    args = parser.parse_args()
-    if len(args.rollouts) != len(args.steps):
-        raise SystemExit("give one --steps per --rollouts")
-
-    keep = set(args.states.split(","))
-    traces: List[Trace] = []
-    for run, steps in zip(args.rollouts, args.steps):
-        traces += from_rollouts(run, [int(s) for s in steps.split(",")])
-    for group in args.cells:
-        traces += from_cells(group)
-    traces = [t for t in traces if t.state in keep]
-    if not traces:
-        raise SystemExit("no traces loaded")
-
-    grams = principle_ngrams(get_moral_value(args.principle))
-    acc = stats(traces, grams)
-    md = ["# Reasoning traces", "",
-          to_markdown(stats_table(acc, args.principle)),
-          render_traces(sample(traces, args.per_cell, args.seed), grams,
-                        args.max_chars)]
-    text = "\n".join(md)
-    if args.out:
-        args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(text)
-        print(f"saved -> {args.out}")
-    else:
-        print(text[:3000])
-
-
-if __name__ == "__main__":
-    main()

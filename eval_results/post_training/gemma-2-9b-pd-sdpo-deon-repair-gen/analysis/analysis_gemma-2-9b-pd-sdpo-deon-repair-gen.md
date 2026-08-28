@@ -1,6 +1,6 @@
 # Post-training eval: gemma-2-9b-pd-sdpo-deon-repair-gen — analysis
 
-Hand-annotated copy of the generated `results_gemma-2-9b-pd-sdpo-deon-repair-gen.md` (snapshot 2026-08-24, regenerated after the two-chapter restructure); findings at the end, sampled traces verbatim in `results_traces_gemma-2-9b-pd-sdpo-deon-repair-gen.md`.
+Hand-annotated copy of the generated `results_gemma-2-9b-pd-sdpo-deon-repair-gen.md` (snapshot 2026-08-24, regenerated after the two-chapter restructure); findings at the end, trace exemplars per step in `traces_checkpoints_gemma-2-9b-pd-sdpo-deon-repair-gen.md` and `traces_training_gemma-2-9b-pd-sdpo-deon-repair-gen.md`.
 
 Where a finding corrects an earlier reading it says so explicitly — the previous annotation mixed training-rollout and checkpoint-eval numbers in places, and those are measured on different prompt surfaces (see the two chapter specifications below).
 
