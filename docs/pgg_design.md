@@ -638,3 +638,86 @@ two earlier regexes were found to miscount (bullet-spanning windows,
 attributed to the agent). Any earlier figure in this document or in the
 screen analysis that was not produced by that script should be treated as
 superseded.
+
+### §9.7 (reserved)
+
+Referenced from code comments (`_build_pgg_decision`, `behavioral.py
+--representation`) for the k-indexed history rewrite of 2026-08-24 -- the
+history states k as the OTHERS' count and both groups' points. That change
+is recorded in the Chapter 3 preamble of
+`eval_results/teacher_signal/pgg_single_turn_qwen3-8b/analysis/analysis_pgg_qwen3-8b.md`;
+no separate section was written.
+
+### §9.8 `decision_full`: the k-table with every player's points (2026-08-25)
+
+The 2026-08-25 v2 screen split the two comprehension channels between the
+two candidate blocks (Chapters 2-3 of the analysis doc above):
+
+- `list` (composition rows, every player's points) makes the utilitarian
+  arm measurable (84 | 85) but forces the agent to add itself to a group
+  total; 35 of its 50 base contributions carried a self-count error and
+  14 concluded "both actions pay the same". Its 16 | 8 floor is noise.
+- `decision` (own payoff by the others' count) has a clean floor (0 | 0)
+  but hides the others' payoffs; utilitarian traces froze them at the
+  history's values ("the others still get 20 each") in essentially every
+  trace, and the arm collapsed to 4 | 5.
+
+Decision: one block that states everything and indexes everything by k.
+`_build_pgg_decision_full` keeps the `decision` frame (rows = how many of
+the OTHERS choose the contribute label, columns = the agent's choice) and
+writes into each cell the agent's points followed by what each other
+player scores under that outcome:
+
+> | others choosing action3 | you choose action3 | you choose action4 |
+> | --- | --- | --- |
+> | 0 | you 5; each other player (action4) 15 | you 10; each other player (action4) 10 |
+> | 1 | you 10; the action3 player 10, each action4 player 20 | you 15; the action3 player 5, each action4 player 15 |
+> | 2 | you 15; each action3 player 15, the action4 player 25 | you 20; each action3 player 10, the action4 player 20 |
+> | 3 | you 20; each other player (action3) 20 | you 25; each other player (action3) 15 |
+
+Every number is derived through `get_score_pgg`: the agent's own payoff at
+(own, k); a fellow contributor sees k - 1 + [own = C] others contributing,
+a keeper sees k + [own = C]. `test_pgg_decision_full_representation` pins
+each cell to scoring and each cell's implied group total to
+N*E + j(sN - E), j = k + [own = C]. `matrix_layout` bits keep their
+meaning (row order / column order); `game_description` stays off (§9.6's
+ON decision is superseded by the appendix finding that the preamble drives
+deontological to 100% at every k).
+
+§9.5 rejected an agent-centric form that states the others' points on
+length (24 numbers against 8). That was the wrong constraint: every
+failure found since was a fact the model had to compute rather than read,
+and the 8B model transcribes 24 stated numbers without error.
+
+**Smoke** (job 3184842 → 3184844, `scripts/debug/pgg_smoke.sh`, then `pgg_smoke_hybrid.sh`,
+64 eps × none / utilitarian / deontological, description off): 0 parse
+failures, 0 self-count errors, 0 frozen-others reads, 0 wrong own-payoff
+reads over 192 traces (every regex flag hand-checked: all were
+row-condition phrasing). none 1/64; utilitarian 60/64 flat; deontological
+own = D 0, 1, 1, 7 of 8.
+
+**Screen** (job 3185343, `configs/sweeps/pgg_single_turn_qwen3_hybrid.yaml`,
+eval group `pgg_single_turn_qwen3-8b_v3`, 4 arms × 400 eps;
+`deontological+repair+generosity` dropped as inert single-shot):
+
+| mean P(C), C_A | D_A | `list` (v2) | `decision` (v2) | `decision_full` (v3) |
+|---|---|---|---|---|
+| none | 16 \| 8 | 0 \| 0 | **1 \| 1** |
+| deontological | 66 \| 42 | 54 \| 40 | **62 \| 40** |
+| utilitarian | 84 \| 85 | 4 \| 5 | **96 \| 95** |
+| universalization | 83 \| 71 | 68 \| 51 | **69 \| 64** |
+
+Fixed-others total in 0% of utilitarian traces (v2 `decision`: 31-45%);
+label inversion 22% (unchanged across all three blocks -- a property of
+the deontological wording at n > 2, reported, not fixed). Three teachers
+give three curve shapes (utilitarian flat, deontological steep, universalization
+intermediate), which is the property that makes PGG a better discriminator
+than the 2x2 games.
+
+**Adopted** as the PGG payoff block for checkpoint evaluation and the P3
+training arm. Open: a stated-vs-true group-total metric for the
+utilitarian arm (some traces count "each action3 player" once where the
+cell means two; the ranking survives, the arithmetic does not), and the
+multi-round block, which is where repair/forgiveness become measurable.
+Results: `eval_results/teacher_signal/pgg_single_turn_qwen3-8b_v3/analysis/`;
+cross-design narrative: Chapter 4 of the analysis doc above.
