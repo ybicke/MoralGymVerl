@@ -61,6 +61,7 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parents[2] / "src"))
+from measures import gap_pp, sign_test_p  # noqa: E402
 from eval_cells import (  # noqa: E402
     check_comparability,
     discover_run_dirs,
@@ -346,20 +347,6 @@ def behavioral(run_dir: Path) -> Dict:
 
 def pct(p: float) -> str:
     return f"{round(100 * p)}"
-
-
-def gap_pp(block: Dict) -> int:
-    return round(100 * (block["cond_given_opp_c"]["p_C"]
-                        - block["cond_given_opp_d"]["p_C"]))
-
-
-def sign_test_p(c_ward: int, d_ward: int) -> float:
-    """Two-sided binomial sign test on the C-ward/D-ward trace split."""
-    n = c_ward + d_ward
-    if n == 0:
-        return 1.0
-    tail = sum(math.comb(n, i) for i in range(min(c_ward, d_ward) + 1))
-    return min(1.0, 2 * tail / 2 ** n)
 
 
 def shared_meta(cells: Dict[CellKey, Path]) -> Dict:

@@ -41,8 +41,9 @@ from typing import Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).parent))
 from eval_cells import check_comparability, discover_run_dirs, load_json  # noqa: E402
+from measures import gap_pp  # noqa: E402
 from publication_tables import (  # noqa: E402
-    D_OPP, STATES4, Cell, Table, behavioral, gap_pp, pct, plain,
+    D_OPP, STATES4, Cell, Table, behavioral, pct, plain,
     state_label, to_latex, to_markdown,
 )
 from training_trajectory import load_decisions, trajectory_table, windows  # noqa: E402

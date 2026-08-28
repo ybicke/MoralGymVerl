@@ -58,7 +58,10 @@ from typing import Dict, List, Optional, Tuple
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parents[2] / "src"))
 from eval_cells import check_comparability, discover_run_dirs, load_cell  # noqa: E402
-from pgg_label_valence import valence  # noqa: E402
+from measures import (  # noqa: E402
+    arithmetic, club_good, curve_counts, diagnostic_totals, fixed_others_total,
+    group_total, p_C, valence,
+)
 from publication_tables import (  # noqa: E402
     MISSING, VALUES, Cell, Table, moral_values_section, pct, to_latex,
     to_markdown,
@@ -83,11 +86,6 @@ ARM_ORDER = (
 # contribute label's count -- the asymmetry `label inversion` is about.
 # Since 699b27f it states k as the OTHERS' count and gives both groups'
 # payoffs (docs/pgg_design.md s9.7).
-CLUB_GOOD = re.compile(
-    r"miss(?:ing)? out|need others as well|need at least|threshold"
-    r"|enough (?:players|others)|already (?:enough|contributed)|club good",
-    re.IGNORECASE)
-
 # ----------------------------------------------------------- cell loading
 
 def parse_cell(run_dir: Path) -> Optional[Dict]:
@@ -158,106 +156,6 @@ def arms_in_order(cells: Dict[str, Dict]) -> List[str]:
             + [a for a in sorted(cells) if a not in ARM_ORDER])
 
 
-def by_state(records: List[Dict], own: str, k: int) -> List[Dict]:
-    return [r for r in records if r["own"] == own and r["k"] == k]
-
-
-def p_C(records: List[Dict]) -> Optional[float]:
-    """Contribution rate over decisions that parsed; None if none did."""
-    decided = [r for r in records if r["act"] is not None]
-    if not decided:
-        return None
-    return sum(r["act"] == "C" for r in decided) / len(decided)
-
-
-# --------------------------------------------------------- game arithmetic
-
-def group_total(j: int, payoffs: Dict) -> int:
-    """True group payoff with j of N contributing: (N-j)(E+sj) + j*sj."""
-    n, e, s = payoffs["n_players"], payoffs["endowment"], payoffs["share"]
-    return (n - j) * (e + s * j) + j * s * j
-
-
-def fixed_others_total(k: int, own_contributes: bool, payoffs: Dict) -> int:
-    """Group total under the fixed-others read: the agent's own payoff row
-    for the observed k applied to every player, i.e. each other player
-    credited as if k of THEIR co-players contributed. Ignores that a
-    contributor sees only k-1 fellow contributors, and that the agent's
-    own contribution raises everyone else by s."""
-    n, e, s = payoffs["n_players"], payoffs["endowment"], payoffs["share"]
-    mine = s * (k + 1) if own_contributes else e + s * k
-    return mine + k * s * (k + 1) + (n - 1 - k) * (e + s * k)
-
-
-def diagnostic_totals(k: int, payoffs: Dict) -> Dict[str, object]:
-    """Totals that identify one arithmetic and not the other, at this k.
-
-    Both reads are computed on both branches (agent contributes / keeps).
-    A value is diagnostic only if it is unique ACROSS the four numbers:
-    at k = 1 the fixed-others contribute total (50) equals the true keep
-    total, so a trace stating 50 says nothing about which arithmetic it
-    ran, even though 50 differs from the true total on its own branch.
-
-    Also reports which branch each surviving value came from. When the
-    two diagnostics sit on different branches the comparison is between
-    an agent that contributes and one that keeps, so the cross-tab is
-    indicative only -- the caller footnotes those k.
-    """
-    branches = {
-        "C": (fixed_others_total(k, True, payoffs), group_total(k + 1, payoffs)),
-        "D": (fixed_others_total(k, False, payoffs), group_total(k, payoffs)),
-    }
-    all_fixed = {v for v, _ in branches.values()}
-    all_true = {t for _, t in branches.values()}
-    fixed, true = all_fixed - all_true, all_true - all_fixed
-    fixed_branches = {b for b, (v, _) in branches.items() if v in fixed}
-    true_branches = {b for b, (_, t) in branches.items() if t in true}
-    return {
-        "fixed": fixed,
-        "true": true,
-        "same_branch": fixed_branches == true_branches,
-    }
-
-
-# ------------------------------------------------------------- detectors
-
-def club_good(raw: str) -> bool:
-    return bool(CLUB_GOOD.search(raw))
-
-
-# Label valence comes from pgg_label_valence.py, not from a detector local
-# to this file. Three earlier regexes over this text miscounted -- windows
-# that spanned bullets, "avoid exploiting" read as exploiting, and the
-# VICTIMS' conduct attributed to the agent ("exploits those acting in good
-# faith BY CHOOSING action3") -- so the surviving one requires the label to
-# be the object of a choice verb whose subject is the agent, and is
-# validated against 20 hand-labelled traces (~85% precision on `inverted`).
-# Its residual failure is pronoun anaphora ("THIS exploits them"), which
-# costs recall on `correct`, so reported inversion is conservative.
-def stated_totals(raw: str) -> set:
-    """Numbers the trace presents as a group/combined total."""
-    found = set()
-    for m in re.finditer(r"(?:total|combined|group)[^.\n]{0,90}?(\d{2,3})\b",
-                         raw, re.IGNORECASE):
-        found.add(int(m.group(1)))
-    for m in re.finditer(r"=\s*\*{0,2}(\d{2,3})\s*(?:points|\*)", raw):
-        found.add(int(m.group(1)))
-    return found
-
-
-def arithmetic(record: Dict, payoffs: Dict) -> str:
-    """Which group-total arithmetic the trace states: fixed, true, both,
-    or neither. Exhaustive, so a table over them sums to the state."""
-    diag = diagnostic_totals(record["k"], payoffs)
-    stated = stated_totals(record["raw"])
-    hit_fixed, hit_true = bool(diag["fixed"] & stated), bool(diag["true"] & stated)
-    if hit_fixed and hit_true:
-        return "both"
-    if hit_fixed:
-        return "fixed"
-    return "true" if hit_true else "neither"
-
-
 # --------------------------------------------------------- statistics
 
 # --------------------------------------------------------- formatting
@@ -275,11 +173,7 @@ def curve_rows(cell: Dict) -> Dict[str, Tuple[List[int], List[int]]]:
     published = cell["block"]["pgg"]["cond_contribution_curve"]
     rows: Dict[str, Tuple[List[int], List[int]]] = {}
     for own in ("C", "D"):
-        counts, ns = [], []
-        for k in range(n_players):
-            sub = by_state(cell["records"], own, k)
-            counts.append(sum(r["act"] == "C" for r in sub))
-            ns.append(len(sub))
+        counts, ns = curve_counts(cell["records"], own, range(n_players))
         rows[own] = (counts, ns)
         # Integrity gate: the tables and behavioral.json must not drift.
         for k, (x, n) in enumerate(zip(counts, ns)):
@@ -389,10 +283,10 @@ def label_inversion_table(cells: Dict[str, Dict],
             rows.append((VALUE_NAMES.get(arm, arm) if own == "C" else "", [
                 Cell(f"{own}$_A$"),
                 Cell(pct(len(inv) / len(half))),
-                Cell(fmt_pct(p_C(inv))),
+                Cell(fmt_pct(p_C(r["act"] for r in inv))),
                 Cell(pct(len(cor) / len(half))),
-                Cell(fmt_pct(p_C(cor))),
-                Cell(pct(p_C([r for _, r in half]))),
+                Cell(fmt_pct(p_C(r["act"] for r in cor))),
+                Cell(pct(p_C(r["act"] for _, r in half))),
             ]))
     if not rows:
         return None
@@ -427,7 +321,7 @@ def group_arithmetic_table(cells: Dict[str, Dict],
     for arm in arms:
         cell = cells[arm]
         records, payoffs = cell["records"], cell["payoffs"]
-        kinds = {id(r): arithmetic(r, payoffs) for r in records}
+        kinds = {id(r): arithmetic(r["k"], r["raw"], payoffs) for r in records}
         if sum(k != "neither" for k in kinds.values()) < PANEL_THRESHOLD * len(records):
             continue
         for k in range(payoffs["n_players"]):
@@ -442,10 +336,10 @@ def group_arithmetic_table(cells: Dict[str, Dict],
                 Cell("/".join(map(str, sorted(diag["fixed"])))),
                 Cell("/".join(map(str, sorted(diag["true"])))),
                 Cell(pct(len(fixed) / len(sub))),
-                Cell(fmt_pct(p_C(fixed))),
+                Cell(fmt_pct(p_C(r["act"] for r in fixed))),
                 Cell(pct(len(true) / len(sub))),
-                Cell(fmt_pct(p_C(true))),
-                Cell(pct(p_C(sub))),
+                Cell(fmt_pct(p_C(r["act"] for r in true))),
+                Cell(pct(p_C(r["act"] for r in sub))),
             ]))
     if not rows:
         return None
@@ -496,7 +390,7 @@ def game_note(payoffs: Dict) -> str:
 def header(cells: Dict[str, Dict], arms: List[str], paths: List[Path]) -> str:
     meta = cells[arms[0]]["meta"]
     n_players = cells[arms[0]]["payoffs"]["n_players"]
-    per_state = len(by_state(cells[arms[0]]["records"], "C", 0))
+    per_state = sum(r["own"] == "C" and r["k"] == 0 for r in cells[arms[0]]["records"])
     commits = sorted({cells[a]["meta"].get("git_commit") for a in arms})
     dates = sorted({(cells[a]["meta"].get("timestamp") or "")[:10]
                     for a in arms})

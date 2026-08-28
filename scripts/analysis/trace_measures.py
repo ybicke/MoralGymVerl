@@ -34,6 +34,10 @@ from typing import Dict, Iterable, List, Tuple
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parents[2] / "src"))
 from eval_cells import load_cell  # noqa: E402
+from measures import (  # noqa: E402
+    NORMATIVE_VOCAB, OVERLAP_WORDS, longest_overlap, normative_hit,
+    principle_ngrams, principle_overlap, words as _words,
+)
 from publication_tables import (  # noqa: E402
     MISSING, Cell, Table, plain, state_label, to_markdown,
 )
@@ -46,36 +50,6 @@ STATES = ("CC", "CD", "DC", "DD")
 # case-insensitively as whole-word prefixes ("exploit" hits exploited /
 # exploitative; "reciproc" hits reciprocity / reciprocate). Reviewed
 # 2026-08-24; change here and the rate's definition changes everywhere.
-NORMATIVE_VOCAB = (
-    "good faith", "trust", "exploit", "moral", "ethic", "principle",
-    "fair", "reciproc", "wrong", "obligat", "betray", "honest",
-)
-OVERLAP_WORDS = 6
-
-_WORD = re.compile(r"[a-z']+")
-
-
-def _words(text: str) -> List[str]:
-    return _WORD.findall(text.lower())
-
-
-def normative_hit(text: str) -> bool:
-    t = text.lower()
-    # "fair" must not fire on "fairly (likely)"; the other stems are safe.
-    return any(re.search(r"\b" + re.escape(v) + (r"(?!ly)" if v == "fair" else ""), t)
-               for v in NORMATIVE_VOCAB)
-
-
-def principle_ngrams(principle: str, n: int = OVERLAP_WORDS) -> set:
-    w = _words(principle)
-    return {tuple(w[i:i + n]) for i in range(len(w) - n + 1)}
-
-
-def principle_overlap(text: str, grams: set, n: int = OVERLAP_WORDS) -> bool:
-    w = _words(text)
-    return any(tuple(w[i:i + n]) in grams for i in range(len(w) - n + 1))
-
-
 # ------------------------------------------------------------------ sources
 
 class Trace:
@@ -261,22 +235,6 @@ def compact_stats_tables(acc: Dict, principle_name: str) -> List[Table]:
 
 SUB = {"CC": "C<sub>A</sub>C<sub>O</sub>", "CD": "C<sub>A</sub>D<sub>O</sub>",
        "DC": "D<sub>A</sub>C<sub>O</sub>", "DD": "D<sub>A</sub>D<sub>O</sub>"}
-
-
-def longest_overlap(text: str, principle_words: List[str]) -> Tuple[int, int]:
-    """(length, start index in text words) of the longest word run shared
-    verbatim with the principle wording. Quadratic, fine at 256/step."""
-    w = _words(text)
-    best = (0, 0)
-    for i in range(len(w)):
-        for j in range(len(principle_words)):
-            k = 0
-            while (i + k < len(w) and j + k < len(principle_words)
-                   and w[i + k] == principle_words[j + k]):
-                k += 1
-            if k > best[0]:
-                best = (k, i)
-    return best
 
 
 def parse_steps(spec: str) -> List[int]:
