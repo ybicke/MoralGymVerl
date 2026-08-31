@@ -64,11 +64,10 @@ mkdir -p "${LOG_BASE}"
 RUN_NAME="teacher_signal_${GAME}_${MORAL_VALUE}_${SLURM_JOB_ID}"
 exec > "${LOG_BASE}/${RUN_NAME}.out" 2> "${LOG_BASE}/${RUN_NAME}.err"
 
-CONFIG="${CONFIG:-configs/eval/teacher_signal_9b.yaml}"
-# Results layout: eval_results/teacher_signal/<EVAL_GROUP>/<cell>/
-#   EVAL_GROUP names the experiment campaign (single_round, multi_round,
-#   robustness, smoke, ...; default: adhoc). Set at
-#   submit time:  EVAL_GROUP=robustness sbatch ...
+CONFIG="${CONFIG:-configs/eval/teacher_signal/gemma2_9b/classic/_harness.yaml}"
+# Results layout: eval_results/<RESULTS_DIR>/<EVAL_GROUP>/cells/<cell>/
+#   EVAL_GROUP is <subject>/<experiment> (docs/naming.md); the sweep path
+#   normally derives it (submit_sweep.py). Hand submits land in adhoc/.
 # One directory per run cell; filenames inside say what they contain:
 #   behavioral.json / behavioral.responses.jsonl
 #   probe_a.json / probe_b.json / probe_b.traces.jsonl

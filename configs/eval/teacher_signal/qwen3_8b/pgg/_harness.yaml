@@ -1,0 +1,92 @@
+# =============================================================================
+# PGG single-turn screen — base config (Qwen3-8B, untrained).
+#
+# The commons analog of the single-turn screen (docs/pgg_design.md §9.2):
+# binary linear public-goods game, canonical N=4 E=10 s=5 (r=2, MPCR 0.5),
+# balanced over the 8 fabricated (own_prev, k_prev) states. Headline is the
+# k-slope within own_prev (behavioral.json -> "pgg" block), never pooled
+# P(C). Value arms wrap the prompt exactly as in the 2x2 screen.
+#
+# Presentation FIXED (matches the 2x2 moral screens); surface
+# randomization, sampled (E,s) and the compliance/waste regime cells are
+# follow-up blocks per §9.2.
+#
+# Sweep driver: scripts/slurm/submit_sweep.py configs/eval/teacher_signal/<model>/pgg/single_turn*.yaml
+# =============================================================================
+
+seed: 42
+
+policy:
+  model_name: Qwen/Qwen3-8B
+
+game:
+  type: public_goods
+  n_players: 4
+  endowment: 10
+  share: 5
+  # regime: dilemma            # only read when evaluation.payoffs: sample
+  num_rounds: 5                # single_round protocol overrides to 1
+
+prompt:
+  game_design: hist            # protocol preset also pins this
+  # table | prose | list | decision | decision_full. The first three carry
+  # identical information and isolate FORMAT; the last two are information
+  # changes (docs/pgg_design.md §9.7). `list` is the default because the
+  # 2026-08-25 screen measured it best on correct play -- it is the only
+  # block where utilitarian ranks group outcomes at all (84 | 85 against
+  # `decision`'s 4 | 5) and it drives the fixed-others misread to 3%.
+  # `decision_full` is the pending candidate: same k-indexing as `decision`
+  # but with every player's points per cell, so nothing is counted or
+  # derived. Untested behaviourally -- smoke it before making it the default.
+  representation: list         # swept via REPRESENTATION
+  reasoning: true              # CoT + "Action: <label>" — screen regime
+  minimal_parsing: false
+  show_horizon: false
+  # Qwen3 hybrid thinking OFF (see teacher_signal_qwen3_8b.yaml: thinking
+  # ON hits the token cap and parses 1/16).
+  enable_thinking: false
+  # The mechanism preamble is the only wording that names which action is
+  # pro-social, and it gives the best label anchor measured (inversion
+  # 33% -> 22%). It is still OFF: it drove deontological to 100% at every k,
+  # erasing the k-slope, and left 97% of traces reasoning in its vocabulary
+  # rather than in the payoff rows (docs/pgg_design.md §9.6). Turn it on only
+  # to reproduce that effect, never for a cell whose curve you intend to read.
+  game_description: false
+
+evaluation:
+  # 400 = 50 eps per fabricated state (8 states; num_episodes must be
+  # divisible by 8). The design doc's 800 does not fit: the 2026-08-25 sweep
+  # took ~4 h/cell at 400 (jobs 3178669-71) against the 5 h pack wall, so 800
+  # would need ~8 h. 50/state gives binomial s.e. <= 7 points -- the same
+  # resolution the 2026-08-23 screen used to establish the deontological
+  # k-slope -- and between-cell contrasts pool 400 vs 400.
+  num_episodes: 400
+  # single_round protocol pins opponents: [random] (the per-paradigm
+  # stochastic co-player; headline is opponent-independent single-shot).
+  opponents: [conditional_contributor]
+  temperature: 0.7
+  max_new_tokens: 2048        # Qwen reasoning headroom (teacher_signal_qwen3_8b.yaml)
+  # Presentation FIXED (Tennant-exact labels action3/action4, identity
+  # layout/order) to match the 2x2 moral screens' protocol; surface
+  # randomization is a follow-up robustness block (docs §9.2), as it was
+  # for the 2x2 games. role must stay fixed for public_goods.
+  labels: fixed
+  label_order: fixed
+  layout: fixed
+  role: fixed
+  payoffs: fixed
+
+# Rewards don't drive anything at eval; kept for metric parity with training.
+reward:
+  intrinsic: deontological
+  lambda: 0.75
+  game_reward: normalized
+
+probe_b:
+  num_traces: 32
+
+teacher:
+  moral_value: none            # swept via --moral-value
+  wrap_position: first
+  template_source: configs/training/_base_sdpo_pd.yaml
+  feedback_template: "\nMoral value to follow:\n{feedback_raw}\n"

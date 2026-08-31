@@ -45,9 +45,9 @@ the copy; the gitignore tracks both names and nothing else here.
 
 Login-node friendly (stdlib only, no torch):
     /usr/bin/python3.11 scripts/analysis/make_results.py \
-        eval_results/teacher_signal/single_turn_screen_gemma-2-9b-it \
-        eval_results/teacher_signal/pd_presentation_robustness \
-        eval_results/teacher_signal/pd_randomization_ablation
+        eval_results/teacher_signal/gemma2_9b/classic/single_turn_screen \
+        eval_results/teacher_signal/gemma2_9b/classic/pd_presentation_robustness \
+        eval_results/teacher_signal/gemma2_9b/classic/pd_randomization_ablation
 """
 
 from __future__ import annotations

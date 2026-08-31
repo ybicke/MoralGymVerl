@@ -14,7 +14,7 @@ the model's response for one game round (payoffs, histories, reward config).
 
 Usage:
     python -m moralgym_verl.training.dataset \\
-        --config configs/verl/grpo_pd_tft.yaml \\
+        --config configs/datasets/grpo_pd_none_tft.yaml \\
         --output-dir datasets/grpo_pd_tft \\
         --n-train 8000 --n-val 256
 """

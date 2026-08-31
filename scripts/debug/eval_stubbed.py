@@ -84,7 +84,7 @@ if __name__ == "__main__":
     # is appended after them, and argparse lets the later value win.
     sys.argv = [
         "behavioral",
-        "--config", "configs/eval/teacher_signal_9b.yaml",
+        "--config", "configs/eval/teacher_signal/gemma2_9b/classic/_harness.yaml",
         "--checkpoint", "base",
         "--num-episodes", "8",
         "--output", "eval_results/_debug/behavioral_stubbed.json",

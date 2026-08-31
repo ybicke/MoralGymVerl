@@ -24,9 +24,9 @@ screen layout; the group is the experiment name
 (<model>-<game>-<algo>-<principle>), the training run is recorded in
 the header and the manifest. Login node, stdlib only:
     /usr/bin/python3.11 scripts/analysis/make_results.py \
-        eval_results/post_training/qwen3-8b-pd-sdpo-deon-repair-gen \
-        --reference eval_results/teacher_signal/single_turn_screen_qwen3-8b \
-        --reference eval_results/teacher_signal/generosity_arm_qwen3-8b \
+        eval_results/post_training/qwen3_8b_sdpo_pd_deon-repair-gen_tft_200/classic/ckpt_ladder \
+        --reference eval_results/teacher_signal/qwen3_8b/classic/single_turn_screen \
+        --reference eval_results/teacher_signal/qwen3_8b/classic/pd_generosity_arm \
         --principle deontological+repair+generosity \
         --rollouts ~/logs_verl/runs/qwen_run2_200
 """

@@ -1,0 +1,75 @@
+# PD presentation-robustness — does the model read the payoff block, or
+# memorize its surface?
+#
+# Separate sweep, separate eval_group, on purpose. It asks a different
+# question from single_turn_screen (which ethic moves behaviour), it has a
+# different instrument (behavioral only — see below), and keeping the
+# groups apart means each sweep_manifest.json describes one experiment and
+# the comparability check stays meaningful.
+#
+# Why it matters: training will randomize presentation precisely so the
+# model cannot learn positional shortcuts (fixed label positions, a
+# memorized grid). This measures the BASE model's fixed-vs-randomized gap,
+# which is the baseline that later tells you whether robustness came from
+# training or was there all along.
+#
+# PD only: it carries the canonical baselines, and a representation-
+# robustness gap should show up there if it exists anywhere. Widen to the
+# other games only if the gap is real.
+#
+# INSTRUMENT CAVEAT: the probes force fixed presentation by design
+# (teacher_forcing.force_fixed_presentation — they are paired diagnostics
+# and must not draw from an unpaired RNG stream). So this sweep is
+# behavioral-only: cooperation rates, per-state tables and the offline
+# per-facet slices, but no probe deltas. RUN_PROBES is off accordingly —
+# leaving it on would rerun identical fixed-presentation probes in every
+# cell.
+#
+# Pairing: presentation draws come from a dedicated RNG stream, so toggling
+# randomization does not perturb any other draw — the fixed and randomized
+# arms stay paired on everything else. That is what makes the delta clean.
+#
+# Reading the results: summarize_eval_cells.py prints a `slices` section
+# breaking P(C) down per presentation facet within the randomized cells —
+# that is where a positional shortcut shows up (e.g. cooperation tracking
+# grid position rather than payoff structure).
+#
+# Submit:
+#   /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/eval/teacher_signal/gemma2_9b/classic/pd_presentation_robustness.yaml --dry-run
+#
+# 1 game x 2 representations x 2 values x 2 presentation arms = 8 cells.
+num_episodes: 400
+
+axes:
+  game: [prisoners_dilemma]
+  representation: [matrix, prose]
+  # none = no moral context (the raw reading ability of the base model —
+  # every cell here is the base model; 'none' just omits the wrapper).
+  # deontological pairs with it to test whether moral framing changes
+  # surface sensitivity. The other wordings are irrelevant to how the
+  # payoff block is read.
+  moral_value: [none, deontological]
+  protocol: [single_round]
+
+  # The contrast, and the reason it is SURFACE randomization rather than
+  # full: the four surface axes (labels, layout, label_order, role)
+  # re-render an IDENTICAL game, so the two arms are the same decisions
+  # differently presented and any gap is attributable to how the block is
+  # read. full_randomization would add payoff resampling, which changes
+  # the game's magnitudes — generalization across payoff instances is a
+  # different claim and does not pair the same way.
+  #
+  # Subsets are expressible without new preset names, to isolate one
+  # channel:  [fixed_representation, layout]  /  [..., labels]  /
+  #           [..., labels+layout+role]
+  # Axis names: labels, layout, label_order, role, payoffs.
+  presentation: [fixed_representation, surface_randomization]
+
+env:
+  # Behavioral-only sweep: the probes are fixed-presentation by design and
+  # would be byte-identical across the two arms.
+  RUN_PROBES: "off"
+  RUN_PROBE_B_EPISODE: "off"
+
+extra_args: ["--temperature", "0.7"]

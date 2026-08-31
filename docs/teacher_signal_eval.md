@@ -14,7 +14,7 @@ models — both are base gemma-2-9b-it. The names refer to prompt versions:
   environment's own `build_prompt()` (same code as training and the
   behavioral eval);
 - *teacher prompt* = the SAME string wrapped by `wrap_prompt()` in the
-  SDPO `reprompt_template` (from `configs/verl/sdpo_pd_tft.yaml`) with a
+  SDPO `reprompt_template` (from `configs/training/_base_sdpo_pd.yaml`) with a
   moral value in the `{feedback}` slot ("Moral value to follow: ...").
 
 "Building/making a prompt" is pure Python string construction — the

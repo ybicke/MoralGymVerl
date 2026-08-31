@@ -3,16 +3,24 @@
 # Submit a MoralGymVerl GRPO or SDPO training job on Clariden.
 #
 # Usage:
-#   bash train_verl.sh <config_name> <run_name> [verl overrides...]
+#   bash train_verl.sh <config_name> [run_name] [verl overrides...]
+#
+# Naming contract (docs/naming.md): configs/training/<RUN_NAME>.yaml is one
+# file per run, named with the canonical grammar
+#   <model>_<size>_<algo>_<game>_<arm>_<opponent>_<steps>[_vN]
+# so RUN_NAME defaults to <config_name> and everything downstream (W&B,
+# checkpoint dir, logs, dataset dir, post-training eval subject) shares it.
+# DATASET_CONFIG defaults to the <algo>_<game>_<arm>_<opponent> fields of
+# the run name. Pass [run_name] only to deviate (smokes: *_smoke).
 #
 # Examples:
-#   bash train_verl.sh grpo_pd_tft grpo_pd_tft_seed1
-#   DATASET_CONFIG=sdpo_run1_pd bash train_verl.sh sdpo_run1_pd_gemma gemma_run1
+#   bash train_verl.sh qwen3_8b_grpo_pd_util_tft_150
+#   DRY_RUN=1 bash train_verl.sh qwen3_8b_grpo_pd_util_tft_150   # resolve only
 #
-# <config_name> -> configs/verl/<name>.yaml; <run_name> names the W&B
-# experiment, checkpoint dir, and log files. Trailing args become Hydra
-# overrides. Env: PARTITION (normal), TIME (12:00:00), DATASET_CONFIG
-# (=<config_name>, also names the W&B group), DATASET_SEED (42).
+# Trailing args become Hydra overrides. Env: PARTITION (normal), TIME
+# (12:00:00), DATASET_CONFIG (derived, also names the W&B group),
+# DATASET_SEED (42), DRY_RUN (stop after name/phase checks; no dataset
+# generation, no sbatch).
 #
 # Three execution contexts — every path below depends on which one it is in:
 #   1-4  login node, submit time   python3.11, no GPUs
@@ -23,10 +31,25 @@
 set -euo pipefail
 
 # ── 1. Arguments ─────────────────────────────────────────────────────────────
-CONFIG_NAME="${1:-grpo_pd_tft}"
-RUN_NAME="${2:-${CONFIG_NAME}_$(date +%Y%m%d_%H%M%S)}"
-shift 2 || true          # remaining args passed to verl as overrides
+CONFIG_NAME="${1:?Usage: train_verl.sh <config_name> [run_name] [overrides...]}"
+shift
+# Optional run_name: a Hydra override always contains '=', a run name never.
+if [ $# -gt 0 ] && [[ "$1" != *=* ]]; then
+    RUN_NAME="$1"; shift
+else
+    RUN_NAME="${CONFIG_NAME}"
+fi
 EXTRA_ARGS="$@"
+
+# Canonical run-name check (docs/naming.md). A canonical name also yields
+# the dataset config: fields 3-6 = <algo>_<game>_<arm>_<opponent>.
+if [[ "${RUN_NAME}" =~ ^([a-z0-9]+)_([0-9]+b)_(grpo|sdpo)_([a-z0-9]+)_([a-z0-9-]+)_([a-z0-9-]+)_([0-9]+|smoke[0-9]*)(_v[0-9]+)?$ ]]; then
+    DATASET_DEFAULT="${BASH_REMATCH[3]}_${BASH_REMATCH[4]}_${BASH_REMATCH[5]}_${BASH_REMATCH[6]}"
+else
+    echo "WARNING: run name '${RUN_NAME}' is not canonical" >&2
+    echo "  expected <model>_<size>_<algo>_<game>_<arm>_<opponent>_<steps>[_vN] (docs/naming.md)" >&2
+    DATASET_DEFAULT="${CONFIG_NAME}"
+fi
 
 # ── 2. Cluster settings ──────────────────────────────────────────────────────
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -46,9 +69,9 @@ EDF_NAME="moralgym_verl"
 DATASET_SEED="${DATASET_SEED:-42}"
 # DATASET_CONFIG decouples data from trainer, e.g. SDPO on the GRPO dataset.
 # It also names the W&B group (step 8): with one reward-agnostic trainer
-# config shared by several arms, the DATASET is the arm identity — the
-# trainer name would label every arm identically.
-DATASET_CONFIG="${DATASET_CONFIG:-${CONFIG_NAME}}"
+# config shared by several arms, the DATASET is the arm identity — which is
+# why it is derived from the arm fields of the canonical run name (step 1).
+DATASET_CONFIG="${DATASET_CONFIG:-${DATASET_DEFAULT}}"
 DATASET_DIR="${SCRATCH}/moralgym_verl_datasets/${RUN_NAME}"
 
 # ── 4. Per-run dataset: phase guard, then generate ───────────────────────────
@@ -61,7 +84,7 @@ DATASET_DIR="${SCRATCH}/moralgym_verl_datasets/${RUN_NAME}"
 import sys, yaml
 repo, ds_name, tr_name = sys.argv[1:4]
 ds = yaml.safe_load(open(f"{repo}/configs/datasets/{ds_name}.yaml"))
-tr = yaml.safe_load(open(f"{repo}/configs/verl/{tr_name}.yaml"))
+tr = yaml.safe_load(open(f"{repo}/configs/training/{tr_name}.yaml"))
 rounds = ds["game"]["num_rounds"]
 mt = (tr.get("actor_rollout_ref", {}).get("rollout", {})
         .get("multi_turn", {}).get("enable", False))
@@ -76,6 +99,16 @@ if (rounds > 1) != bool(mt):
     )
 print(f"Phase check OK: num_rounds={rounds}, multi_turn.enable={bool(mt)}")
 PYEOF
+
+if [ -n "${DRY_RUN:-}" ]; then
+    echo "DRY_RUN resolution:"
+    echo "  config:  configs/training/${CONFIG_NAME}.yaml"
+    echo "  run:     ${RUN_NAME}"
+    echo "  dataset: configs/datasets/${DATASET_CONFIG}.yaml (seed ${DATASET_SEED})"
+    echo "  ckpts:   /iopsstor/scratch/cscs/${USER}/moralgym_verl_runs/${RUN_NAME}"
+    echo "Stopping before dataset generation and sbatch."
+    exit 0
+fi
 
 # System python3 on the login node is 3.6 and cannot parse this codebase.
 echo "Generating dataset from configs/datasets/${DATASET_CONFIG}.yaml (seed ${DATASET_SEED})"
@@ -100,9 +133,9 @@ export PYTHONPATH=/users/${USER}/SDPO:/users/${USER}/MoralGymVerl/src:\$PYTHONPA
 # ── 7. Commands to run on the compute node ───────────────────────────────────
 # Hydra: the PRIMARY config must resolve from --config-path — a searchpath
 # entry alone does not (verified 2026-07-04):
-#   <config_name>, moralgym_user → MoralGymVerl/configs/verl/  (--config-path)
-#   ppo_trainer                  → SDPO/verl/trainer/config/   (searchpath)
-MORALGYM_CONFIG_PATH="/users/${USER}/MoralGymVerl/configs/verl"
+#   <config_name>, _base_clariden → MoralGymVerl/configs/training/ (--config-path)
+#   ppo_trainer                   → SDPO/verl/trainer/config/     (searchpath)
+MORALGYM_CONFIG_PATH="/users/${USER}/MoralGymVerl/configs/training"
 SDPO_CONFIG_PATH="/users/${USER}/SDPO/verl/trainer/config"
 TRAIN_CMD="python -m verl.trainer.main_ppo \
   --config-path ${MORALGYM_CONFIG_PATH} \
@@ -116,7 +149,7 @@ TRAIN_CMD="python -m verl.trainer.main_ppo \
 # in-container write lands in the RAM overlay and vanishes at job end (cost us
 # the first sdpo_run1 checkpoints, 2026-08-19). && gates it on success; after a
 # crash the checkpoints are still on SCRATCH, cp -r by hand if worth keeping.
-# CKPT_DIR must match vars.ckpt_dir in configs/verl/moralgym_user.yaml.
+# CKPT_DIR must match vars.ckpt_dir in configs/training/_base_clariden.yaml.
 CKPT_DIR="/iopsstor/scratch/cscs/${USER}/moralgym_verl_runs/${RUN_NAME}"
 STORE_CKPT="/capstor/store/cscs/swissai/aa004/${USER}/checkpoints/${RUN_NAME}"
 STAGEOUT_CMD="if [ -d ${CKPT_DIR} ]; then mkdir -p ${STORE_CKPT} && cp -r ${CKPT_DIR}/. ${STORE_CKPT}/ && echo Checkpoints staged to ${STORE_CKPT}; else echo No checkpoint dir at ${CKPT_DIR} — skipping stage-out; fi"
@@ -136,13 +169,13 @@ WRAPPED_CMD="${MEM_CMD}; srun --environment=${EDF_NAME} bash -c '${SETUP_CMDS}; 
 
 # ── 8. Submit ────────────────────────────────────────────────────────────────
 echo "Submitting: ${RUN_NAME}"
-echo "  config:  configs/verl/${CONFIG_NAME}.yaml"
+echo "  config:  configs/training/${CONFIG_NAME}.yaml"
 echo "  dataset: ${DATASET_DIR}"
 echo ""
 
 # One task owns the whole node: verl spawns its own Ray workers across the 4
 # GPUs, so the usual --ntasks-per-node=4 convention does not apply. --export
-# carries the run identity into the container, where moralgym_user.yaml reads
+# carries the run identity into the container, where _base_clariden.yaml reads
 # it back via oc.env (MORALGYM_RUN_NAME/GROUP/DATASET_DIR).
 sbatch \
     --job-name="mg-verl" \

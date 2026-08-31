@@ -1,0 +1,34 @@
+# Generosity arm — Qwen3-8B. Paired rerun of generosity_arm.yaml with the
+# model as the only axis that moves (same pairing convention as
+# single_turn_screen_qwen3.yaml vs single_turn_screen.yaml); see
+# generosity_arm.yaml for the delta-sweep rationale and moral_values.py
+# for the generosity rider itself. On qwen the screen's
+# deontological+repair left P(C|DD) at 27-57 — the marginal effect of the
+# rider is read against those cells (adopt iff DD lifts to an
+# intermediate level without eroding the low CD cell).
+#
+# Pool this group with single_turn_screen_qwen3-8b at analysis time.
+#
+# Submit:
+#   /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/eval/teacher_signal/qwen3_8b/classic/pd_generosity_arm.yaml --dry-run
+#
+# 3 x 2 x 1 = 6 cells.
+
+num_episodes: 400
+
+axes:
+  game: [prisoners_dilemma, stag_hunt, chicken]
+
+  representation: [matrix, prose]
+
+  moral_value:
+    - deontological+repair+generosity
+
+  protocol: [single_round]
+
+env:
+  RUN_PROBES: "on"
+  RUN_PROBE_B_EPISODE: "off"
+
+extra_args: ["--temperature", "0.7"]

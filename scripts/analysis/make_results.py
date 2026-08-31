@@ -15,10 +15,10 @@ example traces. Hand-written annotation goes in analysis_*.md beside it,
 never in these files.
 
 Login node, stdlib only:
-    /usr/bin/python3.11 scripts/analysis/make_results.py eval_results/teacher_signal/<group>
-    /usr/bin/python3.11 scripts/analysis/make_results.py eval_results/teacher_signal/<screen> <robustness> <generosity_arm>
-    /usr/bin/python3.11 scripts/analysis/make_results.py eval_results/teacher_signal/<pgg_group>/cells/*__list__*
-    /usr/bin/python3.11 scripts/analysis/make_results.py eval_results/post_training/<experiment> \\
+    /usr/bin/python3.11 scripts/analysis/make_results.py eval_results/teacher_signal/<model>/<family>/<experiment>
+    /usr/bin/python3.11 scripts/analysis/make_results.py eval_results/teacher_signal/<model>/classic/{screen,robustness,generosity_arm}
+    /usr/bin/python3.11 scripts/analysis/make_results.py eval_results/teacher_signal/<model>/pgg/<experiment>/cells/*__list__*
+    /usr/bin/python3.11 scripts/analysis/make_results.py eval_results/post_training/<run_name>/<family>/<experiment> \\
         --reference eval_results/teacher_signal/<screen> --reference eval_results/teacher_signal/<generosity_arm> \\
         --rollouts $SCRATCH/moralgym_verl_runs/<run>
 

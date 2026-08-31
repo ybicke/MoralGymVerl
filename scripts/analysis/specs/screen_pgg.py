@@ -42,7 +42,7 @@ regenerated wholesale.
 
 Login-node friendly (stdlib only, no torch):
     /usr/bin/python3.11 scripts/analysis/make_results.py \
-        eval_results/teacher_signal/qwen3_8b/pgg_single_turn
+        eval_results/teacher_signal/qwen3_8b/pgg/single_turn
 """
 
 from __future__ import annotations

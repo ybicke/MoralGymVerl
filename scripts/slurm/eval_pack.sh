@@ -56,9 +56,15 @@ BATCH_JSON="${1:?Usage: eval_pack.sh <batch.json>}"
 # checkpoint evals.
 LOG_BASE="${HOME}/logs_verl/${EVAL_STAGE:-pre_eval}"
 mkdir -p "${LOG_BASE}"
-exec > "${LOG_BASE}/eval_pack_${SLURM_JOB_ID}.out" 2>&1
+# Tag the log with <subject>__<family>__<experiment>, read off the batch
+# path (eval_results/<root>/<subject>/<family>/<experiment>/
+# packed_node_batches/...), so ls of the log dir answers "which experiment
+# was job N" by itself.
+GROUP_DIR="$(dirname "$(dirname "${BATCH_JSON}")")"
+LOG_TAG="$(basename "$(dirname "$(dirname "${GROUP_DIR}")")")__$(basename "$(dirname "${GROUP_DIR}")")__$(basename "${GROUP_DIR}")"
+exec > "${LOG_BASE}/eval_pack_${SLURM_JOB_ID}_${LOG_TAG}.out" 2>&1
 
-CONFIG="${CONFIG:-configs/eval/teacher_signal_9b.yaml}"
+CONFIG="${CONFIG:-configs/eval/teacher_signal/gemma2_9b/classic/_harness.yaml}"
 WORKDIR="${LOG_BASE}/pack_${SLURM_JOB_ID}"
 mkdir -p "${WORKDIR}"
 

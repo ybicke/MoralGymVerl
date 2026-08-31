@@ -51,7 +51,7 @@ HF_HOME = os.environ.get(
 )
 
 # Models we have trained or intend to train, with the apply_chat_template kwargs the
-# configs actually pass (configs/verl/*.yaml -> data.apply_chat_template_kwargs).
+# configs actually pass (configs/training/*.yaml -> data.apply_chat_template_kwargs).
 KNOWN = {
     "Qwen/Qwen3-8B": {"enable_thinking": False},
     "meta-llama/Llama-3.1-8B-Instruct": {},

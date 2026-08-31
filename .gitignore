@@ -22,3 +22,4 @@ eval_results/**
 
 # Editor config (interpreter pin + debug launch configs, machine-specific)
 .vscode/
+

@@ -32,7 +32,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 def _resolve_yaml_path(yaml_path: str) -> str:
     """teacher.template_source is absolute or repo-relative (the
-    convention in configs/eval/*.yaml) — a relative path always anchors
+    convention in configs/eval/.../_harness.yaml) — a relative path always anchors
     to the repo root, never to the caller's cwd, so resolution is
     deterministic no matter where the process was launched."""
     p = Path(yaml_path)
