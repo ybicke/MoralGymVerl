@@ -2,7 +2,7 @@
 
 Usage:
     python -m moralgym_verl.eval.behavioral \
-        --config configs/eval/teacher_signal_9b.yaml \
+        --config configs/eval/_models/gemma2_9b.yaml \
         --checkpoint base --protocol single_round --moral-value deon_no_exploit
 
 Plays the model against each configured opponent and reports cooperation
@@ -132,6 +132,16 @@ def build_policy(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] =
     moral_value_text = get_moral_value(moral_value_name)
     prompt_wrapper = None
     if moral_value_text:
+        # A value text that names a concrete label (the 'hint' rider) is
+        # only meaningful under fixed labels; under randomized labels it
+        # would name the wrong action in half the episodes.
+        if ("action3" in moral_value_text or "action4" in moral_value_text) \
+                and cfg.get("evaluation", {}).get("labels", "fixed") != "fixed":
+            raise ValueError(
+                f"moral_value {moral_value_name!r} names fixed labels "
+                f"(action3/action4) but evaluation.labels is "
+                f"{cfg['evaluation']['labels']!r} — the hint rider requires "
+                f"labels: fixed")
         template_source = teacher_cfg.get("template_source")
         if not template_source:
             raise ValueError(

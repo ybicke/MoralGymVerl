@@ -42,7 +42,7 @@ regenerated wholesale.
 
 Login-node friendly (stdlib only, no torch):
     /usr/bin/python3.11 scripts/analysis/make_results.py \
-        eval_results/teacher_signal/pgg_single_turn_qwen3-8b
+        eval_results/teacher_signal/qwen3_8b/pgg_single_turn
 """
 
 from __future__ import annotations
@@ -76,7 +76,8 @@ PANEL_THRESHOLD = 0.10
 
 # Value arms in reporting order (composites after the part they extend).
 ARM_ORDER = (
-    "none", "deontological", "deontological+repair",
+    "none", "deontological", "deontological+hint", "deon_explicit",
+    "deon_fairplay", "deontological+repair",
     "deontological+repair+generosity", "utilitarian", "virtue",
     "universalization",
 )

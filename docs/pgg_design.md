@@ -696,7 +696,7 @@ reads over 192 traces (every regex flag hand-checked: all were
 row-condition phrasing). none 1/64; utilitarian 60/64 flat; deontological
 own = D 0, 1, 1, 7 of 8.
 
-**Screen** (job 3185343, `configs/sweeps/pgg_single_turn_qwen3_hybrid.yaml`,
+**Screen** (job 3185343, `configs/sweeps/pgg_single_turn_qwen3_v3.yaml`,
 eval group `pgg_single_turn_qwen3-8b_v3`, 4 arms × 400 eps;
 `deontological+repair+generosity` dropped as inert single-shot):
 

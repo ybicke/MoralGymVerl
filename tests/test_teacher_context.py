@@ -49,10 +49,29 @@ def test_none_is_empty_and_others_are_not():
 
 def test_wordings_are_label_agnostic():
     # No wording may reference concrete action labels — the model must map
-    # principle -> action through the payoff matrix.
+    # principle -> action through the payoff matrix. Sole exemption: the
+    # 'hint' rider, which names the fixed labels BY DESIGN (privileged
+    # label-mapping context for the PGG wording screen; see its registry
+    # comment). behavioral.build_policy refuses any label-naming text
+    # under evaluation.labels != fixed, which is the guard this test
+    # would otherwise provide.
     for name, text in MORAL_VALUE_REGISTRY.items():
+        if name == "hint":
+            continue
         assert "action1" not in text and "action2" not in text, name
         assert "action3" not in text and "action4" not in text, name
+
+
+def test_hint_refused_under_randomized_labels():
+    # The 'hint' exemption above is safe only because the eval refuses it
+    # when labels randomize.
+    from moralgym_verl.eval.behavioral import build_policy
+    cfg = {"evaluation": {"labels": "randomize"},
+           "teacher": {"moral_value": "deontological+hint"},
+           "policy": {"model_name": "unused"},
+           "game": {"num_rounds": 1}}
+    with pytest.raises(ValueError, match="labels: fixed"):
+        build_policy(cfg, checkpoint=None)
 
 
 def test_unknown_name_raises():
