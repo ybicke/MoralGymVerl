@@ -251,11 +251,26 @@ def pick(pool: List[Trace], k: int, rng: random.Random) -> Trace:
     return min(rng.sample(pool, min(k, len(pool))), key=lambda t: len(t.text))
 
 
+def select_exemplars(steps: List[int], traces: List[Trace], k: int,
+                     seed: int) -> Dict[Tuple[int, str], Trace]:
+    """The exemplar per (step, state) -- the single selection both
+    renderers share, so the report's trace panels (make_figures.py
+    trace-panels) show byte-identical traces to the traces_*.md docs.
+    One rng consumed in (steps x STATES) order; changing that order
+    changes every subsequent selection."""
+    rng = random.Random(seed)
+    by: Dict[Tuple[int, str], List[Trace]] = defaultdict(list)
+    for t in traces:
+        by[(t.step, t.state)].append(t)
+    return {(step, st): pick(by[(step, st)], k, rng)
+            for step in steps for st in STATES if by.get((step, st))}
+
+
 def render_exemplars(title: str, surface: str, steps: List[int], traces: List[Trace],
            principle_name: str, k: int, seed: int, max_chars: int) -> str:
     grams = principle_ngrams(get_moral_value(principle_name))
     pw = _words(get_moral_value(principle_name))
-    rng = random.Random(seed)
+    sel = select_exemplars(steps, traces, k, seed)
     by: Dict[Tuple[int, str], List[Trace]] = defaultdict(list)
     for t in traces:
         by[(t.step, t.state)].append(t)
@@ -290,10 +305,9 @@ def render_exemplars(title: str, surface: str, steps: List[int], traces: List[Tr
                       f"| {statistics.median(ov):.0f} / {max(ov)} |")
         md.append("")
         for st in STATES:
-            pool = by.get((step, st), [])
-            if not pool:
+            t = sel.get((step, st))
+            if t is None:
                 continue
-            t = pick(pool, k, rng)
             L, i = longest_overlap(t.text, pw)
             span = " ".join(_words(t.text)[i:i + L]) if L >= OVERLAP_WORDS else ""
             flags = ("normative" if normative_hit(t.text) else "payoff-only")
