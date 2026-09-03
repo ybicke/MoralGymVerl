@@ -1,0 +1,30 @@
+# PD checkpoint ladder, llama31_8b_grpo_pd_deon_tft_150 — Llama-3.1-8B-Instruct GRPO deon arm. job 3204538, the rerun after the verl tools=[] chat-template fix (the contaminated first attempt, job 3203600, was deleted 2026-09-03). Converged ~step 120. base included: no base screen for this model. NOT yet run.
+#
+# Single-round none arm vs the random opponent (single_round pins it),
+# fixed prose presentation: the screen's own protocol, so each row drops
+# into Table 1 / the ladder figures. No moral text — cooperation is carried
+# by the weights. Behavioral only (RUN_PROBES=off). Held-out games are NOT
+# here: transfer sweeps live at the model level, post_training/<model>/.
+#
+# Submit (adapters on iopsstor — the eval container does not mount
+# /capstor/store). Results: eval_results/post_training/llama31_8b_grpo_pd_deon_tft_150/classic/ckpt_ladder/.
+#   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/eval/post_training/llama31_8b_grpo_pd_deon_tft_150/classic/ckpt_ladder.yaml --dry-run
+
+num_episodes: 400          # 100 decisions per fabricated state
+
+axes:
+  game: [prisoners_dilemma]
+  representation: [prose]
+  moral_value: [none]
+  protocol: [single_round]
+  checkpoint:
+    - base
+    - llama31_8b_grpo_pd_deon_tft_150/global_step_60
+    - llama31_8b_grpo_pd_deon_tft_150/global_step_120
+    - llama31_8b_grpo_pd_deon_tft_150/global_step_150
+
+env:
+  RUN_PROBES: "off"
+
+extra_args: ["--temperature", "0.7"]

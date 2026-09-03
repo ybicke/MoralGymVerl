@@ -17,6 +17,11 @@ vars:
   # to unmounted paths land in the container's RAM overlay and vanish at job
   # end (cost us the first sdpo_run1 checkpoints, 2026-08-19).
   ckpt_dir: /iopsstor/scratch/cscs/${oc.env:USER}/moralgym_verl_runs
+  # Gemma-2's stock template minus its raise on non-alternating roles (see
+  # the model block below). Held here so trainer configs that null the
+  # template for other models (_base_grpo_pd) can restore it for a Gemma-2
+  # run by reference instead of by copy.
+  gemma2_chat_template: "{{ bos_token }}{% if messages[0]['role'] == 'system' %}{{ raise_exception('System role not supported') }}{% endif %}{% for message in messages %}{% if (message['role'] == 'assistant') %}{% set role = 'model' %}{% else %}{% set role = message['role'] %}{% endif %}{{ '<start_of_turn>' + role + '\n' + message['content'] | trim + '<end_of_turn>\n' }}{% endfor %}{% if add_generation_prompt %}{{'<start_of_turn>model\n'}}{% endif %}"
 
 data:
   train_files: ["${vars.dataset_dir}/train.parquet"]
@@ -50,7 +55,7 @@ actor_rollout_ref:
     # (initialize_system_prompt) — so every agent loop crashes at init. This
     # is the stock template minus only that raise; it renders byte-identically
     # for every legal conversation (verified 2026-07-05).
-    custom_chat_template: "{{ bos_token }}{% if messages[0]['role'] == 'system' %}{{ raise_exception('System role not supported') }}{% endif %}{% for message in messages %}{% if (message['role'] == 'assistant') %}{% set role = 'model' %}{% else %}{% set role = message['role'] %}{% endif %}{{ '<start_of_turn>' + role + '\n' + message['content'] | trim + '<end_of_turn>\n' }}{% endfor %}{% if add_generation_prompt %}{{'<start_of_turn>model\n'}}{% endif %}"
+    custom_chat_template: ${vars.gemma2_chat_template}
   actor:
     ppo_micro_batch_size_per_gpu: 4
     ppo_max_token_len_per_gpu: ${max_model_len}

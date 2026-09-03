@@ -1,0 +1,34 @@
+# PGG transfer, Gemma-3-12B-IT (GRPO deon, reward channel) — gemma3_12b_grpo_pd_deon_tft_150 trained on 2-player PD only; does
+# the installed disposition generalize to the 4-player binary public-goods
+# game it never played? PD trajectory: converged by ~step 90 (CC/DC 99/95, CD/DD 2/2). First eval of Gemma-3 through the HF-transformers path: the base cell doubles as the model-loading check.
+#
+# Protocol = the adopted PGG screen design (docs/pgg_design.md §9, the
+# qwen3 v3 protocol): decision_full, fixed presentation, GAME_DESCRIPTION
+# off, T=0.7, 400 episodes = 50 per fabricated (own_prev, k) state. No
+# moral text. single_round pins the co-players to random. Headline is the
+# k-slope within own_prev, never pooled P(C). No base PGG screen exists
+# for this model, so the base row comes from checkpoint: base here. Four
+# cells = one packed node.
+#
+#   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/eval/post_training/gemma3_12b/pgg/transfer.yaml --dry-run
+
+num_episodes: 400          # 50 decisions per fabricated (own_prev, k) state
+
+axes:
+  game: [public_goods]
+  representation: [decision_full]
+  moral_value: [none]      # NO moral text: the transfer must come from the weights
+  protocol: [single_round]
+  checkpoint:
+    - base
+    - gemma3_12b_grpo_pd_deon_tft_150/global_step_60
+    - gemma3_12b_grpo_pd_deon_tft_150/global_step_120
+    - gemma3_12b_grpo_pd_deon_tft_150/global_step_150
+
+env:
+  RUN_PROBES: "off"
+  RUN_PROBE_B_EPISODE: "off"
+  GAME_DESCRIPTION: "off"    # matched to the qwen3 v3 screen
+
+extra_args: ["--temperature", "0.7"]

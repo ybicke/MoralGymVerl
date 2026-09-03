@@ -1,0 +1,30 @@
+# =============================================================================
+# GRPO — gemma-2-9b-it, deon reward vs TFT, 150 steps. Everything except the
+# model is _base_grpo_pd, so this is the reward-channel twin of the SDPO run
+# gemma2_9b_sdpo_pd_deon-repair-gen_tft_200 on the SAME base model — the
+# within-model channel comparison Qwen3-8B already has (grpo_pd_deon_tft_200
+# vs sdpo run 2), on the model whose SDPO does not recite the principle.
+#
+# Model block: _base_grpo_pd nulls custom_chat_template (load-bearing for
+# every non-Gemma-2 model); Gemma-2 needs its patched template back (stock
+# one raises on verl's consecutive-user-turn probe), taken by reference
+# from _base_clariden's vars so the two Gemma-2 recipes cannot drift.
+# Memory: _base_clariden already carries the 9B offload settings; the SDPO
+# gemma runs needed RAY_memory_usage_threshold=0.99 at save time on `normal`
+# nodes (host RAM ~507 GB steady, first save tipped Ray's 95% kill line).
+# GRPO holds a ref policy instead of an EMA teacher — same class of load —
+# so export it for the full run.
+#
+# Smoke first (feedback_smoke_before_full_run), then:
+#   RAY_memory_usage_threshold=0.99 bash scripts/slurm/train_verl.sh \
+#       gemma2_9b_grpo_pd_deon_tft_150
+#   DRY_RUN=1 bash scripts/slurm/train_verl.sh gemma2_9b_grpo_pd_deon_tft_150   # resolve only
+# =============================================================================
+defaults:
+  - _base_grpo_pd
+  - _self_
+
+actor_rollout_ref:
+  model:
+    path: google/gemma-2-9b-it
+    custom_chat_template: ${vars.gemma2_chat_template}
