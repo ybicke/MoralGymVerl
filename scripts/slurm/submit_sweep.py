@@ -54,7 +54,7 @@ def main() -> None:
     spec["sweep_path"] = str(args.spec)
     if not (REPO_ROOT / spec["config"]).exists():
         sys.exit(f"eval config not found: {spec['config']} "
-                 f"(harness profiles: _harness.yaml in the sweep dir)")
+                 f"(harness profiles: configs/eval/harness/<model>/<family>.yaml)")
     cells = expand_cells(spec)
     group_dir = REPO_ROOT / "eval_results" / results_dir(spec) / spec["eval_group"]
 

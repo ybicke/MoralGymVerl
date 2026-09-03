@@ -34,13 +34,21 @@ configs/
 ├─ datasets/                 arm identity -> training parquet:
 │  └─ <algo>_<game>_<arm>_<opponent>[_mt].yaml
 └─ eval/                     1 file = 1 experiment; PATH = identity
-   ├─ teacher_signal/<model>/<family>/     base-model screens; each dir also
-   │     ├─ _harness.yaml                  holds the harness profile (model x
-   │     └─ <experiment>.yaml              family measurement settings)
-   └─ post_training/<RUN_NAME>/<family>/<experiment>.yaml   checkpoint evals
-      post_training/cross_<model>/<family>/<experiment>.yaml  spans several runs
-      (post_training sweeps use the base-model screen's _harness.yaml — the
-       screen's protocol, so checkpoint rows stay comparable to base rows)
+   ├─ harness/<model>/<family>.yaml       measurement profile: model x game
+   │                                      family (HF id, generation budget,
+   │                                      prompt regime, presentation). No
+   │                                      experiment content; every sweep of
+   │                                      that model resolves to it, so base
+   │                                      rows and checkpoint rows share one
+   │                                      protocol.
+   ├─ teacher_signal/<model>/<family>/<experiment>.yaml   base-model screens
+   └─ post_training/<RUN_NAME>/<family>/<experiment>.yaml  one run, its
+      │                                   training game (ckpt_ladder)
+      └─ post_training/<model>/<family>/<experiment>.yaml  model level:
+                                          held-out games (transfer), or
+                                          several runs of the model side by
+                                          side; checkpoints from any run of
+                                          that model; base cells live here
 
 eval_results/                mirrors configs/eval/ path-for-path
    (+ _debug/, _archive/ — underscore dirs are outside the contract)
@@ -52,7 +60,8 @@ copy, `logs_verl/training/<jobid>_<RUN_NAME>.log`. Derived from the sweep
 path (`load_sweep`): results dir, manifest location, default model profile;
 `eval_group`/`results_dir`/`name` keys in a sweep are refused, a sweep's
 `game:` axis must stay inside its family dir, and a post_training sweep's
-checkpoints must belong to its subject run. Game-specific experiments under
+checkpoints must belong to its subject run (a model-level sweep's to a run
+of that model). Game-specific experiments under
 `classic/` keep a game prefix (`pd_*`) since the family spans three games.
 
 Submit forms:
@@ -78,7 +87,7 @@ Training runs (checkpoints, W&B, logs):
 | gemma_run2_200 / qwen_run2_200 | {gemma2_9b,qwen3_8b}_sdpo_pd_deon-repair-gen_tft_200 |
 | grpo_deon_tft_200 | qwen3_8b_grpo_pd_deon_tft_200 |
 | grpo_util_tft_150 | qwen3_8b_grpo_pd_util_tft_150 |
-| llama31_deon_150[_v2] | llama31_8b_grpo_pd_deon_tft_150[_v2] |
+| llama31_deon_150_v2 | llama31_8b_grpo_pd_deon_tft_150 (job 3204538; the first attempt llama31_deon_150, job 3203600, had a verl tool-call preamble in every prompt and was deleted 2026-09-03) |
 
 Trainer configs: sdpo_run1_pd_{gemma,qwen3} → the `_tft_70` run files;
 sdpo_run2_pd_{gemma,qwen3,qwen3_32b} → the `_tft_200` run files;
@@ -90,8 +99,8 @@ Datasets: grpo_pd_tft → grpo_pd_none_tft; grpo_deon_pd_tft → grpo_pd_deon_tf
 grpo_deon_pd → grpo_pd_deon_random; grpo_util_pd_tft → grpo_pd_util_tft;
 sdpo_run1_pd → sdpo_pd_deon-repair-gen_tft.
 
-Eval profiles (now `_harness.yaml` in each screen dir): teacher_signal_9b →
-teacher_signal/gemma2_9b/classic/_harness.yaml; teacher_signal_qwen3_8b →
+Eval profiles (now `configs/eval/harness/<model>/<family>.yaml`): teacher_signal_9b →
+harness/gemma2_9b/classic.yaml; teacher_signal_qwen3_8b →
 qwen3_8b/classic/; teacher_signal_qwen3_32b → qwen3_32b/classic/;
 pgg_screen_9b → gemma2_9b/pgg/; pgg_screen_qwen3_8b → qwen3_8b/pgg/.
 
@@ -108,7 +117,7 @@ Sweeps → results (both trees moved identically):
 | ckpt_gemma_run2_200 → gemma-2-9b-pd-sdpo-deon-repair-gen | post_training/gemma2_9b_sdpo_pd_deon-repair-gen_tft_200/classic/ckpt_ladder |
 | ckpt_qwen_run2_200 → qwen3-8b-pd-sdpo-deon-repair-gen | post_training/qwen3_8b_sdpo_pd_deon-repair-gen_tft_200/classic/ckpt_ladder |
 | ckpt_grpo_deon_tft_200 → qwen3-8b-pd-grpo-deon-tft | post_training/qwen3_8b_grpo_pd_deon_tft_200/classic/ckpt_ladder |
-| ckpt_pgg_transfer_qwen3 → qwen3-8b-pgg-transfer | post_training/cross_qwen3_8b/pgg/transfer |
+| ckpt_pgg_transfer_qwen3 → qwen3-8b-pgg-transfer | post_training/qwen3_8b/pgg/transfer |
 
 Nothing is deferred: the one job queued mid-migration (3243465, the v4
 deon-wording screen) was cancelled before it ran and resubmitted under the

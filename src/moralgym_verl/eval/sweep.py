@@ -10,15 +10,18 @@ identity, and the results land at the mirrored path —
     configs/eval/teacher_signal/<model>/<family>/<experiment>.yaml
     configs/eval/post_training/<run_name>/<family>/<experiment>.yaml
     -> eval_results/<results_root>/<subject>/<family>/<experiment>/
-<subject> is a base-model token (teacher_signal), a training RUN_NAME, or
-cross_<model> for sweeps comparing checkpoints across runs; <family> is a
-game family (GAME_FAMILIES, mirroring src/moralgym_verl/game/). eval_group
-and results_dir are DERIVED from the path; a spec declaring either is
-refused, so config and results location cannot diverge.
+<subject> is a base-model token (teacher_signal); under post_training it
+is either a training RUN_NAME (that run's evals on its training game) or a
+bare model token (model-level sweeps: held-out games, or several runs of
+the model side by side); <family> is a game family (GAME_FAMILIES,
+mirroring src/moralgym_verl/game/). eval_group and results_dir are DERIVED
+from the path; a spec declaring either is refused, so config and results
+location cannot diverge. The measurement profile (harness) is likewise
+derived: configs/eval/harness/<model>/<family>.yaml.
 
 Spec schema:
-    config: configs/eval/.../_harness.yaml   # optional override; default is the
-                                   # sweep dir's _harness.yaml (post_training falls back to the screen's)
+    config: configs/eval/harness/<model>/<family>.yaml   # optional override;
+                                   # default derived from the subject's model token
     num_episodes: 100              # 3rd positional (default: launcher's 25)
     axes:                          # required; grid = cartesian product
       game: [prisoners_dilemma]    # game, moral_value, protocol are mandatory
@@ -69,8 +72,8 @@ MANIFEST_NAME = "sweep_manifest.json"
 # do with the wording", the other "what did training install".
 RESULTS_ROOTS = ("teacher_signal", "post_training")
 # Canonical model tokens (docs/naming.md). A teacher_signal subject is one
-# of these; a post_training subject is a run name starting with one, or
-# cross_<token> for sweeps spanning several runs.
+# of these; a post_training subject is a run name starting with one, or the
+# bare token for model-level sweeps (held-out games / several runs).
 MODEL_TOKENS = ("gemma2_9b", "gemma3_12b", "llama31_8b", "qwen3_8b",
                 "qwen3_32b")
 # Game families, mirroring src/moralgym_verl/game/ (classic_games.py = 2x2
@@ -81,28 +84,26 @@ GAME_FAMILIES = {
     "pgg": ("public_goods",),
 }
 SWEEP_CONFIG_ROOT = "configs/eval"
-HARNESS_NAME = "_harness.yaml"
+# Harness profiles: the model x game-family MEASUREMENT settings (HF id,
+# generation budget, prompt regime, presentation defaults). A harness carries
+# no experiment content -- no moral value, no checkpoint, no grid -- so it
+# lives outside both results roots, and every sweep of a model, base screen
+# or checkpoint eval, resolves to the same file. That shared file is what
+# makes base rows and trained rows comparable.
+HARNESS_ROOT = f"{SWEEP_CONFIG_ROOT}/harness"
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
-def harness_config(root: str, subject: str, family: str,
-                   model_token: str) -> str:
-    """Repo-relative path of the harness profile for a sweep.
-
-    The profile lives next to the experiments it measures:
-    <root>/<subject>/<family>/_harness.yaml. post_training sweeps fall back
-    to the base-model screen's harness — deliberately, so checkpoint evals
-    run under the screen's own protocol and their rows stay comparable to
-    the base-model rows.
-    """
-    local = f"{SWEEP_CONFIG_ROOT}/{root}/{subject}/{family}/{HARNESS_NAME}"
-    screen = (f"{SWEEP_CONFIG_ROOT}/teacher_signal/{model_token}/{family}/"
-              f"{HARNESS_NAME}")
-    for candidate in (local, screen):
-        if (_REPO_ROOT / candidate).exists():
-            return candidate
-    raise ValueError(f"no harness profile found for {subject}/{family}: "
-                     f"expected {local} or {screen}")
+def harness_config(model_token: str, family: str) -> str:
+    """Repo-relative path of the harness profile:
+    configs/eval/harness/<model>/<family>.yaml. Raises if absent — a model
+    without a profile cannot be measured, and a sweep must not silently
+    borrow another model's settings."""
+    path = f"{HARNESS_ROOT}/{model_token}/{family}.yaml"
+    if not (_REPO_ROOT / path).exists():
+        raise ValueError(f"no harness profile for {model_token}/{family}: "
+                         f"expected {path}")
+    return path
 
 
 def results_dir(spec: Dict) -> str:
@@ -141,13 +142,12 @@ def subject_model(root: str, subject: str) -> str:
             raise ValueError(f"teacher_signal subject {subject!r} must be a "
                              f"model token: {MODEL_TOKENS}")
         return subject
-    stem = subject[len("cross_"):] if subject.startswith("cross_") else subject
     for token in MODEL_TOKENS:
-        if stem == token or stem.startswith(token + "_"):
+        if subject == token or subject.startswith(token + "_"):
             return token
     raise ValueError(f"post_training subject {subject!r} must be a training "
-                     f"run name (<model>_<size>_...) or cross_<model_token>; "
-                     f"known tokens: {MODEL_TOKENS}")
+                     f"run name (<model>_<size>_...) or a bare model token "
+                     f"(model-level sweep); known tokens: {MODEL_TOKENS}")
 # Cells per packed job. 4 = one per GPU on a GH200 node. Clariden is
 # OverSubscribe=EXCLUSIVE, so a 1-GPU job is billed for all 4 GPUs; packing
 # cuts billed node-hours (and the fairshare hit that follows them) ~4x.
@@ -230,27 +230,29 @@ def load_sweep(path: str) -> Dict:
         raise ValueError(f"game(s) {foreign} are not in family {family!r} "
                          f"({GAME_FAMILIES[family]})")
 
-    # Checkpoint axis: only post_training evaluates trained weights, and a
-    # non-cross subject IS the training run — every checkpoint must belong
-    # to it, which is the machine-checked training<->eval link.
+    # Checkpoint axis: only post_training evaluates trained weights. A
+    # run-named subject IS the training run — every checkpoint must belong
+    # to it (the machine-checked training<->eval link); a model-level
+    # subject accepts any run of that model.
     checkpoints = [c for c in spec["axes"].get("checkpoint", [])
                    if c != "base" and not str(c).startswith("/")]
     if checkpoints and root != "post_training":
         raise ValueError("checkpoint axis is only valid under "
                          "configs/eval/post_training/")
-    if root == "post_training" and not subject.startswith("cross_"):
-        stray = [c for c in checkpoints
-                 if not str(c).startswith(subject + "/")]
+    if root == "post_training":
+        if subject == model_token:
+            stray = [c for c in checkpoints
+                     if not str(c).startswith(model_token + "_")]
+            where = f"a {model_token} training run"
+        else:
+            stray = [c for c in checkpoints
+                     if not str(c).startswith(subject + "/")]
+            where = (f"training run {subject!r} (use post_training/"
+                     f"{model_token}/ for sweeps across runs)")
         if stray:
-            raise ValueError(
-                f"checkpoint(s) {stray} do not belong to training run "
-                f"{subject!r} — a post_training sweep evaluates its "
-                f"subject's checkpoints (use cross_{model_token}/ for "
-                f"comparisons across runs)"
-            )
+            raise ValueError(f"checkpoint(s) {stray} do not belong to {where}")
 
-    spec.setdefault("config",
-                    harness_config(root, subject, family, model_token))
+    spec.setdefault("config", harness_config(model_token, family))
     return spec
 
 

@@ -35,7 +35,7 @@ from moralgym_verl.eval.teacher_forcing import (
 )
 from moralgym_verl.game.prompts import build_prompt
 
-CFG = "/users/bickery/MoralGymVerl/configs/eval/teacher_signal/gemma2_9b/classic/_harness.yaml"
+CFG = "/users/bickery/MoralGymVerl/configs/eval/harness/gemma2_9b/classic.yaml"
 results = []
 
 

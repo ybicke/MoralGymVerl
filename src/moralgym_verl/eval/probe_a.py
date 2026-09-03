@@ -16,7 +16,7 @@ in metadata for audit.
 
 Writes probe_a.json into --output-dir. Usage (container, 1 GPU):
     python3 -m moralgym_verl.eval.probe_a \
-        --config configs/eval/teacher_signal/gemma2_9b/classic/_harness.yaml \
+        --config configs/eval/harness/gemma2_9b/classic.yaml \
         --moral-value deontological --game prisoners_dilemma \
         --output-dir <run_dir>
 """

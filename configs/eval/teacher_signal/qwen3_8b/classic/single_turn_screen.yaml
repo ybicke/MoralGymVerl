@@ -2,7 +2,7 @@
 # (gemma-2-9b-it, 2026-08-10) with the model as the only axis that moves;
 # see that file for the design rationale behind the axes.
 #
-# Differences live in configs/eval/teacher_signal/qwen3_8b/classic/_harness.yaml:
+# Differences live in configs/eval/harness/qwen3_8b/classic.yaml:
 # enable_thinking off, and max_new_tokens 768 so the cap binds for neither
 # model (gemma's 512 never bound: 6/14400 responses lacked an Action line).
 #

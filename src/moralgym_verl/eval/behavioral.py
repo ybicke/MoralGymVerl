@@ -2,7 +2,7 @@
 
 Usage:
     python -m moralgym_verl.eval.behavioral \
-        --config configs/eval/teacher_signal/gemma2_9b/classic/_harness.yaml \
+        --config configs/eval/harness/gemma2_9b/classic.yaml \
         --checkpoint base --protocol single_round --moral-value deon_no_exploit
 
 Plays the model against each configured opponent and reports cooperation

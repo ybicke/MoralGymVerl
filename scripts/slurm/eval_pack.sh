@@ -64,7 +64,7 @@ GROUP_DIR="$(dirname "$(dirname "${BATCH_JSON}")")"
 LOG_TAG="$(basename "$(dirname "$(dirname "${GROUP_DIR}")")")__$(basename "$(dirname "${GROUP_DIR}")")__$(basename "${GROUP_DIR}")"
 exec > "${LOG_BASE}/eval_pack_${SLURM_JOB_ID}_${LOG_TAG}.out" 2>&1
 
-CONFIG="${CONFIG:-configs/eval/teacher_signal/gemma2_9b/classic/_harness.yaml}"
+CONFIG="${CONFIG:-configs/eval/harness/gemma2_9b/classic.yaml}"
 WORKDIR="${LOG_BASE}/pack_${SLURM_JOB_ID}"
 mkdir -p "${WORKDIR}"
 

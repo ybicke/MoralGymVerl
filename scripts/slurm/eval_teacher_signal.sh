@@ -64,7 +64,7 @@ mkdir -p "${LOG_BASE}"
 RUN_NAME="teacher_signal_${GAME}_${MORAL_VALUE}_${SLURM_JOB_ID}"
 exec > "${LOG_BASE}/${RUN_NAME}.out" 2> "${LOG_BASE}/${RUN_NAME}.err"
 
-CONFIG="${CONFIG:-configs/eval/teacher_signal/gemma2_9b/classic/_harness.yaml}"
+CONFIG="${CONFIG:-configs/eval/harness/gemma2_9b/classic.yaml}"
 # Results layout: eval_results/<RESULTS_DIR>/<EVAL_GROUP>/cells/<cell>/
 #   EVAL_GROUP is <subject>/<experiment> (docs/naming.md); the sweep path
 #   normally derives it (submit_sweep.py). Hand submits land in adhoc/.

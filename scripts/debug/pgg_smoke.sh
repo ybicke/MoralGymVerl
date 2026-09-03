@@ -20,7 +20,7 @@
 # Outputs land in $OUT as <TAG>_<representation>_<moral_value>.json plus the
 # raw traces beside them -- read those, the rates alone have repeatedly been
 # misleading (docs/pgg_design.md §9.5-9.7).
-CONFIG="${CONFIG:-/users/bickery/MoralGymVerl/configs/eval/teacher_signal/qwen3_8b/pgg/_harness.yaml}"
+CONFIG="${CONFIG:-/users/bickery/MoralGymVerl/configs/eval/harness/qwen3_8b/pgg.yaml}"
 EPISODES="${EPISODES:-64}"
 OUT="${OUT:-/users/bickery/MoralGymVerl/eval_results/_debug}"
 TAG="${TAG:-pgg_smoke}"

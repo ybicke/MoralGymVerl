@@ -51,7 +51,10 @@ evaluation:
   # stochastic co-player; headline is opponent-independent single-shot).
   opponents: [conditional_contributor]
   temperature: 0.7
-  max_new_tokens: 512
+  # 1024 (classic screen used 512): the decision_full k-table is read
+  # row by row and the gemma-2 CoT over it is longer than the 2x2 one.
+  # A bound, not a target; responses stop at EOS.
+  max_new_tokens: 1024
   # Presentation FIXED (Tennant-exact labels action3/action4, identity
   # layout/order) to match the 2x2 moral screens' protocol; surface
   # randomization is a follow-up robustness block (docs §9.2), as it was
