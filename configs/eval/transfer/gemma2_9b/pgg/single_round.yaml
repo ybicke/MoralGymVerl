@@ -11,7 +11,7 @@
 # cells = one packed node.
 #
 #   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
-#       configs/eval/post_training/gemma2_9b/pgg/transfer.yaml --dry-run
+#       configs/eval/transfer/gemma2_9b/pgg/single_round.yaml --dry-run
 
 num_episodes: 400          # 50 decisions per fabricated (own_prev, k) state
 

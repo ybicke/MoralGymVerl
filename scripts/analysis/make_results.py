@@ -4,7 +4,7 @@
 One entrypoint for every kind of group. The kind is read from the group's
 sweep manifest (falling back to the first cell's metadata):
 
-    checkpoint axis + public_goods    -> specs/post_training_pgg  results_<experiment>.md (transfer)
+    checkpoint axis + public_goods    -> specs/post_training_pgg  results_<experiment>.md (transfer/ groups)
     checkpoint axis present           -> specs/post_training   results_<experiment>.md
                                           + traces_checkpoints_*.md (+ traces_training_*.md with --rollouts)
     game == public_goods              -> specs/screen_pgg      results_pgg_<model>.md

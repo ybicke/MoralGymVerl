@@ -20,7 +20,7 @@ many others contributed). Then the trace measures on THESE traces
 policy, and example traces per policy x state.
 
     /usr/bin/python3.11 scripts/analysis/make_results.py \\
-        eval_results/post_training/qwen3_8b/pgg/transfer \\
+        eval_results/transfer/qwen3_8b/pgg/single_round \\
         --reference eval_results/teacher_signal/qwen3_8b/pgg/single_turn_v3
 """
 from __future__ import annotations

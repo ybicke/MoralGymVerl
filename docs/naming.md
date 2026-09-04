@@ -41,14 +41,17 @@ configs/
    │                                      that model resolves to it, so base
    │                                      rows and checkpoint rows share one
    │                                      protocol.
-   ├─ teacher_signal/<model>/<family>/<experiment>.yaml   base-model screens
-   └─ post_training/<RUN_NAME>/<family>/<experiment>.yaml  one run, its
-      │                                   training game (ckpt_ladder)
-      └─ post_training/<model>/<family>/<experiment>.yaml  model level:
-                                          held-out games (transfer), or
-                                          several runs of the model side by
-                                          side; checkpoints from any run of
-                                          that model; base cells live here
+   ├─ teacher_signal/<model>/<family>/<experiment>.yaml   base model + wording
+   │                                      in context (subject = model token)
+   ├─ post_training/<RUN_NAME>/<family>/ckpt_ladder.yaml  what training
+   │                                      installed, measured on the run's
+   │                                      OWN training game (subject = run;
+   │                                      game axis = field 4 of the name)
+   └─ transfer/<model>/<family>/<experiment>.yaml   does it carry to games
+                                          never trained on: checkpoints from
+                                          any run of the model, base cells
+                                          included; experiments named by
+                                          protocol (single_round, multi_round)
 
 eval_results/                mirrors configs/eval/ path-for-path
    (+ _debug/, _archive/ — underscore dirs are outside the contract)
@@ -60,8 +63,9 @@ copy, `logs_verl/training/<jobid>_<RUN_NAME>.log`. Derived from the sweep
 path (`load_sweep`): results dir, manifest location, default model profile;
 `eval_group`/`results_dir`/`name` keys in a sweep are refused, a sweep's
 `game:` axis must stay inside its family dir, and a post_training sweep's
-checkpoints must belong to its subject run (a model-level sweep's to a run
-of that model). Game-specific experiments under
+checkpoints must belong to its subject run and its game axis to the run's
+training game; a transfer sweep's checkpoints to a run of its subject model.
+Game-specific experiments under
 `classic/` keep a game prefix (`pd_*`) since the family spans three games.
 
 Submit forms:
@@ -117,7 +121,8 @@ Sweeps → results (both trees moved identically):
 | ckpt_gemma_run2_200 → gemma-2-9b-pd-sdpo-deon-repair-gen | post_training/gemma2_9b_sdpo_pd_deon-repair-gen_tft_200/classic/ckpt_ladder |
 | ckpt_qwen_run2_200 → qwen3-8b-pd-sdpo-deon-repair-gen | post_training/qwen3_8b_sdpo_pd_deon-repair-gen_tft_200/classic/ckpt_ladder |
 | ckpt_grpo_deon_tft_200 → qwen3-8b-pd-grpo-deon-tft | post_training/qwen3_8b_grpo_pd_deon_tft_200/classic/ckpt_ladder |
-| ckpt_pgg_transfer_qwen3 → qwen3-8b-pgg-transfer | post_training/qwen3_8b/pgg/transfer |
+| ckpt_pgg_transfer_qwen3 → qwen3-8b-pgg-transfer | transfer/qwen3_8b/pgg/single_round |
+| post_training/<model>/pgg/transfer (jobs 3281381-86; their manifests still say so) | transfer/<model>/pgg/single_round |
 
 Nothing is deferred: the one job queued mid-migration (3243465, the v4
 deon-wording screen) was cancelled before it ran and resubmitted under the

@@ -25,7 +25,7 @@
 # run ~3.7 h at 400 episodes (5 h pack wall).
 #
 #   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
-#       configs/eval/post_training/qwen3_8b/pgg/transfer.yaml --dry-run
+#       configs/eval/transfer/qwen3_8b/pgg/single_round.yaml --dry-run
 
 num_episodes: 400          # 50 decisions per fabricated (own_prev, k) state
 

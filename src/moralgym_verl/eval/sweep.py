@@ -9,15 +9,20 @@ Naming contract (docs/naming.md): the yaml's PATH is the experiment's
 identity, and the results land at the mirrored path —
     configs/eval/teacher_signal/<model>/<family>/<experiment>.yaml
     configs/eval/post_training/<run_name>/<family>/<experiment>.yaml
+    configs/eval/transfer/<model>/<family>/<experiment>.yaml
     -> eval_results/<results_root>/<subject>/<family>/<experiment>/
-<subject> is a base-model token (teacher_signal); under post_training it
-is either a training RUN_NAME (that run's evals on its training game) or a
-bare model token (model-level sweeps: held-out games, or several runs of
-the model side by side); <family> is a game family (GAME_FAMILIES,
-mirroring src/moralgym_verl/game/). eval_group and results_dir are DERIVED
-from the path; a spec declaring either is refused, so config and results
-location cannot diverge. The measurement profile (harness) is likewise
-derived: configs/eval/harness/<model>/<family>.yaml.
+Each root answers one question and fixes what its subject is:
+    teacher_signal  base model + wording in context     subject = model token
+    post_training   what training installed, measured   subject = RUN_NAME;
+                    on the run's own training game      game axis = that game
+    transfer        does it carry to games never        subject = model token;
+                    trained on                          checkpoints from any
+                                                        run of that model
+<family> is a game family (GAME_FAMILIES, mirroring src/moralgym_verl/
+game/). eval_group and results_dir are DERIVED from the path; a spec
+declaring either is refused, so config and results location cannot
+diverge. The measurement profile (harness) is likewise derived:
+configs/eval/harness/<model>/<family>.yaml.
 
 Spec schema:
     config: configs/eval/harness/<model>/<family>.yaml   # optional override;
@@ -65,15 +70,18 @@ from moralgym_verl.eval.config import PROTOCOL_PRESETS, resolve_presentation
 LAUNCHER = "scripts/slurm/eval_teacher_signal.sh"
 PACK_LAUNCHER = "scripts/slurm/eval_pack.sh"
 MANIFEST_NAME = "sweep_manifest.json"
-# Results root under eval_results/: the sweep's `results_dir` key.
-# teacher_signal = pre-training screens (base models, principle in
-# context); post_training = checkpoint evals of trained models. Keeping
-# them apart is the point -- one folder answers "what does the base model
-# do with the wording", the other "what did training install".
-RESULTS_ROOTS = ("teacher_signal", "post_training")
-# Canonical model tokens (docs/naming.md). A teacher_signal subject is one
-# of these; a post_training subject is a run name starting with one, or the
-# bare token for model-level sweeps (held-out games / several runs).
+# Results roots under eval_results/: the sweep's `results_dir` key. One
+# question per root (module docstring): what the base model does with the
+# wording / what training installed on its own game / whether that carries
+# to games never trained on. Keeping them apart is the point.
+RESULTS_ROOTS = ("teacher_signal", "post_training", "transfer")
+# Canonical model tokens (docs/naming.md). teacher_signal and transfer
+# subjects are one of these; a post_training subject is a run name
+# starting with one.
+# Game field of a run name (docs/naming.md, field 4) -> game_type, so a
+# post_training sweep can be held to its run's training game.
+GAME_TOKENS = {"pd": "prisoners_dilemma", "sh": "stag_hunt", "ch": "chicken",
+               "pgg": "public_goods"}
 MODEL_TOKENS = ("gemma2_9b", "gemma3_12b", "llama31_8b", "qwen3_8b",
                 "qwen3_32b")
 # Game families, mirroring src/moralgym_verl/game/ (classic_games.py = 2x2
@@ -137,17 +145,27 @@ def sweep_identity(path: str) -> Tuple[str, str, str, str]:
 
 def subject_model(root: str, subject: str) -> str:
     """The model token a subject refers to; raises if none matches."""
-    if root == "teacher_signal":
+    if root in ("teacher_signal", "transfer"):
         if subject not in MODEL_TOKENS:
-            raise ValueError(f"teacher_signal subject {subject!r} must be a "
-                             f"model token: {MODEL_TOKENS}")
+            raise ValueError(f"{root} subject {subject!r} must be a model "
+                             f"token: {MODEL_TOKENS}")
         return subject
     for token in MODEL_TOKENS:
-        if subject == token or subject.startswith(token + "_"):
+        if subject.startswith(token + "_"):
             return token
     raise ValueError(f"post_training subject {subject!r} must be a training "
-                     f"run name (<model>_<size>_...) or a bare model token "
-                     f"(model-level sweep); known tokens: {MODEL_TOKENS}")
+                     f"run name (<model>_<size>_<algo>_<game>_...); known "
+                     f"tokens: {MODEL_TOKENS}")
+
+
+def training_game(run_name: str) -> str:
+    """game_type a run was trained on, from field 4 of its name."""
+    fields = run_name.split("_")
+    if len(fields) < 4 or fields[3] not in GAME_TOKENS:
+        raise ValueError(f"cannot read the training game from run name "
+                         f"{run_name!r} (field 4 must be one of "
+                         f"{sorted(GAME_TOKENS)})")
+    return GAME_TOKENS[fields[3]]
 # Cells per packed job. 4 = one per GPU on a GH200 node. Clariden is
 # OverSubscribe=EXCLUSIVE, so a 1-GPU job is billed for all 4 GPUs; packing
 # cuts billed node-hours (and the fairshare hit that follows them) ~4x.
@@ -230,27 +248,37 @@ def load_sweep(path: str) -> Dict:
         raise ValueError(f"game(s) {foreign} are not in family {family!r} "
                          f"({GAME_FAMILIES[family]})")
 
-    # Checkpoint axis: only post_training evaluates trained weights. A
-    # run-named subject IS the training run — every checkpoint must belong
-    # to it (the machine-checked training<->eval link); a model-level
-    # subject accepts any run of that model.
+    # Checkpoint axis: trained weights are evaluated under post_training
+    # (the subject IS the run: every checkpoint must be its own, and the
+    # game must be the one it trained on -- the machine-checked
+    # training<->eval link) or under transfer (any run of the subject
+    # model, any game in the family). Screens never take checkpoints.
     checkpoints = [c for c in spec["axes"].get("checkpoint", [])
                    if c != "base" and not str(c).startswith("/")]
-    if checkpoints and root != "post_training":
-        raise ValueError("checkpoint axis is only valid under "
-                         "configs/eval/post_training/")
+    if checkpoints and root == "teacher_signal":
+        raise ValueError("checkpoint axis is not valid under "
+                         "configs/eval/teacher_signal/ (base-model screens)")
     if root == "post_training":
-        if subject == model_token:
-            stray = [c for c in checkpoints
-                     if not str(c).startswith(model_token + "_")]
-            where = f"a {model_token} training run"
-        else:
-            stray = [c for c in checkpoints
-                     if not str(c).startswith(subject + "/")]
-            where = (f"training run {subject!r} (use post_training/"
-                     f"{model_token}/ for sweeps across runs)")
+        stray = [c for c in checkpoints
+                 if not str(c).startswith(subject + "/")]
         if stray:
-            raise ValueError(f"checkpoint(s) {stray} do not belong to {where}")
+            raise ValueError(
+                f"checkpoint(s) {stray} do not belong to training run "
+                f"{subject!r}; sweeps across runs live under "
+                f"configs/eval/transfer/{model_token}/")
+        game = training_game(subject)
+        foreign = [g for g in spec["axes"]["game"] if g != game]
+        if foreign:
+            raise ValueError(
+                f"post_training evaluates a run on its training game "
+                f"({game}); game(s) {foreign} belong under "
+                f"configs/eval/transfer/{model_token}/")
+    elif root == "transfer":
+        stray = [c for c in checkpoints
+                 if not str(c).startswith(model_token + "_")]
+        if stray:
+            raise ValueError(f"checkpoint(s) {stray} are not from a "
+                             f"{model_token} training run")
 
     spec.setdefault("config", harness_config(model_token, family))
     return spec

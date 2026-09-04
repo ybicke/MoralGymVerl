@@ -81,7 +81,7 @@ if [ "${PROTOCOL:-}" = "single_round" ] && [ "${RUN_PROBE_B_EPISODE:-off}" = "on
     echo "       episode probe is multi-round only. Unset one of them." >&2
     exit 1
 fi
-RESULTS_DIR="${RESULTS_DIR:-teacher_signal}"   # post_training for checkpoint evals
+RESULTS_DIR="${RESULTS_DIR:-teacher_signal}"   # post_training / transfer for checkpoint evals
 RUN_DIR="${PROJECT_ROOT}/eval_results/${RESULTS_DIR}/${EVAL_GROUP}/cells/${GAME}__${MORAL_VALUE}_${SLURM_JOB_ID}"
 OUTPUT="${RUN_DIR}/behavioral.json"
 mkdir -p "${RUN_DIR}"

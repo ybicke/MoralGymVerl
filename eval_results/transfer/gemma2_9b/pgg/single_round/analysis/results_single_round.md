@@ -1,4 +1,4 @@
-# PGG transfer: gemma2_9b / transfer
+# PGG transfer: gemma2_9b / single_round
 
 gemma-2-9b-it. Checkpoints trained on single-round 2-player PD, evaluated on the 4-player binary public-goods game with no moral text in the prompt: any contribution beyond the base row is carried by the weights into a game the policy never played. Runs and evaluated steps:
 
@@ -8,7 +8,7 @@ gemma-2-9b-it. Checkpoints trained on single-round 2-player PD, evaluated on the
 
 | row | group | cell | job |
 |---|---|---|---|
-| base, no context | `gemma2_9b/pgg/transfer` | `public_goods__none__decision_full__single_round__base_3281386` | 3281386 |
+| base, no context | `gemma2_9b/pgg/single_round` | `public_goods__none__decision_full__single_round__base_3281386` | 3281386 |
 
 **Game.** Binary linear public-goods game, N = 4, endowment E = 10, share s = 5. Contributing pays 5(k+1), keeping pays 10 + 5k, where k is the number of *other* players contributing: keeping dominates by 5 at every k, while full contribution (20 each) beats full keeping (10 each). The group total with j of the 4 contributing runs 40 → 80, so contributing raises group welfare at every k. Co-players are scripted; the agent sees only the count k, never who did what.
 

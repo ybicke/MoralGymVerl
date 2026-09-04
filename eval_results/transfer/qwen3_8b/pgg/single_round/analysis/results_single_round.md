@@ -1,4 +1,4 @@
-# PGG transfer: qwen3_8b / transfer
+# PGG transfer: qwen3_8b / single_round
 
 Qwen3-8B. Checkpoints trained on single-round 2-player PD, evaluated on the 4-player binary public-goods game with no moral text in the prompt: any contribution beyond the base row is carried by the weights into a game the policy never played. Runs and evaluated steps:
 

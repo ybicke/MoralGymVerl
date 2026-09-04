@@ -3,7 +3,7 @@
 
 Usage (login node, from the repo root):
     /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
-        configs/eval/<teacher_signal|post_training>/<subject>/<experiment>.yaml
+        configs/eval/<teacher_signal|post_training|transfer>/<subject>/<family>/<experiment>.yaml
     ... --dry-run     # print the expansion without submitting
 
 The spec's path is its identity (docs/naming.md): results land at the
