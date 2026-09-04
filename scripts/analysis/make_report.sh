@@ -60,6 +60,10 @@ $PY $MF trace-table \
 
 $PY $MF prompt-panels --ladder $GRPO_QWEN
 
+$PY $MF prompt-panels --name pgg --game-only \
+    --ladder eval_results/transfer/qwen3_8b/pgg/single_round \
+    --analysis-dir eval_results/post_training/comparison/analysis
+
 # Curated trace exemplars (within a pick, selection is the same seeded
 # rule as the traces_checkpoints_*.md docs):
 #   GRPO before/after its training jump in the repair state D_A C_O;

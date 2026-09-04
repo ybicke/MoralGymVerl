@@ -115,8 +115,26 @@ def curve(block: Dict, own: str) -> List[float]:
     return [100 * cv[str(k)]["p_C"] for k in range(len(cv))]
 
 
-def run_color(j: int) -> str:
-    return RUN_COLORS[j % len(RUN_COLORS)]
+MODEL_COLORS = {"qwen3": RUN_COLORS[0], "gemma-2": RUN_COLORS[2],
+                "gemma-3": RUN_COLORS[3], "llama": RUN_COLORS[4]}
+
+
+def run_color(run) -> str:
+    """Color encodes the MODEL (same hue for both channels of one model);
+    the channel is carried by panel grouping and titles."""
+    if isinstance(run, int):                      # legacy positional slot
+        return RUN_COLORS[run % len(RUN_COLORS)]
+    key = run.model.lower()
+    for frag, color in MODEL_COLORS.items():
+        if frag in key:
+            return color
+    return RUN_COLORS[hash(run.model) % len(RUN_COLORS)]
+
+
+def by_channel(runs):
+    """GRPO panels left, SDPO right, model order kept within a channel."""
+    return ([r for r in runs if "GRPO" in r.channel]
+            + [r for r in runs if "GRPO" not in r.channel])
 
 
 def shade(color: str, i: int, n: int) -> Tuple[float, float, float]:
@@ -166,11 +184,12 @@ def _references(ax, run: Run, own: str, labels: list, ks_out: list) -> None:
 
 
 def fig_pooled(runs: List[Run], out_dir: Path, name: str) -> List[Path]:
+    runs = by_channel(runs)
     fig, ax = plt.subplots(figsize=(WIDTHS["wide"], 2.1))
     xmax = max(max(r.steps) for r in runs)
     labels, base_labels, seen = [], [], set()
     for j, run in enumerate(runs):
-        color = run_color(j)
+        color = run_color(run)
         xs = ([0] if run.base is not None else []) + run.steps
         ys = (([100 * run.base["cooperation_rate"]] if run.base is not None else [])
               + [100 * run.points[s]["cooperation_rate"] for s in run.steps])
@@ -204,26 +223,34 @@ def fig_final(runs: List[Run], out_dir: Path, name: str) -> List[Path]:
     """The screen's Figure-1 form: one panel per run at its LAST evaluated
     checkpoint, own previous move C solid / D dashed, base and in-context
     in the same two line styles."""
+    runs = by_channel(runs)
     ncols = len(runs)
+    n_grpo = sum("GRPO" in r.channel for r in runs)
     fig, axes = plt.subplots(1, ncols, sharey=True, squeeze=False,
                              figsize=(WIDTHS["wide"], 2.0),
-                             gridspec_kw={"wspace": 0.1})
+                             gridspec_kw={"wspace": 0.12})
     for j, run in enumerate(runs):
-        ax, color, last = axes[0][j], run_color(j), run.steps[-1]
+        ax, color, last = axes[0][j], run_color(run), run.steps[-1]
+        sdpo = "GRPO" not in run.channel
         labels, ks = [], []
         for own in OWN:
             if run.base is not None:
                 ys = curve(run.base, own); ks = list(range(len(ys)))
-                ax.plot(ks, ys, color=INK_MUTED, lw=1.0, ms=2.4, **OWN_STYLE[own])
-            for block in run.context.values():
-                ys = curve(block, own); ks = list(range(len(ys)))
-                ax.plot(ks, ys, color=ACCENT, lw=1.0, ms=2.4, **OWN_STYLE[own])
+                ax.plot(ks, ys, color=INK_MUTED, lw=0.9, ms=2.0,
+                        **OWN_STYLE[own])
+            if sdpo:
+                # the initial teacher's policy: base + principle in context.
+                # Meaningless for the reward channel, so GRPO panels omit it.
+                for block in run.context.values():
+                    ys = curve(block, own); ks = list(range(len(ys)))
+                    ax.plot(ks, ys, color=ACCENT, lw=0.9, ms=2.0,
+                            **OWN_STYLE[own])
             ys = curve(run.points[last], own); ks = list(range(len(ys)))
-            ax.plot(ks, ys, color=color, lw=1.5, ms=3.0, **OWN_STYLE[own])
+            ax.plot(ks, ys, color=color, lw=1.2, ms=2.6, **OWN_STYLE[own])
             labels.append((ys[-1], f"s{last} {own}$_A$", color))
         if run.base is not None:
             labels.append((curve(run.base, "C")[-1], "base", INK_MUTED))
-        if run.context:
+        if sdpo and run.context:
             labels.append((curve(next(iter(run.context.values())), "C")[-1],
                            "+ctx", ACCENT))
         _labels(ax, labels, ks[-1], min_gap=7.0)
@@ -231,7 +258,14 @@ def fig_final(runs: List[Run], out_dir: Path, name: str) -> List[Path]:
         ax.set_title(title(run), fontsize=8)
         if j == 0:
             ax.set_ylabel("P(C) (%)", fontsize=7.5)
-    _footnote(fig, runs, "grey", "violet", "solid = own previous move C, dashed = D")
+    for x, lab in ((n_grpo / 2 / ncols, "GRPO"),
+                   ((n_grpo + (ncols - n_grpo) / 2) / ncols, "SDPO")):
+        if 0 < x < 1:
+            fig.text(0.07 + 0.92 * x, 1.02, lab, ha="center", fontsize=8.5,
+                     fontweight="bold", color=INK)
+    _footnote(fig, runs, "grey",
+              "violet, SDPO panels: the initial teacher",
+              "solid = own previous move C, dashed = D")
     fig.subplots_adjust(left=0.07, right=0.99, top=0.8, bottom=0.3)
     return save(fig, out_dir / "figures", f"transfer_final_{name}")
 
@@ -243,8 +277,9 @@ def fig_curves(runs: List[Run], out_dir: Path, name: str) -> List[Path]:
     fig, axes = plt.subplots(2, ncols, sharey=True, sharex=True, squeeze=False,
                              figsize=(WIDTHS["wide"], 3.8),
                              gridspec_kw={"hspace": 0.25, "wspace": 0.1})
+    runs = by_channel(runs)
     for j, run in enumerate(runs):
-        color = run_color(j)
+        color = run_color(run)
         for i, own in enumerate(OWN):
             ax, labels, ks = axes[i][j], [], []
             _references(ax, run, own, labels, ks)
