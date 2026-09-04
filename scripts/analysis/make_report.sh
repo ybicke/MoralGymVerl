@@ -34,6 +34,8 @@ $PY $MF ladder-grid --name grpo --macro-prefix GDT \
     --reference $SCREEN_QWEN
 
 $PY $MF ladder-grid --name sdpo \
+    --reference eval_results/teacher_signal/qwen3_8b/classic/pd_generosity_arm \
+    --reference eval_results/teacher_signal/gemma2_9b/classic/pd_generosity_arm \
     --ladder "Qwen3-8B SDPO=$SDPO_QWEN" \
     --ladder "Gemma2-9B SDPO=$SDPO_GEMMA" \
     --reference $SCREEN_QWEN --reference $SCREEN_GEMMA

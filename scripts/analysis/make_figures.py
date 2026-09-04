@@ -319,14 +319,23 @@ def fig_ladder_grid(args, out_dir: Path) -> None:
         ax = axes[i // ncols][i % ncols]
         model_refs = [r for r in refs
                       if r.parts[-3].split("_")[0] in ladder.parents[1].name]
-        steps, curves, _, has_base = load_ladder(
+        steps, curves, teacher, has_base = load_ladder(
             ladder, model_refs, args.principle)
         xs = ([0] if has_base else []) + steps
         for st, ys in curves.items():
             ax.plot(xs, ys, color=STATE_COLORS[st], marker="o",
                     markersize=3, linewidth=1.2)
-        ax.set_xticks(xs, (["base"] if has_base else [])
-                      + [str(k) for k in steps], fontsize=7)
+        ticks = (["base"] if has_base else []) + [str(k) for k in steps]
+        if teacher:
+            # the initial teacher: base + principle in context, per state
+            xt = xs[-1] + (xs[-1] - xs[0]) * 0.16
+            ax.axvline(xs[-1] + (xt - xs[-1]) / 2, color=INK_MUTED,
+                       linewidth=0.5, linestyle=(0, (2, 3)))
+            for st, y in teacher.items():
+                ax.plot([xt], [y], marker="o", markersize=4, mfc="white",
+                        mec=STATE_COLORS[st], mew=1.2, linestyle="none")
+            xs, ticks = xs + [xt], ticks + ["+ctx"]
+        ax.set_xticks(xs, ticks, fontsize=7)
         ax.set_title(label, fontsize=8)
         ax.set_ylim(-3, 103)
         clean_axes(ax)
@@ -676,6 +685,8 @@ def fig_transfer_grid(args, out_dir: Path) -> None:
     for pth in (fig_pooled(runs, out_dir, args.name) + fig_final(runs, out_dir, args.name)
                 + fig_curves(runs, out_dir, args.name)):
         print(f"wrote {pth}")
+    from transfer_figures import transfer_summary_table
+    transfer_summary_table(runs, args.group, out_dir)
 
 
 def mirror_to_report(out_dir: Path, report_dir: Path) -> None:
