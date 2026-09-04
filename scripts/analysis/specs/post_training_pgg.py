@@ -41,7 +41,7 @@ from results_doc import (  # noqa: E402
 from specs.post_training import checkpoint_of  # noqa: E402
 from specs.screen_pgg import _trace_tags, curve_rows, game_note, parse_cell  # noqa: E402
 from trace_measures import NORMATIVE_VOCAB, OVERLAP_WORDS  # noqa: E402
-from transfer_figures import fig_curves, fig_pooled, load_transfer  # noqa: E402
+from transfer_figures import fig_curves, fig_final, fig_pooled, load_transfer  # noqa: E402
 from moralgym_verl.game.moral_values import get_moral_value  # noqa: E402
 
 VALUE_NAMES = dict(VALUES)
@@ -296,20 +296,28 @@ def build(args: argparse.Namespace) -> Path:
     md.append(emit(transfer_table(policies, group)))
     runs = load_transfer(group, args.reference, args.context)
     name = group.parent.parent.name
-    curves_png = fig_curves(runs, out_dir, name)[-1]
     pooled_png = fig_pooled(runs, out_dir, name)[-1]
-    print(f"saved -> {curves_png}\nsaved -> {pooled_png}")
+    final_png = fig_final(runs, out_dir, name)[-1]
+    curves_png = fig_curves(runs, out_dir, name)[-1]
+    for f in (pooled_png, final_png, curves_png):
+        print(f"saved -> {f}")
+    rel = lambda f: f.relative_to(out_dir)
     md.append("\n".join([
-        "### Figure 1 — conditional contribution curves", "",
-        f"![P(C) against k_O per run and checkpoint]({curves_png.relative_to(out_dir)})",
-        "", "Rows: the agent's own previous move; columns: training runs. One "
-        "line per checkpoint, shaded light to full by step; base dashed grey; "
-        "in-context rows dotted. Flat = unconditional, rising = conditional on "
-        "how many others contributed.", "",
-        "### Figure 2 — pooled contribution by step", "",
-        f"![pooled P(C) against training step]({pooled_png.relative_to(out_dir)})",
-        "", "The transfer headline: pooled P(C) per checkpoint, base at step 0, "
-        "in-context rows as dotted levels.", "", ""]))
+        "### Figure 1 — pooled contribution by step", "",
+        f"![pooled P(C) against training step]({rel(pooled_png)})", "",
+        "The transfer headline: pooled P(C) per checkpoint, base at step 0, "
+        "in-context rows as dotted levels.", "",
+        "### Figure 2 — conditional contribution at the last checkpoint", "",
+        f"![P(C) against k_O at the last checkpoint, own C solid / own D dashed]({rel(final_png)})", "",
+        "The screen's Figure-1 form: solid = agent contributed last round, "
+        "dashed = it kept; base grey, in-context violet. The vertical gap "
+        "between solid and dashed is the own-move anchoring, the slope the "
+        "response to the others.", "",
+        "### Figure 3 — every checkpoint", "",
+        f"![P(C) against k_O per run and checkpoint]({rel(curves_png)})", "",
+        "Rows: own previous move; columns: runs; one line per checkpoint, "
+        "shaded light to full by step. Flat = unconditional, rising = "
+        "conditional on how many others contributed.", "", ""]))
     md.append(emit(trace_table(policies, args.principle)))
     if args.exemplars:
         label_of = {p.cell["run_dir"]: p.label for p in policies}

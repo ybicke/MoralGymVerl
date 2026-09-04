@@ -58,17 +58,23 @@ Contribution rate (%) by fabricated previous round: C<sub><small>A</small></sub>
 | step 200 | 48 \| 4 | 70 \| 40 | 96 \| 60 | 100 \| 82 | 78 \| 46 | **62** | +52 \| +78 |
 
 
-### Figure 1 — conditional contribution curves
-
-![P(C) against k_O per run and checkpoint](figures/transfer_curves_gemma2_9b.png)
-
-Rows: the agent's own previous move; columns: training runs. One line per checkpoint, shaded light to full by step; base dashed grey; in-context rows dotted. Flat = unconditional, rising = conditional on how many others contributed.
-
-### Figure 2 — pooled contribution by step
+### Figure 1 — pooled contribution by step
 
 ![pooled P(C) against training step](figures/transfer_pooled_gemma2_9b.png)
 
 The transfer headline: pooled P(C) per checkpoint, base at step 0, in-context rows as dotted levels.
+
+### Figure 2 — conditional contribution at the last checkpoint
+
+![P(C) against k_O at the last checkpoint, own C solid / own D dashed](figures/transfer_final_gemma2_9b.png)
+
+The screen's Figure-1 form: solid = agent contributed last round, dashed = it kept; base grey, in-context violet. The vertical gap between solid and dashed is the own-move anchoring, the slope the response to the others.
+
+### Figure 3 — every checkpoint
+
+![P(C) against k_O per run and checkpoint](figures/transfer_curves_gemma2_9b.png)
+
+Rows: own previous move; columns: runs; one line per checkpoint, shaded light to full by step. Flat = unconditional, rising = conditional on how many others contributed.
 
 
 ### Table T2 — reasoning traces on the transfer cells

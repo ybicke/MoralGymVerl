@@ -92,10 +92,30 @@ def load_transfer(group: Path, references: List[Path],
 
 
 # --------------------------------------------------------------- drawing
+#
+# One layout system for the three transfer figures, so they stack as rows
+# of a report page: every figure is WIDTHS["wide"] (= \textwidth) across,
+# panels share the run colour (RUN_COLORS by run order, identical in all
+# three), base is dashed grey, in-context rows dotted violet (ACCENT),
+# labels are direct (inside a blank right margin of each panel), and the
+# only legend is a one-line footnote naming the two conventions.
+#
+#   pooled   P(C) vs training step, one axes           height 2.1 in
+#   final    last checkpoint per run, own C solid /
+#            own D dashed -- the screen's Figure-1 form  height 2.0 in
+#   curves   every checkpoint, rows = own move          height 3.8 in
+
+OWN_STYLE = {"C": dict(ls="-", marker="o"), "D": dict(ls="--", marker="s")}
+LABEL_MARGIN = 1.15          # k-axis units reserved right of the last k
+
 
 def curve(block: Dict, own: str) -> List[float]:
     cv = block["pgg"]["cond_contribution_curve"][own]
     return [100 * cv[str(k)]["p_C"] for k in range(len(cv))]
+
+
+def run_color(j: int) -> str:
+    return RUN_COLORS[j % len(RUN_COLORS)]
 
 
 def shade(color: str, i: int, n: int) -> Tuple[float, float, float]:
@@ -105,17 +125,20 @@ def shade(color: str, i: int, n: int) -> Tuple[float, float, float]:
     return (r + (1 - r) * w, g + (1 - g) * w, b + (1 - b) * w)
 
 
+def title(run: Run) -> str:
+    return f"{run.model}\n{run.channel}"
+
+
 def _labels(ax, entries, x, min_gap=6.0, fontsize=7, clip=True):
     """Labels right of anchor x, nudged apart so they never overprint; a
     label sits at its line's height when there is room, else it is pushed
-    up in order. Kept inside the axes (the panel reserves a blank margin)
-    so a column never writes into its neighbour."""
+    up in order, and the stack slides down if it overflows the axes."""
     entries = sorted(entries, key=lambda e: e[0])
     ys = [e[0] for e in entries]
     for i in range(1, len(ys)):
         ys[i] = max(ys[i], ys[i - 1] + min_gap)
     over = ys[-1] - 100 if ys else 0
-    if over > 0:                       # slide the stack down if it overflows
+    if over > 0:
         ys = [y - over for y in ys]
     for (y0, text, color), y in zip(entries, ys):
         ax.annotate(text, (x, y), xytext=(3, 0), textcoords="offset points",
@@ -123,90 +146,136 @@ def _labels(ax, entries, x, min_gap=6.0, fontsize=7, clip=True):
                     annotation_clip=clip)
 
 
-def fig_curves(runs: List[Run], out_dir: Path, name: str) -> List[Path]:
-    ncols = len(runs)
-    fig, axes = plt.subplots(
-        2, ncols, sharey=True, sharex=True, squeeze=False,
-            figsize=(1.9 * ncols + 0.6, 4.1),
-        gridspec_kw={"hspace": 0.28, "wspace": 0.1})
-    for j, run in enumerate(runs):
-        color = RUN_COLORS[j % len(RUN_COLORS)]
-        ks = None
-        for i, own in enumerate(OWN):
-            ax = axes[i][j]
-            labels = []
-            if run.base is not None:
-                ys = curve(run.base, own)
-                ks = list(range(len(ys)))
-                ax.plot(ks, ys, color=INK_MUTED, ls="--", lw=1.1)
-                labels.append((ys[-1], "base", INK_MUTED))
-            for value, block in run.context.items():
-                ys = curve(block, own)
-                ks = list(range(len(ys)))
-                ax.plot(ks, ys, color=ACCENT, ls=":", lw=1.1)
-                labels.append((ys[-1], "+ctx", ACCENT))
-            steps = run.steps
-            for s_idx, step in enumerate(steps):
-                ys = curve(run.points[step], own)
-                ks = list(range(len(ys)))
-                c = shade(color, s_idx, len(steps))
-                ax.plot(ks, ys, color=c, marker="o", ms=2.8, lw=1.3)
-                labels.append((ys[-1], f"s{step}", c))
-            _labels(ax, labels, ks[-1], min_gap=7.0)
-            ax.set_ylim(-3, 103)
-            ax.set_xlim(-0.15, ks[-1] + 1.05)   # blank margin for the labels
-            ax.set_xticks(ks)
-            clean_axes(ax)
-            if i == 0:
-                ax.set_title(f"{run.model}\n{run.channel}", fontsize=8)
-            if i == 1:
-                ax.set_xlabel("$k_O$ (others contributing)", fontsize=7.5)
-            if j == 0:
-                ax.set_ylabel(f"own prev {own}\nP(C) %", fontsize=7.5)
-    ctx_values = sorted({v for r in runs for v in r.context})
-    fig.subplots_adjust(bottom=0.17 if ctx_values else 0.13)
-    if ctx_values:
-        fig.text(0.5, 0.01, "+ctx = base with " + " / ".join(f"`{v}`" for v in ctx_values)
-                 + " in context (dotted); base = untrained (dashed)",
-                 ha="center", fontsize=7, color=INK_MUTED)
-    return save(fig, out_dir / "figures", f"transfer_curves_{name}")
+def _k_axes(ax, ks, xlabel: bool) -> None:
+    ax.set_ylim(-3, 103)
+    ax.set_xlim(-0.15, ks[-1] + LABEL_MARGIN)
+    ax.set_xticks(ks)
+    clean_axes(ax)
+    if xlabel:
+        ax.set_xlabel("$k_O$ (others contributing)", fontsize=7.5)
+
+
+def _footnote(fig, runs: List[Run], base_style="dashed grey",
+              ctx_style="dotted violet", extra: str = "") -> None:
+    ctx = sorted({v for r in runs for v in r.context})
+    parts = [f"base = untrained ({base_style})"]
+    if ctx:
+        parts.append("+ctx = base with " + " / ".join(f"`{v}`" for v in ctx)
+                     + f" in context ({ctx_style})")
+    if extra:
+        parts.append(extra)
+    fig.text(0.5, 0.01, "; ".join(parts), ha="center", fontsize=7,
+             color=INK_MUTED)
+
+
+def _references(ax, run: Run, own: str, labels: list, ks_out: list) -> None:
+    """Draw base and in-context curves for one own move; collect labels."""
+    if run.base is not None:
+        ys = curve(run.base, own)
+        ks_out[:] = list(range(len(ys)))
+        ax.plot(ks_out, ys, color=INK_MUTED, ls="--", lw=1.0)
+        labels.append((ys[-1], "base", INK_MUTED))
+    for block in run.context.values():
+        ys = curve(block, own)
+        ks_out[:] = list(range(len(ys)))
+        ax.plot(ks_out, ys, color=ACCENT, ls=":", lw=1.0)
+        labels.append((ys[-1], "+ctx", ACCENT))
 
 
 def fig_pooled(runs: List[Run], out_dir: Path, name: str) -> List[Path]:
-    fig, ax = plt.subplots(figsize=(WIDTHS["column"] + 0.9, 2.4))
-    labels = []
+    fig, ax = plt.subplots(figsize=(WIDTHS["wide"], 2.1))
     xmax = max(max(r.steps) for r in runs)
+    labels, base_labels, seen = [], [], set()
     for j, run in enumerate(runs):
-        color = RUN_COLORS[j % len(RUN_COLORS)]
+        color = run_color(j)
         xs = ([0] if run.base is not None else []) + run.steps
         ys = (([100 * run.base["cooperation_rate"]] if run.base is not None else [])
               + [100 * run.points[s]["cooperation_rate"] for s in run.steps])
         ax.plot(xs, ys, color=color, marker="o", ms=3.2, lw=1.4)
         labels.append((ys[-1], f"{run.model} {run.channel}", color))
-    seen = set()
-    base_labels = []
-    for run in runs:
         if run.base is not None and run.model not in seen:
             y = 100 * run.base["cooperation_rate"]
             ax.plot([0], [y], "o", ms=5, mfc="white", mec=INK, zorder=5)
             base_labels.append((y, f"{run.model} base", INK))
         for value, block in run.context.items():
-            key = (run.model, value)
-            if key in seen:
+            if (run.model, value) in seen:
                 continue
-            seen.add(key)
+            seen.add((run.model, value))
             y = 100 * block["cooperation_rate"]
-            ax.axhline(y, ls=":", lw=1, color=ACCENT)
-            ax.annotate(f"{run.model} + {value} in context", (0, y),
-                        xytext=(3, 3), textcoords="offset points",
-                        fontsize=6.5, color=ACCENT)
+            ax.plot([0, xmax], [y, y], ls=":", lw=1, color=ACCENT)
+            labels.append((y, f"{run.model} + {value} in context", ACCENT))
         seen.add(run.model)
-    _labels(ax, base_labels, 0, min_gap=5.0, fontsize=6.5, clip=False)
-    _labels(ax, labels, xmax, min_gap=5.0, fontsize=7, clip=False)
-    ax.set_xlabel("training step")
-    ax.set_ylabel("pooled P(C) %")
+    _labels(ax, base_labels, 0, min_gap=5.0, fontsize=6.5)
+    _labels(ax, labels, xmax, min_gap=5.5, fontsize=7)
+    ax.set_xlabel("training step", fontsize=7.5)
+    ax.set_ylabel("pooled P(C) (%)", fontsize=7.5)
     ax.set_ylim(-3, 103)
-    ax.set_xlim(-5, xmax * 1.02)
+    ax.set_xlim(-4, xmax * 1.55)          # right margin holds the labels
+    ax.set_xticks([x for x in ax.get_xticks() if 0 <= x <= xmax])
     clean_axes(ax)
-    fig.subplots_adjust(right=0.62)
+    fig.subplots_adjust(left=0.09, right=0.99, top=0.97, bottom=0.2)
     return save(fig, out_dir / "figures", f"transfer_pooled_{name}")
+
+
+def fig_final(runs: List[Run], out_dir: Path, name: str) -> List[Path]:
+    """The screen's Figure-1 form: one panel per run at its LAST evaluated
+    checkpoint, own previous move C solid / D dashed, base and in-context
+    in the same two line styles."""
+    ncols = len(runs)
+    fig, axes = plt.subplots(1, ncols, sharey=True, squeeze=False,
+                             figsize=(WIDTHS["wide"], 2.0),
+                             gridspec_kw={"wspace": 0.1})
+    for j, run in enumerate(runs):
+        ax, color, last = axes[0][j], run_color(j), run.steps[-1]
+        labels, ks = [], []
+        for own in OWN:
+            if run.base is not None:
+                ys = curve(run.base, own); ks = list(range(len(ys)))
+                ax.plot(ks, ys, color=INK_MUTED, lw=1.0, ms=2.4, **OWN_STYLE[own])
+            for block in run.context.values():
+                ys = curve(block, own); ks = list(range(len(ys)))
+                ax.plot(ks, ys, color=ACCENT, lw=1.0, ms=2.4, **OWN_STYLE[own])
+            ys = curve(run.points[last], own); ks = list(range(len(ys)))
+            ax.plot(ks, ys, color=color, lw=1.5, ms=3.0, **OWN_STYLE[own])
+            labels.append((ys[-1], f"s{last} {own}$_A$", color))
+        if run.base is not None:
+            labels.append((curve(run.base, "C")[-1], "base", INK_MUTED))
+        if run.context:
+            labels.append((curve(next(iter(run.context.values())), "C")[-1],
+                           "+ctx", ACCENT))
+        _labels(ax, labels, ks[-1], min_gap=7.0)
+        _k_axes(ax, ks, xlabel=True)
+        ax.set_title(title(run), fontsize=8)
+        if j == 0:
+            ax.set_ylabel("P(C) (%)", fontsize=7.5)
+    _footnote(fig, runs, "grey", "violet", "solid = own previous move C, dashed = D")
+    fig.subplots_adjust(left=0.07, right=0.99, top=0.8, bottom=0.3)
+    return save(fig, out_dir / "figures", f"transfer_final_{name}")
+
+
+def fig_curves(runs: List[Run], out_dir: Path, name: str) -> List[Path]:
+    """Every checkpoint: rows = own previous move, columns = runs, one line
+    per checkpoint shaded light-to-full by step."""
+    ncols = len(runs)
+    fig, axes = plt.subplots(2, ncols, sharey=True, sharex=True, squeeze=False,
+                             figsize=(WIDTHS["wide"], 3.8),
+                             gridspec_kw={"hspace": 0.25, "wspace": 0.1})
+    for j, run in enumerate(runs):
+        color = run_color(j)
+        for i, own in enumerate(OWN):
+            ax, labels, ks = axes[i][j], [], []
+            _references(ax, run, own, labels, ks)
+            for s_idx, step in enumerate(run.steps):
+                ys = curve(run.points[step], own); ks = list(range(len(ys)))
+                c = shade(color, s_idx, len(run.steps))
+                ax.plot(ks, ys, color=c, marker="o", ms=2.6, lw=1.3)
+                labels.append((ys[-1], f"s{step}", c))
+            _labels(ax, labels, ks[-1], min_gap=7.0)
+            _k_axes(ax, ks, xlabel=(i == 1))
+            if i == 0:
+                ax.set_title(title(run), fontsize=8)
+            if j == 0:
+                ax.set_ylabel(f"own prev {own}\nP(C) (%)", fontsize=7.5)
+    _footnote(fig, runs)
+    fig.subplots_adjust(left=0.08, right=0.99, top=0.9, bottom=0.15)
+    return save(fig, out_dir / "figures", f"transfer_curves_{name}")

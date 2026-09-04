@@ -559,7 +559,7 @@ def fig_transfer_grid(args, out_dir: Path) -> None:
     model), --reference screen groups for the in-context rows. Columns are
     every run across the groups, so the same figure shows replication
     across models and the GRPO-vs-SDPO contrast within one."""
-    from transfer_figures import fig_curves, fig_pooled, load_transfer
+    from transfer_figures import fig_curves, fig_final, fig_pooled, load_transfer
     runs = []
     for g in args.group:
         runs += load_transfer(Path(g).expanduser(),
@@ -567,7 +567,8 @@ def fig_transfer_grid(args, out_dir: Path) -> None:
                               [args.principle] if args.principle else None)
     if not runs:
         raise SystemExit("no transfer runs found under --group dirs")
-    for pth in fig_curves(runs, out_dir, args.name) + fig_pooled(runs, out_dir, args.name):
+    for pth in (fig_pooled(runs, out_dir, args.name) + fig_final(runs, out_dir, args.name)
+                + fig_curves(runs, out_dir, args.name)):
         print(f"wrote {pth}")
 
 

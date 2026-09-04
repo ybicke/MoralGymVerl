@@ -44,6 +44,14 @@ $PY $MF dopp-compare \
     --ladder "Gemma2-9B SDPO=$SDPO_GEMMA" \
     --reference $SCREEN_QWEN --reference $SCREEN_GEMMA
 
+# Held-out-game transfer (eval_results/transfer/): pooled, last-checkpoint,
+# every-checkpoint figures across all runs; in-context row from the Qwen v3 screen.
+$PY $MF transfer-grid --name pgg --principle deontological \
+    --group eval_results/transfer/qwen3_8b/pgg/single_round \
+    --group eval_results/transfer/gemma2_9b/pgg/single_round \
+    --group eval_results/transfer/gemma3_12b/pgg/single_round \
+    --reference eval_results/teacher_signal/qwen3_8b/pgg/single_turn_v3
+
 $PY $MF trace-table \
     --ladder "Qwen3-8B GRPO=$GRPO_QWEN" \
     --ladder "Qwen3-8B SDPO=$SDPO_QWEN" \
