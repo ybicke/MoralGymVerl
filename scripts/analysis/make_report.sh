@@ -60,6 +60,7 @@ $PY $MF trace-table --steps 0,60,90,120,final \
     --transfer "Qwen3-8B SDPO=eval_results/transfer/qwen3_8b/pgg/single_round" \
     --transfer "Gemma2-9B SDPO=eval_results/transfer/gemma2_9b/pgg/single_round" \
     --transfer "Gemma3-12B GRPO=eval_results/transfer/gemma3_12b/pgg/single_round" \
+    --pgg-reference eval_results/teacher_signal/qwen3_8b/pgg/single_turn_v3 \
     --reference $SCREEN_QWEN --reference $SCREEN_GEMMA
 
 $PY $MF prompt-panels --ladder $GRPO_QWEN
