@@ -23,7 +23,6 @@ SDPO_GEMMA=$PT/gemma2_9b_sdpo_pd_deon-repair-gen_tft_200/classic/ckpt_ladder
 $PY $MF training-grid --name grpo --window 5 \
     --run "Qwen3-8B GRPO=$RUNS/qwen3_8b_grpo_pd_deon_tft_200" \
     --run "Gemma3-12B GRPO=$RUNS/gemma3_12b_grpo_pd_deon_tft_150" \
-    --run "Llama3.1-8B GRPO=$RUNS/llama31_8b_grpo_pd_deon_tft_150_v2" \
     --run "Qwen3-8B GRPO util=$RUNS/qwen3_8b_grpo_pd_util_tft_150"
 
 $PY $MF training-grid --name sdpo --window 5 \
