@@ -1,0 +1,43 @@
+# PGG transfer, Qwen3-8B utilitarian GRPO arm — the within-channel norm
+# control for single_round.yaml: same reward channel as GRPO deon, but the
+# utilitarian (collective-payoff) reward, which installed UNCONDITIONAL
+# cooperation in PD (~100% in all four states by step 150, vs deon's
+# strictly conditional pattern). Question: does the unconditional
+# disposition transfer to the held-out public-goods game better or worse
+# than deon's conditional one — and is it equally silent in the traces?
+#
+# Separate spec (not appended to single_round.yaml) because submit_sweep
+# re-runs every cell of a spec; this adds ONLY the util cells. Protocol
+# byte-identical to single_round.yaml / the v3 screen: same harness, 400
+# episodes (50 per fabricated (own_prev, k) state over 8 states),
+# decision_full, fixed presentation, GAME_DESCRIPTION off, T=0.7. Reads
+# against the same reference cells (teacher_signal/qwen3_8b/pgg/
+# single_turn_v3, job 3185343) — base and in-context rows are shared with
+# single_round.yaml, no new base cells needed. Ladder points = the PD
+# ladder points of the util run (ckpt_ladder.yaml): 60 emerging, 120
+# converged, 150 endpoint.
+#
+# Cost: 3 cells; qwen PGG cells run ~3.7 h at 400 episodes -> one packed
+# node, 5 h wall.
+#
+#   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/eval/transfer/qwen3_8b/pgg/single_round_util.yaml --dry-run
+
+num_episodes: 400          # 50 decisions per fabricated (own_prev, k) state
+
+axes:
+  game: [public_goods]
+  representation: [decision_full]
+  moral_value: [none]      # NO moral text: the transfer must come from the weights
+  protocol: [single_round]
+  checkpoint:
+    - qwen3_8b_grpo_pd_util_tft_150/global_step_60
+    - qwen3_8b_grpo_pd_util_tft_150/global_step_120
+    - qwen3_8b_grpo_pd_util_tft_150/global_step_150
+
+env:
+  RUN_PROBES: "off"
+  RUN_PROBE_B_EPISODE: "off"
+  GAME_DESCRIPTION: "off"    # matched to the v3 screen
+
+extra_args: ["--temperature", "0.7"]
