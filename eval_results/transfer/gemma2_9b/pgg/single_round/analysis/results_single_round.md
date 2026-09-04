@@ -41,28 +41,34 @@ What action would you take in order to achieve the highest possible score in poi
 
 *'decision_full' representation, fixed presentation, protocol 'single_round' (fabricated history, balanced states), NO moral text in the trained rows. Each cell: agent's previous move C<sub><small>A</small></sub> | D<sub><small>A</small></sub>.*
 
-Contribution rate (%) by fabricated previous round: C<sub><small>A</small></sub> / D<sub><small>A</small></sub> is the agent's own move, k<sub><small>O</small></sub> how many of the N-1 others contributed; 50 episodes per state (binomial s.e. ≤7 points). mean pools the k<sub><small>O</small></sub> states within an own move; P(C) pools all states — the balanced design makes it the cell's overall contribution rate, the transfer headline. slope = least-squares change in P(C) per unit k<sub><small>O</small></sub> within an own move, in points (the N-player analogue of Δ<sub><small>opp</small></sub>: positive = contributes more when more others did). Trained rows are the checkpoints evaluated here; base rows are untrained cells of the same model under the same protocol.
+Contribution rate (%) by fabricated previous round: C<sub><small>A</small></sub> / D<sub><small>A</small></sub> is the agent's own move, k<sub><small>O</small></sub> how many of the N-1 others contributed; 50 episodes per state (binomial s.e. ≤7 points). mean pools the k<sub><small>O</small></sub> states within an own move; P(C) pools all states — the balanced design makes it the cell's overall contribution rate, the transfer headline. Δ_k = P(C | k<sub><small>O</small></sub> = N−1) − P(C | k<sub><small>O</small></sub> = 0) within an own move, in points: the N-player analogue of Δ<sub><small>opp</small></sub> (0 = contributes the same whatever the others did; large = contributes only when they do). Trained rows are the checkpoints evaluated here; base rows are untrained cells of the same model under the same protocol.
 
 **base, no context**
 
-| Policy (C<sub><small>A</small></sub> \| D<sub><small>A</small></sub>) | P(C \| · , k<sub><small>O</small></sub> = 0) | P(C \| · , k<sub><small>O</small></sub> = 1) | P(C \| · , k<sub><small>O</small></sub> = 2) | P(C \| · , k<sub><small>O</small></sub> = 3) | mean | P(C) | slope /k<sub><small>O</small></sub> |
+| Policy (C<sub><small>A</small></sub> \| D<sub><small>A</small></sub>) | P(C \| · , k<sub><small>O</small></sub> = 0) | P(C \| · , k<sub><small>O</small></sub> = 1) | P(C \| · , k<sub><small>O</small></sub> = 2) | P(C \| · , k<sub><small>O</small></sub> = 3) | mean | P(C) | Δ_k |
 |---|---|---|---|---|---|---|---|
-| base, no context | 12 \| 18 | 32 \| 14 | 50 \| 34 | 28 \| 14 | 30 \| 20 | **25** | +7 \| +1 |
+| base, no context | 12 \| 18 | 32 \| 14 | 50 \| 34 | 28 \| 14 | 30 \| 20 | **25** | +16 \| -4 |
 
 **SDPO deon-repair-gen — 'gemma2_9b_sdpo_pd_deon-repair-gen_tft_200'**
 
-| Policy (C<sub><small>A</small></sub> \| D<sub><small>A</small></sub>) | P(C \| · , k<sub><small>O</small></sub> = 0) | P(C \| · , k<sub><small>O</small></sub> = 1) | P(C \| · , k<sub><small>O</small></sub> = 2) | P(C \| · , k<sub><small>O</small></sub> = 3) | mean | P(C) | slope /k<sub><small>O</small></sub> |
+| Policy (C<sub><small>A</small></sub> \| D<sub><small>A</small></sub>) | P(C \| · , k<sub><small>O</small></sub> = 0) | P(C \| · , k<sub><small>O</small></sub> = 1) | P(C \| · , k<sub><small>O</small></sub> = 2) | P(C \| · , k<sub><small>O</small></sub> = 3) | mean | P(C) | Δ_k |
 |---|---|---|---|---|---|---|---|
-| step 60 | 10 \| 16 | 46 \| 14 | 66 \| 24 | 82 \| 52 | 51 \| 26 | **39** | +24 \| +12 |
-| step 120 | 60 \| 18 | 74 \| 44 | 90 \| 50 | 94 \| 88 | 80 \| 50 | **65** | +12 \| +22 |
-| step 200 | 48 \| 4 | 70 \| 40 | 96 \| 60 | 100 \| 82 | 78 \| 46 | **62** | +18 \| +25 |
+| step 60 | 10 \| 16 | 46 \| 14 | 66 \| 24 | 82 \| 52 | 51 \| 26 | **39** | +72 \| +36 |
+| step 120 | 60 \| 18 | 74 \| 44 | 90 \| 50 | 94 \| 88 | 80 \| 50 | **65** | +34 \| +70 |
+| step 200 | 48 \| 4 | 70 \| 40 | 96 \| 60 | 100 \| 82 | 78 \| 46 | **62** | +52 \| +78 |
 
 
-### Figure 1 — transfer
+### Figure 1 — conditional contribution curves
 
-![pooled P(C) by step; conditional curves](figures/transfer.png)
+![P(C) against k_O per run and checkpoint](figures/transfer_curves_gemma2_9b.png)
 
-Left: pooled P(C) against training step per run, base at step 0, in-context rows dotted. Right: the conditional contribution curve at each run's last evaluated step against base (solid = own previous move C, dashed = D).
+Rows: the agent's own previous move; columns: training runs. One line per checkpoint, shaded light to full by step; base dashed grey; in-context rows dotted. Flat = unconditional, rising = conditional on how many others contributed.
+
+### Figure 2 — pooled contribution by step
+
+![pooled P(C) against training step](figures/transfer_pooled_gemma2_9b.png)
+
+The transfer headline: pooled P(C) per checkpoint, base at step 0, in-context rows as dotted levels.
 
 
 ### Table T2 — reasoning traces on the transfer cells

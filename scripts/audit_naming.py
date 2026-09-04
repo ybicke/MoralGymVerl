@@ -38,6 +38,8 @@ def main() -> int:
             specs.add((root, spec.parent.parent.name, spec.parent.name,
                        spec.stem))
         for subject in sorted((RESULTS / root).glob("[!_]*")):
+            if subject.name == "comparison":
+                continue   # cross-run figures/docs (make_figures.py), not an experiment
             if not subject.is_dir():
                 continue
             if is_flat_group(subject):

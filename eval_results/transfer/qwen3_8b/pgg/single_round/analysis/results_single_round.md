@@ -52,44 +52,50 @@ Now make your decision.
 
 *'decision_full' representation, fixed presentation, protocol 'single_round' (fabricated history, balanced states), NO moral text in the trained rows. Each cell: agent's previous move C<sub><small>A</small></sub> | D<sub><small>A</small></sub>.*
 
-Contribution rate (%) by fabricated previous round: C<sub><small>A</small></sub> / D<sub><small>A</small></sub> is the agent's own move, k<sub><small>O</small></sub> how many of the N-1 others contributed; 50 episodes per state (binomial s.e. ≤7 points). mean pools the k<sub><small>O</small></sub> states within an own move; P(C) pools all states — the balanced design makes it the cell's overall contribution rate, the transfer headline. slope = least-squares change in P(C) per unit k<sub><small>O</small></sub> within an own move, in points (the N-player analogue of Δ<sub><small>opp</small></sub>: positive = contributes more when more others did). Trained rows are the checkpoints evaluated here; base rows are untrained cells of the same model under the same protocol.
+Contribution rate (%) by fabricated previous round: C<sub><small>A</small></sub> / D<sub><small>A</small></sub> is the agent's own move, k<sub><small>O</small></sub> how many of the N-1 others contributed; 50 episodes per state (binomial s.e. ≤7 points). mean pools the k<sub><small>O</small></sub> states within an own move; P(C) pools all states — the balanced design makes it the cell's overall contribution rate, the transfer headline. Δ_k = P(C | k<sub><small>O</small></sub> = N−1) − P(C | k<sub><small>O</small></sub> = 0) within an own move, in points: the N-player analogue of Δ<sub><small>opp</small></sub> (0 = contributes the same whatever the others did; large = contributes only when they do). Trained rows are the checkpoints evaluated here; base rows are untrained cells of the same model under the same protocol.
 
 **base, no context**
 
-| Policy (C<sub><small>A</small></sub> \| D<sub><small>A</small></sub>) | P(C \| · , k<sub><small>O</small></sub> = 0) | P(C \| · , k<sub><small>O</small></sub> = 1) | P(C \| · , k<sub><small>O</small></sub> = 2) | P(C \| · , k<sub><small>O</small></sub> = 3) | mean | P(C) | slope /k<sub><small>O</small></sub> |
+| Policy (C<sub><small>A</small></sub> \| D<sub><small>A</small></sub>) | P(C \| · , k<sub><small>O</small></sub> = 0) | P(C \| · , k<sub><small>O</small></sub> = 1) | P(C \| · , k<sub><small>O</small></sub> = 2) | P(C \| · , k<sub><small>O</small></sub> = 3) | mean | P(C) | Δ_k |
 |---|---|---|---|---|---|---|---|
-| base, no context | 2 \| 4 | 0 \| 0 | 0 \| 0 | 2 \| 0 | 1 \| 1 | **1** | -0 \| -1 |
+| base, no context | 2 \| 4 | 0 \| 0 | 0 \| 0 | 2 \| 0 | 1 \| 1 | **1** | +0 \| -4 |
 
 **GRPO deon — 'qwen3_8b_grpo_pd_deon_tft_200'**
 
-| Policy (C<sub><small>A</small></sub> \| D<sub><small>A</small></sub>) | P(C \| · , k<sub><small>O</small></sub> = 0) | P(C \| · , k<sub><small>O</small></sub> = 1) | P(C \| · , k<sub><small>O</small></sub> = 2) | P(C \| · , k<sub><small>O</small></sub> = 3) | mean | P(C) | slope /k<sub><small>O</small></sub> |
+| Policy (C<sub><small>A</small></sub> \| D<sub><small>A</small></sub>) | P(C \| · , k<sub><small>O</small></sub> = 0) | P(C \| · , k<sub><small>O</small></sub> = 1) | P(C \| · , k<sub><small>O</small></sub> = 2) | P(C \| · , k<sub><small>O</small></sub> = 3) | mean | P(C) | Δ_k |
 |---|---|---|---|---|---|---|---|
-| step 60 | 0 \| 10 | 0 \| 2 | 0 \| 0 | 6 \| 0 | 2 \| 3 | **2** | +2 \| -3 |
-| step 90 | 0 \| 4 | 0 \| 0 | 0 \| 0 | 8 \| 0 | 2 \| 1 | **2** | +2 \| -1 |
-| step 120 | 0 \| 6 | 0 \| 0 | 0 \| 2 | 10 \| 0 | 2 \| 2 | **2** | +3 \| -2 |
-| step 180 | 0 \| 6 | 0 \| 2 | 0 \| 0 | 18 \| 0 | 4 \| 2 | **3** | +5 \| -2 |
+| step 60 | 0 \| 10 | 0 \| 2 | 0 \| 0 | 6 \| 0 | 2 \| 3 | **2** | +6 \| -10 |
+| step 90 | 0 \| 4 | 0 \| 0 | 0 \| 0 | 8 \| 0 | 2 \| 1 | **2** | +8 \| -4 |
+| step 120 | 0 \| 6 | 0 \| 0 | 0 \| 2 | 10 \| 0 | 2 \| 2 | **2** | +10 \| -6 |
+| step 180 | 0 \| 6 | 0 \| 2 | 0 \| 0 | 18 \| 0 | 4 \| 2 | **3** | +18 \| -6 |
 
 **SDPO deon-repair-gen — 'qwen3_8b_sdpo_pd_deon-repair-gen_tft_200'**
 
-| Policy (C<sub><small>A</small></sub> \| D<sub><small>A</small></sub>) | P(C \| · , k<sub><small>O</small></sub> = 0) | P(C \| · , k<sub><small>O</small></sub> = 1) | P(C \| · , k<sub><small>O</small></sub> = 2) | P(C \| · , k<sub><small>O</small></sub> = 3) | mean | P(C) | slope /k<sub><small>O</small></sub> |
+| Policy (C<sub><small>A</small></sub> \| D<sub><small>A</small></sub>) | P(C \| · , k<sub><small>O</small></sub> = 0) | P(C \| · , k<sub><small>O</small></sub> = 1) | P(C \| · , k<sub><small>O</small></sub> = 2) | P(C \| · , k<sub><small>O</small></sub> = 3) | mean | P(C) | Δ_k |
 |---|---|---|---|---|---|---|---|
-| step 60 | 2 \| 2 | 2 \| 6 | 2 \| 2 | 30 \| 0 | 9 \| 2 | **6** | +8 \| -1 |
-| step 110 | 8 \| 4 | 10 \| 18 | 18 \| 10 | 78 \| 38 | 28 \| 18 | **23** | +22 \| +9 |
-| step 130 | 14 \| 2 | 48 \| 20 | 56 \| 14 | 96 \| 72 | 54 \| 27 | **40** | +25 \| +20 |
-| step 180 | 38 \| 4 | 72 \| 18 | 74 \| 22 | 100 \| 74 | 71 \| 30 | **50** | +19 \| +21 |
+| step 60 | 2 \| 2 | 2 \| 6 | 2 \| 2 | 30 \| 0 | 9 \| 2 | **6** | +28 \| -2 |
+| step 110 | 8 \| 4 | 10 \| 18 | 18 \| 10 | 78 \| 38 | 28 \| 18 | **23** | +70 \| +34 |
+| step 130 | 14 \| 2 | 48 \| 20 | 56 \| 14 | 96 \| 72 | 54 \| 27 | **40** | +82 \| +70 |
+| step 180 | 38 \| 4 | 72 \| 18 | 74 \| 22 | 100 \| 74 | 71 \| 30 | **50** | +62 \| +70 |
 
 **base + 'deontological' in context**
 
-| Policy (C<sub><small>A</small></sub> \| D<sub><small>A</small></sub>) | P(C \| · , k<sub><small>O</small></sub> = 0) | P(C \| · , k<sub><small>O</small></sub> = 1) | P(C \| · , k<sub><small>O</small></sub> = 2) | P(C \| · , k<sub><small>O</small></sub> = 3) | mean | P(C) | slope /k<sub><small>O</small></sub> |
+| Policy (C<sub><small>A</small></sub> \| D<sub><small>A</small></sub>) | P(C \| · , k<sub><small>O</small></sub> = 0) | P(C \| · , k<sub><small>O</small></sub> = 1) | P(C \| · , k<sub><small>O</small></sub> = 2) | P(C \| · , k<sub><small>O</small></sub> = 3) | mean | P(C) | Δ_k |
 |---|---|---|---|---|---|---|---|
-| base + 'deontological' in context | 28 \| 4 | 54 \| 40 | 64 \| 30 | 100 \| 86 | 62 \| 40 | **51** | +23 \| +24 |
+| base + 'deontological' in context | 28 \| 4 | 54 \| 40 | 64 \| 30 | 100 \| 86 | 62 \| 40 | **51** | +72 \| +82 |
 
 
-### Figure 1 — transfer
+### Figure 1 — conditional contribution curves
 
-![pooled P(C) by step; conditional curves](figures/transfer.png)
+![P(C) against k_O per run and checkpoint](figures/transfer_curves_qwen3_8b.png)
 
-Left: pooled P(C) against training step per run, base at step 0, in-context rows dotted. Right: the conditional contribution curve at each run's last evaluated step against base (solid = own previous move C, dashed = D).
+Rows: the agent's own previous move; columns: training runs. One line per checkpoint, shaded light to full by step; base dashed grey; in-context rows dotted. Flat = unconditional, rising = conditional on how many others contributed.
+
+### Figure 2 — pooled contribution by step
+
+![pooled P(C) against training step](figures/transfer_pooled_qwen3_8b.png)
+
+The transfer headline: pooled P(C) per checkpoint, base at step 0, in-context rows as dotted levels.
 
 
 ### Table T2 — reasoning traces on the transfer cells

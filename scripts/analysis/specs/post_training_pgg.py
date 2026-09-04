@@ -41,6 +41,7 @@ from results_doc import (  # noqa: E402
 from specs.post_training import checkpoint_of  # noqa: E402
 from specs.screen_pgg import _trace_tags, curve_rows, game_note, parse_cell  # noqa: E402
 from trace_measures import NORMATIVE_VOCAB, OVERLAP_WORDS  # noqa: E402
+from transfer_figures import fig_curves, fig_pooled, load_transfer  # noqa: E402
 from moralgym_verl.game.moral_values import get_moral_value  # noqa: E402
 
 VALUE_NAMES = dict(VALUES)
@@ -141,8 +142,8 @@ def transfer_table(policies: List[Policy], group: Path) -> Table:
             row += [Cell(pct(sum(cv[own][0]) / sum(cv[own][1])))
                     for own in ("C", "D")]
             row.append(Cell(pct(block["cooperation_rate"]), bold=True))
-            slope = block["pgg"]["k_slope"]
-            row += [Cell(f"{100 * slope[own]:+.0f}") for own in ("C", "D")]
+            row += [Cell(f"{100 * (cv[own][0][-1] / cv[own][1][-1] - cv[own][0][0] / cv[own][1][0]):+.0f}")
+                    for own in ("C", "D")]
             rows.append((row_label(p), row))
         panels.append((title, rows))
 
@@ -160,16 +161,17 @@ def transfer_table(policies: List[Policy], group: Path) -> Table:
             "s.e.\\ $\\leq$7 points). mean pools the $k_O$ states within an "
             "own move; P(C) pools all states -- the balanced design makes it "
             "the cell's overall contribution rate, the transfer headline. "
-            "slope = least-squares change in P(C) per unit $k_O$ within an "
-            "own move, in points (the N-player analogue of $\\Delta_{opp}$: "
-            "positive = contributes more when more others did). Trained "
+            "$\\Delta_k$ = P(C $\\mid$ $k_O$ = N$-$1) $-$ P(C $\\mid$ $k_O$ = 0) "
+            "within an own move, in points: the N-player analogue of "
+            "$\\Delta_{opp}$ (0 = contributes the same whatever the others "
+            "did; large = contributes only when they do). Trained "
             "rows are the checkpoints evaluated here; base rows are "
             "untrained cells of the same model under the same protocol."),
         stub="Policy (C$_A$ $\\mid$ D$_A$)",
         col_groups=[(f"P(C $\\mid$ · , $k_O$ = {k})", ["C$_A$", "D$_A$"])
                     for k in range(n_states)]
                    + [("mean", ["C$_A$", "D$_A$"]), (None, ["P(C)"]),
-                      ("slope /$k_O$", ["C$_A$", "D$_A$"])],
+                      ("$\\Delta_k$", ["C$_A$", "D$_A$"])],
         panels=panels,
         pair_groups=True,
     )
@@ -209,87 +211,6 @@ def trace_table(policies: List[Policy], principle: str) -> Table:
                     (None, ["recites \\%"])],
         panels=panels,
     )
-
-
-# --------------------------------------------------------------- figure
-
-def transfer_figure(policies: List[Policy], path: Path) -> None:
-    """Left: pooled P(C) against training step, one line per run; base at
-    step 0 and the in-context rows as dotted reference levels. Right: the
-    conditional curve at each run's last evaluated step against base
-    (solid = C_A, dashed = D_A). Direct-labelled; colour by run, never the
-    only cue."""
-    from figure_style import (INK, INK_MUTED, RUN_COLORS, WIDTHS, apply_style,
-                              clean_axes, save)
-    import matplotlib.pyplot as plt
-
-    apply_style()
-    base = next((p for p in policies if p.label == BASE), None)
-    ctx = [p for p in policies if p.run == "base" and p.label != BASE]
-    runs: Dict[str, List[Policy]] = {}
-    for p in policies:
-        if p.run != "base":
-            runs.setdefault(p.run, []).append(p)
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(WIDTHS["wide"], 2.5),
-                                   gridspec_kw={"width_ratios": [1.25, 1]})
-    for i, (run, ps) in enumerate(runs.items()):
-        color = RUN_COLORS[i % len(RUN_COLORS)]
-        xs = [0] + [p.step for p in ps] if base else [p.step for p in ps]
-        ys = ([base.cell["block"]["cooperation_rate"]] if base else []) \
-            + [p.cell["block"]["cooperation_rate"] for p in ps]
-        ax1.plot(xs, [100 * y for y in ys], marker="o", ms=3.5, color=color)
-        ax1.annotate(channel(run), (xs[-1], 100 * ys[-1]), xytext=(4, 0),
-                     textcoords="offset points", fontsize=7.5, color=color,
-                     va="center")
-    if base:
-        ax1.plot([0], [100 * base.cell["block"]["cooperation_rate"]], "o",
-                 ms=5, mfc="white", mec=INK, zorder=5)
-        ax1.annotate("base", (0, 100 * base.cell["block"]["cooperation_rate"]),
-                     xytext=(0, 6), textcoords="offset points", fontsize=7.5,
-                     ha="center", color=INK)
-    for p in ctx:
-        y = 100 * p.cell["block"]["cooperation_rate"]
-        ax1.axhline(y, ls=":", lw=1, color=INK_MUTED)
-        ax1.annotate(f"+{p.cell['meta']['moral_value']} in context", (0, y),
-                     xytext=(2, 3), textcoords="offset points", fontsize=7,
-                     color=INK_MUTED)
-    ax1.set_xlabel("training step")
-    ax1.set_ylabel("pooled P(C) %")
-    ax1.set_ylim(0, 100)
-    clean_axes(ax1)
-
-    n_states = len(policies[0].cell["block"]["pgg"]["cond_contribution_curve"]["C"])
-    ks = list(range(n_states))
-
-    def curve(p: Policy, own: str) -> List[float]:
-        cv = p.cell["block"]["pgg"]["cond_contribution_curve"][own]
-        return [100 * cv[str(k)]["p_C"] for k in ks]
-
-    style = {"C": dict(ls="-", marker="o"), "D": dict(ls="--", marker="s")}
-    if base:
-        for own in ("C", "D"):
-            ax2.plot(ks, curve(base, own), color=INK_MUTED, ms=3.5, **style[own])
-        ax2.annotate("base", (ks[-1], curve(base, "C")[-1]), xytext=(4, 0),
-                     textcoords="offset points", fontsize=7, color=INK_MUTED,
-                     va="center")
-    for i, (run, ps) in enumerate(runs.items()):
-        color = RUN_COLORS[i % len(RUN_COLORS)]
-        last = ps[-1]
-        for own in ("C", "D"):
-            ax2.plot(ks, curve(last, own), color=color, ms=3.5, **style[own])
-        ax2.annotate(f"{channel(run)} s{last.step}", (ks[-1], curve(last, "C")[-1]),
-                     xytext=(4, 0), textcoords="offset points", fontsize=7,
-                     color=color, va="center")
-    ax2.set_xticks(ks)
-    ax2.set_xlabel("$k_O$ (others contributing last round)")
-    ax2.set_ylabel("P(C) %")
-    ax2.set_ylim(0, 100)
-    ax2.plot([], [], color=INK, ls="-", marker="o", ms=3.5, label="own prev C")
-    ax2.plot([], [], color=INK, ls="--", marker="s", ms=3.5, label="own prev D")
-    ax2.legend(loc="upper left", fontsize=7)
-    clean_axes(ax2)
-    fig.tight_layout()
-    save(fig, path.parent, path.stem)
 
 
 # --------------------------------------------------------------- header
@@ -373,16 +294,22 @@ def build(args: argparse.Namespace) -> Path:
     cells = [p.cell["cell"] for p in policies]
     md = [header(policies, group), prompt_design_section(cells)]
     md.append(emit(transfer_table(policies, group)))
-    fig_path = out_dir / "figures" / "transfer.png"
-    transfer_figure(policies, fig_path)
-    print(f"saved -> {fig_path}")
+    runs = load_transfer(group, args.reference, args.context)
+    name = group.parent.parent.name
+    curves_png = fig_curves(runs, out_dir, name)[-1]
+    pooled_png = fig_pooled(runs, out_dir, name)[-1]
+    print(f"saved -> {curves_png}\nsaved -> {pooled_png}")
     md.append("\n".join([
-        "### Figure 1 — transfer", "",
-        f"![pooled P(C) by step; conditional curves]({fig_path.relative_to(out_dir)})",
-        "", "Left: pooled P(C) against training step per run, base at step 0, "
-        "in-context rows dotted. Right: the conditional contribution curve at "
-        "each run's last evaluated step against base (solid = own previous "
-        "move C, dashed = D).", "", ""]))
+        "### Figure 1 — conditional contribution curves", "",
+        f"![P(C) against k_O per run and checkpoint]({curves_png.relative_to(out_dir)})",
+        "", "Rows: the agent's own previous move; columns: training runs. One "
+        "line per checkpoint, shaded light to full by step; base dashed grey; "
+        "in-context rows dotted. Flat = unconditional, rising = conditional on "
+        "how many others contributed.", "",
+        "### Figure 2 — pooled contribution by step", "",
+        f"![pooled P(C) against training step]({pooled_png.relative_to(out_dir)})",
+        "", "The transfer headline: pooled P(C) per checkpoint, base at step 0, "
+        "in-context rows as dotted levels.", "", ""]))
     md.append(emit(trace_table(policies, args.principle)))
     if args.exemplars:
         label_of = {p.cell["run_dir"]: p.label for p in policies}

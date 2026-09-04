@@ -554,6 +554,23 @@ def fig_dopp_compare(args, out_dir: Path) -> None:
 
 # ---------------------------------------------------------------------------
 
+def fig_transfer_grid(args, out_dir: Path) -> None:
+    """Cross-model transfer: --group <transfer group dir> repeated (one per
+    model), --reference screen groups for the in-context rows. Columns are
+    every run across the groups, so the same figure shows replication
+    across models and the GRPO-vs-SDPO contrast within one."""
+    from transfer_figures import fig_curves, fig_pooled, load_transfer
+    runs = []
+    for g in args.group:
+        runs += load_transfer(Path(g).expanduser(),
+                              [Path(r) for r in args.reference],
+                              [args.principle] if args.principle else None)
+    if not runs:
+        raise SystemExit("no transfer runs found under --group dirs")
+    for pth in fig_curves(runs, out_dir, args.name) + fig_pooled(runs, out_dir, args.name):
+        print(f"wrote {pth}")
+
+
 def mirror_to_report(out_dir: Path, report_dir: Path) -> None:
     """Copy PDFs + numbers.tex into the Overleaf clone, if it exists."""
     if not (report_dir / ".git").is_dir():
@@ -585,6 +602,7 @@ FIGURES = {
     "prompt-panels": prompt_panels,
     "trace-panels": trace_panels,
     "ckpt-ladder": fig_ckpt_ladder,
+    "transfer-grid": lambda a, o: fig_transfer_grid(a, o),
 }
 
 
@@ -606,6 +624,9 @@ def main() -> None:
     ap.add_argument("--run", action="append", default=[],
                     help="training-grid: label=rollout-run-dir, repeated")
     ap.add_argument("--ncols", type=int, default=2)
+    ap.add_argument("--group", action="append", default=[],
+                    help="transfer-grid: eval_results/transfer/<model>/"
+                         "<family>/<experiment> dir, repeated")
     ap.add_argument("--pick", action="append", default=[],
                     help="trace-panels: label=ckpt_ladder_dir:step:state, "
                          "repeated")
@@ -631,6 +652,8 @@ def main() -> None:
     elif args.figure in ("training-grid", "ladder-grid", "dopp-compare",
                          "trace-table", "prompt-panels", "trace-panels"):
         out_dir = Path("eval_results/post_training/comparison/analysis")
+    elif args.figure == "transfer-grid":
+        out_dir = Path("eval_results/transfer/comparison/analysis")
     else:
         raise SystemExit("training-curves needs --analysis-dir "
                          "(the experiment's analysis dir)")
