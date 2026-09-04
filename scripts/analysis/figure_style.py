@@ -128,12 +128,11 @@ def footnote(fig, parts: list) -> None:
 
 
 def save(fig, out_dir, name: str) -> list:
-    """Write <name>.pdf (for LaTeX) + <name>.png (for quick viewing)."""
-    out_dir.mkdir(parents=True, exist_ok=True)
-    paths = []
-    for ext in ("pdf", "png"):
-        p = out_dir / f"{name}.{ext}"
+    """Write the quick-look <name>.png at the top level and the
+    canonical vector PDF (what Overleaf includes) under pdf/."""
+    (out_dir / "pdf").mkdir(parents=True, exist_ok=True)
+    paths = [out_dir / f"{name}.png", out_dir / "pdf" / f"{name}.pdf"]
+    for p in paths:
         fig.savefig(p, bbox_inches="tight", pad_inches=0.02)
-        paths.append(p)
     plt.close(fig)
     return paths

@@ -565,7 +565,7 @@ def mirror_to_report(out_dir: Path, report_dir: Path) -> None:
         print(f"note: {report_dir} not present, nothing mirrored")
         return
     import shutil
-    for src in sorted((out_dir / "figures").glob("*.pdf")):
+    for src in sorted((out_dir / "figures" / "pdf").glob("*.pdf")):
         dst = report_dir / "figures" / src.name
         dst.parent.mkdir(exist_ok=True)
         shutil.copy2(src, dst)
