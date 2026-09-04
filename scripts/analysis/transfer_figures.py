@@ -224,13 +224,15 @@ def fig_final(runs: List[Run], out_dir: Path, name: str) -> List[Path]:
     checkpoint, own previous move C solid / D dashed, base and in-context
     in the same two line styles."""
     runs = by_channel(runs)
-    ncols = len(runs)
-    n_grpo = sum("GRPO" in r.channel for r in runs)
-    fig, axes = plt.subplots(1, ncols, sharey=True, squeeze=False,
-                             figsize=(WIDTHS["wide"], 2.0),
-                             gridspec_kw={"wspace": 0.12})
+    ncols = 2 if len(runs) >= 4 else len(runs)
+    nrows = -(-len(runs) // ncols)
+    fig, axes = plt.subplots(nrows, ncols, sharey=True, squeeze=False,
+                             figsize=(WIDTHS["wide"] * ncols / 2,
+                                      2.2 * nrows),
+                             gridspec_kw={"wspace": 0.12, "hspace": 0.55})
     for j, run in enumerate(runs):
-        ax, color, last = axes[0][j], run_color(run), run.steps[-1]
+        ax = axes[j // ncols][j % ncols]
+        color, last = run_color(run), run.steps[-1]
         sdpo = "GRPO" not in run.channel
         labels, ks = [], []
         for own in OWN:
@@ -254,19 +256,17 @@ def fig_final(runs: List[Run], out_dir: Path, name: str) -> List[Path]:
             labels.append((curve(next(iter(run.context.values())), "C")[-1],
                            "+ctx", ACCENT))
         _labels(ax, labels, ks[-1], min_gap=7.0)
-        _k_axes(ax, ks, xlabel=True)
+        _k_axes(ax, ks, xlabel=(j // ncols == nrows - 1))
         ax.set_title(title(run), fontsize=8)
-        if j == 0:
+        if j % ncols == 0:
             ax.set_ylabel("P(C) (%)", fontsize=7.5)
-    for x, lab in ((n_grpo / 2 / ncols, "GRPO"),
-                   ((n_grpo + (ncols - n_grpo) / 2) / ncols, "SDPO")):
-        if 0 < x < 1:
-            fig.text(0.07 + 0.92 * x, 1.02, lab, ha="center", fontsize=8.5,
-                     fontweight="bold", color=INK)
+    for j in range(len(runs), nrows * ncols):
+        axes[j // ncols][j % ncols].axis("off")
     _footnote(fig, runs, "grey",
               "violet, SDPO panels: the initial teacher",
               "solid = own previous move C, dashed = D")
-    fig.subplots_adjust(left=0.07, right=0.99, top=0.8, bottom=0.3)
+    fig.subplots_adjust(left=0.07, right=0.99, top=0.9,
+                        bottom=0.3 / nrows)
     return save(fig, out_dir / "figures", f"transfer_final_{name}")
 
 
