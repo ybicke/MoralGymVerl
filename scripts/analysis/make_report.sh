@@ -83,6 +83,8 @@ $PY $MF trace-panels \
     --pick "Qwen3-8B SDPO=$SDPO_QWEN:200:CD" \
     --mark "recite=If you have taken advantage of others who acted in good faith, stop and return to acting in good faith" \
     --pick "Gemma2-9B SDPO=$SDPO_GEMMA:200:CD" \
-    --mark "fail=A acted in good faith last round by choosing action4"
+    --mark "fail=A acted in good faith last round by choosing action4" \
+    --pick "Qwen3-8B SDPO=$SDPO_QWEN:200:max-recite" \
+    --mark ""
 
 echo "report regenerated; commit + push ~/moralgym-report to publish"

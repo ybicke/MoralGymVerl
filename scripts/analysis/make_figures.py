@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -41,7 +42,10 @@ from figure_style import (  # noqa: E402
 from training_trajectory import STATES, load_decisions, windows  # noqa: E402
 from eval_cells import discover_run_dirs, load_cell  # noqa: E402
 from specs.post_training import checkpoint_of, reference_rows  # noqa: E402
-from measures import normative_hit, principle_ngrams, principle_overlap  # noqa: E402
+from measures import (  # noqa: E402
+    longest_overlap, normative_hit, principle_ngrams, principle_overlap,
+    words as measure_words,
+)
 from moralgym_verl.game.moral_values import get_moral_value  # noqa: E402
 from trace_measures import from_cells, select_exemplars  # noqa: E402
 
@@ -420,16 +424,18 @@ def trace_language_table(args, out_dir: Path) -> None:
                            f"{rates(cell)[want_norm - 1]:.0f}")
         rows.append(row)
     cap = (r"Moral language in the PD reasoning traces, pooled over the"
-           r" four states (400 traces per cell, checkpoint-eval surface,"
-           r" no principle in any prompt). \emph{Normative} = share of"
-           r" traces containing at least one of 12 reviewed stems (good"
-           r" faith, trust, exploit, moral, ethic, principle, fair,"
-           r" reciproc, wrong, obligat, betray, honest); the untrained"
-           r" base rate is payoff-talk hits, mostly `exploit'."
-           r" \emph{Recites} = share reproducing at least 6 consecutive"
-           r" words of the teacher principle verbatim, so a faithful"
-           r" paraphrase scores 0. `final' = the run's last evaluated"
-           r" checkpoint.").replace(BS + BS, BS)
+           r" four states (400 traces per cell, checkpoint-eval surface;"
+           r" the principle text is never in these prompts)."
+           r" \emph{Normative} = the trace contains at least one of 12"
+           r" moral word stems (good faith, trust, exploit, moral, ethic,"
+           r" principle, fair, reciproc, wrong, obligat, betray, honest);"
+           r" the untrained base rate is payoff-sense hits, mostly"
+           r" `exploit'. \emph{Recites} = the trace quotes at least 6"
+           r" consecutive words of the teacher principle verbatim --- a"
+           r" hit means word-for-word quoted \emph{clauses} (median run"
+           r" 8, max 21 of the principle's ${\sim}90$ words), not the"
+           r" full text, and a faithful paraphrase scores 0. `final' ="
+           r" the run's last evaluated checkpoint.").replace(BS + BS, BS)
     (tdir / "trace_language_pd.tex").write_text(note + table(
         cap, "tab:trace-language-pd",
         [("normative (" + BS + "%)", len(cols)),
@@ -544,15 +550,37 @@ def trace_panels(args, out_dir: Path) -> None:
         if group not in sels:
             traces = from_cells(group)
             steps = sorted({t.step for t in traces})
-            sels[group] = select_exemplars(traces=traces, steps=steps,
-                                           k=8, seed=0)
-        t = sels[group].get((int(step), state))
+            sel = select_exemplars(traces=traces, steps=steps, k=8, seed=0)
+            by_step = defaultdict(list)
+            for t in traces:
+                by_step[t.step].append(t)
+            sel = type("Sel", (), {"get": sel.get,
+                                   "traces_by_step": dict(by_step)})()
+            sels[group] = sel
+        if state == "max-recite":
+            # the step's longest verbatim run of the principle, any state
+            # (the traces_*.md docs' "longest recitation" exemplar); the
+            # run is auto-highlighted, so no --mark is needed.
+            pw = measure_words(get_moral_value(args.principle))
+            pool = [t for t in sels[group].traces_by_step[int(step)]]
+            t = max(pool, key=lambda t: longest_overlap(t.text, pw)[0])
+        else:
+            t = sels[group].get((int(step), state))
         if t is None:
             raise SystemExit(f"no exemplar for {label} step {step} {state}")
         body = t.text.strip()
         if len(body) > 2500:
             body = body[:2500] + " [...]"
-        if mark:
+        if state == "max-recite":
+            pw = measure_words(get_moral_value(args.principle))
+            L, i = longest_overlap(t.text, pw)
+            span_words = measure_words(t.text)[i:i + L]
+            pat = r"\W+".join(re.escape(w) for w in span_words)
+            m = re.search(pat, body, re.I)
+            if m:
+                body = (body[:m.start()] + "~~" + body[m.start():m.end()]
+                        + "~~" + body[m.end():])
+        elif mark:
             kind, _, span = mark.partition("=")
             d = {"fail": "@@", "recite": "~~"}[kind]
             if span not in body:
@@ -561,11 +589,16 @@ def trace_panels(args, out_dir: Path) -> None:
         import re as _re
         slug = _re.sub(r"[^A-Za-z0-9]+", "_", f"{label}_{step}_{state}")
         (tdir / f"{slug}.txt").write_text(body + NL)
-        st_tex = (BS + "(" + BS + "mathrm{" + state[0] + "_A "
-                  + state[1] + "_O}" + BS + ")")
+        if state == "max-recite":
+            st_tex = "longest verbatim recitation ({} words)".format(
+                longest_overlap(t.text, measure_words(
+                    get_moral_value(args.principle)))[0])
+        else:
+            st_tex = ("state " + BS + "(" + BS + "mathrm{" + state[0]
+                      + "_A " + state[1] + "_O}" + BS + ")")
         entries.append(
             BS + "lstinputlisting[title={" + label + " --- step " + step
-            + ", state " + st_tex + ", move " + t.move
+            + ", " + st_tex + ", move " + t.move
             + "}]{generated/panels/" + slug + ".txt}")
     (out_dir / "generated" / "trace_panels.tex").write_text(
         "% generated by scripts/analysis/make_figures.py -- do not edit"
