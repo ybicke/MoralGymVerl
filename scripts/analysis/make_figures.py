@@ -577,7 +577,7 @@ def mirror_to_report(out_dir: Path, report_dir: Path) -> None:
     gen = out_dir / "generated"
     for num in (sorted(gen.glob("numbers_*.tex"))
                 + sorted(gen.glob("tables/*.tex"))
-                + sorted(gen.glob("*_panels.tex"))
+                + sorted(gen.glob("*panels*.tex"))
                 + sorted(gen.glob("panels/*.txt"))):
         dst = report_dir / "generated" / num.relative_to(gen)
         dst.parent.mkdir(parents=True, exist_ok=True)

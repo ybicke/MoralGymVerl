@@ -60,19 +60,19 @@ Contribution rate (%) by fabricated previous round: C<sub><small>A</small></sub>
 
 ### Figure 1 — pooled contribution by step
 
-![pooled P(C) against training step](figures/transfer_pooled_gemma3_12b.png)
+![pooled P(C) against training step](figures/pdf/transfer_pooled_gemma3_12b.pdf)
 
 The transfer headline: pooled P(C) per checkpoint, base at step 0, in-context rows as dotted levels.
 
 ### Figure 2 — conditional contribution at the last checkpoint
 
-![P(C) against k_O at the last checkpoint, own C solid / own D dashed](figures/transfer_final_gemma3_12b.png)
+![P(C) against k_O at the last checkpoint, own C solid / own D dashed](figures/pdf/transfer_final_gemma3_12b.pdf)
 
 The screen's Figure-1 form: solid = agent contributed last round, dashed = it kept; base grey, in-context violet. The vertical gap between solid and dashed is the own-move anchoring, the slope the response to the others.
 
 ### Figure 3 — every checkpoint
 
-![P(C) against k_O per run and checkpoint](figures/transfer_curves_gemma3_12b.png)
+![P(C) against k_O per run and checkpoint](figures/pdf/transfer_curves_gemma3_12b.pdf)
 
 Rows: own previous move; columns: runs; one line per checkpoint, shaded light to full by step. Flat = unconditional, rising = conditional on how many others contributed.
 
