@@ -77,14 +77,18 @@ $PY $MF prompt-panels --name pgg --game-only \
 # recitation of the teacher wording.
 $PY $MF trace-panels \
     --pick "Qwen3-8B GRPO=$GRPO_QWEN:60:DC" \
-    --mark "" \
+    --mark "" --note "" \
     --pick "Qwen3-8B GRPO=$GRPO_QWEN:180:DC" \
     --mark "fail=**choosing action3** is more likely to result in a better outcome" \
+    --note "wrong: its own table two sentences above gives defecting 4 > 3 against action3" \
     --pick "Qwen3-8B SDPO=$SDPO_QWEN:200:CD" \
     --mark "recite=If you have taken advantage of others who acted in good faith, stop and return to acting in good faith" \
+    --note "verbatim quote of the teacher principle, which is not in this prompt" \
     --pick "Gemma2-9B SDPO=$SDPO_GEMMA:200:CD" \
     --mark "fail=A acted in good faith last round by choosing action4" \
+    --note "misreads the state: action4 was the opponent's defection, then cited to justify defecting back" \
     --pick "Qwen3-8B SDPO=$SDPO_QWEN:200:max-recite" \
-    --mark ""
+    --mark "" \
+    --note "the principle's opening clause, 21 words one-to-one"
 
 echo "report regenerated; commit + push ~/moralgym-report to publish"

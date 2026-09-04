@@ -543,7 +543,8 @@ def trace_panels(args, out_dir: Path) -> None:
     sels = {}
     entries = []
     marks = args.mark + [""] * (len(args.pick) - len(args.mark))
-    for pickspec, mark in zip(args.pick, marks):
+    notes = args.note + [""] * (len(args.pick) - len(args.note))
+    for pickspec, mark, note in zip(args.pick, marks, notes):
         label, _, rest = pickspec.rpartition("=")
         group, step, state = rest.rsplit(":", 2)
         group = Path(group).expanduser()
@@ -578,14 +579,18 @@ def trace_panels(args, out_dir: Path) -> None:
             pat = r"\W+".join(re.escape(w) for w in span_words)
             m = re.search(pat, body, re.I)
             if m:
+                tail = " ~~[" + note + "]~~" if note else ""
                 body = (body[:m.start()] + "~~" + body[m.start():m.end()]
-                        + "~~" + body[m.end():])
+                        + "~~" + tail + body[m.end():])
         elif mark:
             kind, _, span = mark.partition("=")
             d = {"fail": "@@", "recite": "~~"}[kind]
             if span not in body:
                 raise SystemExit(f"mark not found in {label}: {span[:40]}")
-            body = body.replace(span, d + span + d, 1)
+            marked = d + span + d
+            if note:
+                marked += " " + d + "[" + note + "]" + d
+            body = body.replace(span, marked, 1)
         import re as _re
         slug = _re.sub(r"[^A-Za-z0-9]+", "_", f"{label}_{step}_{state}")
         (tdir / f"{slug}.txt").write_text(body + NL)
@@ -737,6 +742,10 @@ def main() -> None:
     ap.add_argument("--mark", action="append", default=[],
                     help="trace-panels: per pick (positional): "
                          "fail=<substr> or recite=<substr> or ''")
+    ap.add_argument("--note", action="append", default=[],
+                    help="trace-panels: per pick (positional): bracketed "
+                         "annotation appended after the marked span, in "
+                         "the mark's color")
     ap.add_argument("--name", default="all",
                     help="ladder-grid: output filename suffix, e.g. the "
                          "algorithm the grid groups (grpo/sdpo)")
