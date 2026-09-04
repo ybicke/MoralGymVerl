@@ -89,6 +89,9 @@ $PY $MF trace-panels \
     --note "misreads the state: action4 was the opponent's defection, then cited to justify defecting back" \
     --pick "Qwen3-8B SDPO=$SDPO_QWEN:200:max-recite" \
     --mark "" \
-    --note "the principle's opening clause, 21 words one-to-one"
+    --note "the principle's opening clause, 21 words one-to-one" \
+    --pick "Qwen3-8B SDPO=$SDPO_QWEN:120:CD" \
+    --mark "norm=encourage A to act in good faith in future rounds" \
+    --note "the norm in the model's own words: normative 100 percent at this step, verbatim recitation only 12 percent"
 
 echo "report regenerated; commit + push ~/moralgym-report to publish"

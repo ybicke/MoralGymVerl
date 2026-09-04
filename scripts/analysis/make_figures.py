@@ -473,7 +473,7 @@ def trace_language_table(args, out_dir: Path) -> None:
                         base_cell = cell
                         break
                 break
-        row = [label]
+        row = [label, str(best[1]) if best[0] is not None else "--"]
         for want_norm in (True, False):
             for cell in (base_cell, best[0]):
                 row.append("--" if cell is None else
@@ -482,11 +482,13 @@ def trace_language_table(args, out_dir: Path) -> None:
     cap = (r"The same two measures on the held-out PGG transfer traces"
            r" (400 traces per cell, no moral text in any prompt): the"
            r" untrained base model and each run's last"
-           r" transfer-evaluated checkpoint.").replace(BS + BS, BS)
+           r" transfer-evaluated checkpoint (the `step' column names"
+           r" it).").replace(BS + BS, BS)
     (tdir / "trace_language_pgg.tex").write_text(note + table(
         cap, "tab:trace-language-pgg",
-        [("normative (" + BS + "%)", 2), ("recites (" + BS + "%)", 2)],
-        ["base", "final", "base", "final"], rows))
+        [("", 1), ("normative (" + BS + "%)", 2),
+         ("recites (" + BS + "%)", 2)],
+        ["step", "base", "final", "base", "final"], rows))
     print(f"wrote {tdir / 'trace_language_pgg.tex'}")
     for r in rows:
         print("  " + "  ".join(f"{v:>5}" for v in r))
@@ -584,7 +586,7 @@ def trace_panels(args, out_dir: Path) -> None:
                         + "~~" + tail + body[m.end():])
         elif mark:
             kind, _, span = mark.partition("=")
-            d = {"fail": "@@", "recite": "~~"}[kind]
+            d = {"fail": "@@", "recite": "~~", "norm": "++"}[kind]
             if span not in body:
                 raise SystemExit(f"mark not found in {label}: {span[:40]}")
             marked = d + span + d
