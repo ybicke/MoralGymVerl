@@ -52,10 +52,14 @@ $PY $MF transfer-grid --name pgg --principle deontological \
     --group eval_results/transfer/gemma3_12b/pgg/single_round \
     --reference eval_results/teacher_signal/qwen3_8b/pgg/single_turn_v3
 
-$PY $MF trace-table \
+$PY $MF trace-table --steps 0,60,90,120,final \
     --ladder "Qwen3-8B GRPO=$GRPO_QWEN" \
     --ladder "Qwen3-8B SDPO=$SDPO_QWEN" \
     --ladder "Gemma2-9B SDPO=$SDPO_GEMMA" \
+    --transfer "Qwen3-8B GRPO=eval_results/transfer/qwen3_8b/pgg/single_round" \
+    --transfer "Qwen3-8B SDPO=eval_results/transfer/qwen3_8b/pgg/single_round" \
+    --transfer "Gemma2-9B SDPO=eval_results/transfer/gemma2_9b/pgg/single_round" \
+    --transfer "Gemma3-12B GRPO=eval_results/transfer/gemma3_12b/pgg/single_round" \
     --reference $SCREEN_QWEN --reference $SCREEN_GEMMA
 
 $PY $MF prompt-panels --ladder $GRPO_QWEN
@@ -68,10 +72,16 @@ $PY $MF prompt-panels --name pgg --game-only \
 # rule as the traces_checkpoints_*.md docs):
 #   GRPO before/after its training jump in the repair state D_A C_O;
 #   SDPO in the betrayed state C_A D_O: Qwen recites, Gemma paraphrases.
+# Marks: red (fail=) = the flawed inference, violet (recite=) = verbatim
+# recitation of the teacher wording.
 $PY $MF trace-panels \
     --pick "Qwen3-8B GRPO=$GRPO_QWEN:60:DC" \
+    --mark "" \
     --pick "Qwen3-8B GRPO=$GRPO_QWEN:180:DC" \
+    --mark "fail=**choosing action3** is more likely to result in a better outcome" \
     --pick "Qwen3-8B SDPO=$SDPO_QWEN:200:CD" \
-    --pick "Gemma2-9B SDPO=$SDPO_GEMMA:200:CD"
+    --mark "recite=If you have taken advantage of others who acted in good faith, stop and return to acting in good faith" \
+    --pick "Gemma2-9B SDPO=$SDPO_GEMMA:200:CD" \
+    --mark "fail=A acted in good faith last round by choosing action4"
 
 echo "report regenerated; commit + push ~/moralgym-report to publish"
