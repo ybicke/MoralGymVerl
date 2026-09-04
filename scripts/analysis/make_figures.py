@@ -386,7 +386,7 @@ def trace_language_table(args, out_dir: Path) -> None:
             if "base" in refs:
                 base_cell = load_cell(refs["base"])
         final = max(cells) if cells else None
-        row = [label]
+        row = [label, str(final) if final else "--"]
         for want_norm in (True, False):
             for c in cols:
                 step = final if c is None else c
@@ -415,7 +415,9 @@ def trace_language_table(args, out_dir: Path) -> None:
                     best = (cell, step)
             if best[0] is not None:
                 n, r = rates(best[0])
-                pgg = [f"{n:.0f}", f"{r:.0f}"]
+                pgg = [str(best[1]), f"{n:.0f}", f"{r:.0f}"]
+        if len(pgg) == 2:
+            pgg = ["--"] + pgg
         rows.append(row + pgg)
 
     BS, NL = chr(92), chr(10)
@@ -435,20 +437,20 @@ def trace_language_table(args, out_dir: Path) -> None:
         " share reproducing at least 6 consecutive words of the teacher"
         " principle verbatim, so a faithful paraphrase scores 0.}",
         BS + "label{tab:trace-language}",
-        BS + "begin{tabular}{l" + "r" * (2 * len(cols) + 2) + "}",
+        BS + "begin{tabular}{lr" + "r" * (2 * len(cols) + 3) + "}",
         BS + "toprule",
-        " & " + BS + "multicolumn{" + str(len(cols)) + "}{c}{PD:"
+        " & & " + BS + "multicolumn{" + str(len(cols)) + "}{c}{PD:"
         " normative (" + BS + "%)}"
         " & " + BS + "multicolumn{" + str(len(cols)) + "}{c}{PD:"
         " recites (" + BS + "%)}"
-        " & " + BS + "multicolumn{2}{c}{PGG final} " + BS + BS,
-        BS + "cmidrule(lr){2-" + str(1 + len(cols)) + "}"
-        + BS + "cmidrule(lr){" + str(2 + len(cols)) + "-"
-        + str(1 + 2 * len(cols)) + "}"
-        + BS + "cmidrule(lr){" + str(2 + 2 * len(cols)) + "-"
-        + str(3 + 2 * len(cols)) + "}",
-        "Run & " + " & ".join(hdr + hdr + ["norm.", "rec."])
-        + " " + BS + BS,
+        " & " + BS + "multicolumn{3}{c}{PGG transfer} " + BS + BS,
+        BS + "cmidrule(lr){3-" + str(2 + len(cols)) + "}"
+        + BS + "cmidrule(lr){" + str(3 + len(cols)) + "-"
+        + str(2 + 2 * len(cols)) + "}"
+        + BS + "cmidrule(lr){" + str(3 + 2 * len(cols)) + "-"
+        + str(5 + 2 * len(cols)) + "}",
+        "Run & $s_f$ & " + " & ".join(hdr + hdr
+        + ["$s_t$", "norm.", "rec."]) + " " + BS + BS,
         BS + "midrule",
     ]
     for row in rows:
