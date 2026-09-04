@@ -1,0 +1,136 @@
+{
+  "sweep": {
+    "num_episodes": 400,
+    "axes": {
+      "game": [
+        "public_goods"
+      ],
+      "representation": [
+        "decision_full"
+      ],
+      "moral_value": [
+        "none"
+      ],
+      "protocol": [
+        "single_round"
+      ],
+      "checkpoint": [
+        "qwen3_8b_grpo_pd_deon_tft_200/global_step_60",
+        "qwen3_8b_grpo_pd_deon_tft_200/global_step_90",
+        "qwen3_8b_grpo_pd_deon_tft_200/global_step_120",
+        "qwen3_8b_grpo_pd_deon_tft_200/global_step_180",
+        "qwen3_8b_sdpo_pd_deon-repair-gen_tft_200/global_step_60",
+        "qwen3_8b_sdpo_pd_deon-repair-gen_tft_200/global_step_110",
+        "qwen3_8b_sdpo_pd_deon-repair-gen_tft_200/global_step_130",
+        "qwen3_8b_sdpo_pd_deon-repair-gen_tft_200/global_step_180"
+      ]
+    },
+    "env": {
+      "RUN_PROBES": "off",
+      "RUN_PROBE_B_EPISODE": "off",
+      "GAME_DESCRIPTION": "off"
+    },
+    "extra_args": [
+      "--temperature",
+      "0.7"
+    ],
+    "name": "qwen3_8b/pgg/transfer",
+    "eval_group": "qwen3_8b/pgg/transfer",
+    "results_dir": "post_training",
+    "config": "configs/eval/harness/qwen3_8b/pgg.yaml",
+    "sweep_path": "configs/eval/post_training/qwen3_8b/pgg/transfer.yaml"
+  },
+  "submitted": "2026-09-03T17:57:08.489036",
+  "git_commit": "63927c1-dirty",
+  "packed": true,
+  "cells": [
+    {
+      "game": "public_goods",
+      "representation": "decision_full",
+      "moral_value": "none",
+      "protocol": "single_round",
+      "checkpoint": "qwen3_8b_grpo_pd_deon_tft_200/global_step_60",
+      "job_id": "3281381",
+      "run_dir": "public_goods__none__decision_full__single_round__qwen3_8b_grpo_pd_deon_tft_200-global_step_60_3281381",
+      "batch": 0,
+      "batch_file": "batch_000.json"
+    },
+    {
+      "game": "public_goods",
+      "representation": "decision_full",
+      "moral_value": "none",
+      "protocol": "single_round",
+      "checkpoint": "qwen3_8b_grpo_pd_deon_tft_200/global_step_90",
+      "job_id": "3281381",
+      "run_dir": "public_goods__none__decision_full__single_round__qwen3_8b_grpo_pd_deon_tft_200-global_step_90_3281381",
+      "batch": 0,
+      "batch_file": "batch_000.json"
+    },
+    {
+      "game": "public_goods",
+      "representation": "decision_full",
+      "moral_value": "none",
+      "protocol": "single_round",
+      "checkpoint": "qwen3_8b_grpo_pd_deon_tft_200/global_step_120",
+      "job_id": "3281381",
+      "run_dir": "public_goods__none__decision_full__single_round__qwen3_8b_grpo_pd_deon_tft_200-global_step_120_3281381",
+      "batch": 0,
+      "batch_file": "batch_000.json"
+    },
+    {
+      "game": "public_goods",
+      "representation": "decision_full",
+      "moral_value": "none",
+      "protocol": "single_round",
+      "checkpoint": "qwen3_8b_grpo_pd_deon_tft_200/global_step_180",
+      "job_id": "3281381",
+      "run_dir": "public_goods__none__decision_full__single_round__qwen3_8b_grpo_pd_deon_tft_200-global_step_180_3281381",
+      "batch": 0,
+      "batch_file": "batch_000.json"
+    },
+    {
+      "game": "public_goods",
+      "representation": "decision_full",
+      "moral_value": "none",
+      "protocol": "single_round",
+      "checkpoint": "qwen3_8b_sdpo_pd_deon-repair-gen_tft_200/global_step_60",
+      "job_id": "3281382",
+      "run_dir": "public_goods__none__decision_full__single_round__qwen3_8b_sdpo_pd_deon-repair-gen_tft_200-global_step_60_3281382",
+      "batch": 1,
+      "batch_file": "batch_001.json"
+    },
+    {
+      "game": "public_goods",
+      "representation": "decision_full",
+      "moral_value": "none",
+      "protocol": "single_round",
+      "checkpoint": "qwen3_8b_sdpo_pd_deon-repair-gen_tft_200/global_step_110",
+      "job_id": "3281382",
+      "run_dir": "public_goods__none__decision_full__single_round__qwen3_8b_sdpo_pd_deon-repair-gen_tft_200-global_step_110_3281382",
+      "batch": 1,
+      "batch_file": "batch_001.json"
+    },
+    {
+      "game": "public_goods",
+      "representation": "decision_full",
+      "moral_value": "none",
+      "protocol": "single_round",
+      "checkpoint": "qwen3_8b_sdpo_pd_deon-repair-gen_tft_200/global_step_130",
+      "job_id": "3281382",
+      "run_dir": "public_goods__none__decision_full__single_round__qwen3_8b_sdpo_pd_deon-repair-gen_tft_200-global_step_130_3281382",
+      "batch": 1,
+      "batch_file": "batch_001.json"
+    },
+    {
+      "game": "public_goods",
+      "representation": "decision_full",
+      "moral_value": "none",
+      "protocol": "single_round",
+      "checkpoint": "qwen3_8b_sdpo_pd_deon-repair-gen_tft_200/global_step_180",
+      "job_id": "3281382",
+      "run_dir": "public_goods__none__decision_full__single_round__qwen3_8b_sdpo_pd_deon-repair-gen_tft_200-global_step_180_3281382",
+      "batch": 1,
+      "batch_file": "batch_001.json"
+    }
+  ]
+}

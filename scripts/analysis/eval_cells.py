@@ -59,6 +59,9 @@ PROTOCOL_DERIVED = {"num_rounds", "game_design", "num_episodes"}
 # Likewise: the --presentation spec is the intent, eval_presentation the
 # resolved state. Declaring the axis declares both as varying together.
 PRESENTATION_DERIVED = {"presentation_spec"}
+# Written by the eval from the checkpoint argument (base vs finetuned), so a
+# sweep that declares `checkpoint` has declared this too.
+CHECKPOINT_DERIVED = {"model_type"}
 
 
 def find_manifest(run_dir: Path) -> Optional[Path]:
@@ -106,6 +109,8 @@ def check_comparability(run_dirs: List[Path]) -> bool:
         excluded |= PROTOCOL_DERIVED
     if "eval_presentation" in axis_keys:
         excluded |= PRESENTATION_DERIVED
+    if "checkpoint" in axis_keys:
+        excluded |= CHECKPOINT_DERIVED
 
     by_key: Dict[str, Dict[str, List[str]]] = {}
     for run_dir in run_dirs:

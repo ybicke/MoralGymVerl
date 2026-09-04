@@ -1,0 +1,21 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{Same traces as Table T1, pooled over the eight states. normative \% = share of traces containing at least one of 12 reviewed word stems (good faith, trust, exploit, moral, ethic, principle, fair, reciproc, wrong, obligat, betray, honest), matched on word boundaries; one hit marks the trace. It measures whether the trace reaches for moral VOCABULARY, not whether a norm is applied. recites \% = the `deontological+repair+generosity` wording split into words and all its 6-word n-grams collected; a trace counts if it reproduces ANY 6 consecutive words. VERBATIM only -- a faithful paraphrase scores 0. The principle text is in none of these prompts except the in-context rows, where it is the prompt itself.}
+\label{tab:transfer-traces}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrr}
+\toprule
+Policy & n & normative \% & recites \% \\
+\midrule
+\multicolumn{4}{l}{\emph{base, no context}} \\
+base, no context & 400 & 1 & 0 \\
+\addlinespace
+\multicolumn{4}{l}{\emph{GRPO deon — `gemma3_12b_grpo_pd_deon_tft_150`}} \\
+step 60 & 400 & 0 & 0 \\
+step 120 & 400 & 1 & 0 \\
+step 150 & 400 & 1 & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}

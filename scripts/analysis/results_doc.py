@@ -329,16 +329,21 @@ def state_caption(state: str) -> str:
 def exemplars_section(cells: Sequence[CellData], k: int = 8, seed: int = 0,
                       max_chars: int = 2500, per_state: int = 1,
                       tags: Optional[Callable[[CellData, Decision], List[str]]] = None,
-                      arm_order: Optional[Sequence[str]] = None) -> str:
+                      arm_order: Optional[Sequence[str]] = None,
+                      arm_of: Optional[Callable[[CellData], str]] = None) -> str:
     """Verbatim example traces, per arm x fabricated state.
 
     Selection is content-blind: per (arm, state), `per_state` draws of
     the shortest of `k` traces sampled with a fixed seed. `tags(cell,
     decision)` may add measure classes to the header line (e.g. the
     label-valence verdict), so a reader sees what the tables counted.
+    `arm_of(cell)` names the group a cell belongs to (default: its moral
+    value); checkpoint docs pass the policy label, since every trained
+    cell there is the `none` arm.
     """
     rng = random.Random(seed)
-    order = list(arm_order or []) + sorted({c.arm for c in cells}
+    arm_of = arm_of or (lambda c: c.arm)
+    order = list(arm_order or []) + sorted({arm_of(c) for c in cells}
                                            - set(arm_order or []))
     lines = ["### Example traces", "",
              f"Per arm and fabricated state: the shortest of {k} traces drawn "
@@ -346,7 +351,7 @@ def exemplars_section(cells: Sequence[CellData], k: int = 8, seed: int = 0,
              f"{max_chars} characters are cut with `[…]`. Header: arm · state · "
              "move" + (" · measure tags" if tags else "") + ".", ""]
     for arm in order:
-        for c in [c for c in cells if c.arm == arm]:
+        for c in [c for c in cells if arm_of(c) == arm]:
             by_state: Dict[str, List[Decision]] = defaultdict(list)
             for d in c.decisions:
                 by_state[d.state].append(d)

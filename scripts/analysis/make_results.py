@@ -4,6 +4,7 @@
 One entrypoint for every kind of group. The kind is read from the group's
 sweep manifest (falling back to the first cell's metadata):
 
+    checkpoint axis + public_goods    -> specs/post_training_pgg  results_<experiment>.md (transfer)
     checkpoint axis present           -> specs/post_training   results_<experiment>.md
                                           + traces_checkpoints_*.md (+ traces_training_*.md with --rollouts)
     game == public_goods              -> specs/screen_pgg      results_pgg_<model>.md
@@ -35,7 +36,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from eval_cells import discover_run_dirs, load_json  # noqa: E402
 
-KINDS = ("post_training", "screen_pgg", "screen_2x2")
+KINDS = ("post_training", "post_training_pgg", "screen_pgg", "screen_2x2")
 
 
 def detect_kind(paths) -> str:
@@ -46,15 +47,17 @@ def detect_kind(paths) -> str:
     if manifest.exists():
         axes = json.loads(manifest.read_text()).get("sweep", {}).get("axes", {})
         if "checkpoint" in axes:
-            return "post_training"
+            return ("post_training_pgg" if axes.get("game") == ["public_goods"]
+                    else "post_training")
         if axes.get("game") == ["public_goods"]:
             return "screen_pgg"
         if "game" in axes:
             return "screen_2x2"
     meta = (load_json(discover_run_dirs([first])[0], "behavioral.json") or {}).get("metadata", {})
+    pgg = meta.get("game_type") == "public_goods"
     if (meta.get("checkpoint") or "base") != "base":
-        return "post_training"
-    return "screen_pgg" if meta.get("game_type") == "public_goods" else "screen_2x2"
+        return "post_training_pgg" if pgg else "post_training"
+    return "screen_pgg" if pgg else "screen_2x2"
 
 
 def main() -> None:
