@@ -36,7 +36,7 @@ from typing import Dict, List, Optional
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from figure_style import (  # noqa: E402
     ACCENT, INK, INK_MUTED, RUN_COLORS, STATE_COLORS, STATE_TEX, WIDTHS,
-    apply_style, clean_axes, save,
+    apply_style, clean_axes, direct_labels, save,
 )
 from training_trajectory import STATES, load_decisions, windows  # noqa: E402
 from eval_cells import discover_run_dirs, load_cell  # noqa: E402
@@ -51,19 +51,6 @@ import matplotlib.pyplot as plt  # noqa: E402
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
-
-def direct_labels(ax, entries, x, min_gap: float, fontsize=8) -> None:
-    """Right-margin state labels, nudged apart when they collide.
-    entries: [(y, text, color)] at anchor x (data coords)."""
-    entries = sorted(entries, key=lambda e: e[0])
-    ys = [e[0] for e in entries]
-    for i in range(1, len(ys)):
-        ys[i] = max(ys[i], ys[i - 1] + min_gap)
-    for (y0, text, color), y in zip(entries, ys):
-        ax.annotate(text, (x, y0), xytext=(5, (y - y0) * 2.2),
-                    textcoords="offset points", va="center", ha="left",
-                    fontsize=fontsize, color=color, annotation_clip=False)
-
 
 def cell_p_c(cell) -> Dict[str, float]:
     """P(C|state) in %, illegal excluded from the denominator."""

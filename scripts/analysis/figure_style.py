@@ -1,11 +1,25 @@
-"""Shared matplotlib style for report figures (make_figures.py).
+"""Shared matplotlib style for report figures -- the STYLE CONTRACT.
 
-One place for fonts, sizes, and the state color mapping so every figure
-in the LaTeX report reads as one system. Categorical colors are slots
-1-4 of the validated reference palette (light mode, white surface;
-adjacent-pair CVD dE >= 9.1, normal-vision dE >= 22.9). The aqua and
-yellow slots sit below 3:1 contrast on white, so every figure direct-
-labels its lines/marks -- do not rely on color alone.
+Every figure in the LaTeX report (make_figures.py, transfer_figures.py,
+and any future module) draws from here, so the set reads as one system
+and is publication-ready without per-figure tuning:
+
+- WIDTH: every figure is WIDTHS["wide"] (= \textwidth) across and
+  stacks as a report row; single-panel exceptions use a fraction of it.
+- COLOR SEMANTICS: color encodes the panel's comparison unit --
+  STATE_COLORS when lines compare fabricated states within one run,
+  RUN_COLORS (fixed order by run position) when lines compare runs.
+  Checkpoint progression within a run = light-to-full tint (shade()).
+- REFERENCES: the untrained base is ALWAYS REF_BASE (dashed grey), a
+  principle-in-context cell ALWAYS REF_CONTEXT (dotted violet).
+- LABELS: direct labels via direct_labels() in a reserved margin;
+  a legend only where direct labels cannot carry identity. Conventions
+  that need naming go into one footnote() line, never a second legend.
+
+Categorical colors are slots of the validated reference palette (light
+mode, white surface; adjacent-pair CVD dE >= 9.1, normal-vision dE >=
+22.9). The aqua and yellow slots sit below 3:1 contrast on white, so
+direct labels are mandatory -- never rely on color alone.
 
 Login node: /usr/bin/python3.11 (matplotlib in ~/.local).
 """
@@ -34,6 +48,10 @@ RUN_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4",
 GRID = "#d9d8d2"
 INK = "#1a1a19"
 INK_MUTED = "#6b6a63"
+
+# Reference-line grammar, identical in every figure.
+REF_BASE = {"color": INK_MUTED, "ls": "--", "lw": 1.0}     # untrained base
+REF_CONTEXT = {"color": ACCENT, "ls": ":", "lw": 1.0}      # principle in ctx
 
 # TeX-ready labels, subscripts matching the results docs' convention.
 STATE_TEX = {
@@ -83,6 +101,30 @@ def clean_axes(ax) -> None:
     ax.spines["right"].set_visible(False)
     ax.grid(axis="y")
     ax.grid(axis="x", visible=False)
+
+
+def direct_labels(ax, entries, x, min_gap=6.0, fontsize=7.5, clip=True):
+    """Labels right of anchor x, nudged apart so they never overprint; a
+    label sits at its line's height when there is room, else it is pushed
+    up in order, and the stack slides down if it overflows the axes.
+    entries: [(y, text, color)] in data coords."""
+    entries = sorted(entries, key=lambda e: e[0])
+    ys = [e[0] for e in entries]
+    for i in range(1, len(ys)):
+        ys[i] = max(ys[i], ys[i - 1] + min_gap)
+    over = ys[-1] - 100 if ys else 0
+    if over > 0:
+        ys = [y - over for y in ys]
+    for (y0, text, color), y in zip(entries, ys):
+        ax.annotate(text, (x, y), xytext=(3, 0), textcoords="offset points",
+                    va="center", ha="left", fontsize=fontsize, color=color,
+                    annotation_clip=clip)
+
+
+def footnote(fig, parts: list) -> None:
+    """One muted line naming the figure's drawing conventions."""
+    fig.text(0.5, 0.01, "; ".join(parts), ha="center", fontsize=7,
+             color=INK_MUTED)
 
 
 def save(fig, out_dir, name: str) -> list:

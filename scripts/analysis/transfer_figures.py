@@ -27,7 +27,8 @@ import matplotlib.colors as mcolors  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 from eval_cells import discover_run_dirs, load_json  # noqa: E402
 from figure_style import (  # noqa: E402
-    ACCENT, INK, INK_MUTED, RUN_COLORS, WIDTHS, clean_axes, save,
+    ACCENT, INK, INK_MUTED, REF_BASE, REF_CONTEXT, RUN_COLORS, WIDTHS,
+    clean_axes, direct_labels as _labels, footnote, save,
 )
 
 CKPT_RE = re.compile(r"/([^/]+)/global_step_(\d+)/")
@@ -129,23 +130,6 @@ def title(run: Run) -> str:
     return f"{run.model}\n{run.channel}"
 
 
-def _labels(ax, entries, x, min_gap=6.0, fontsize=7, clip=True):
-    """Labels right of anchor x, nudged apart so they never overprint; a
-    label sits at its line's height when there is room, else it is pushed
-    up in order, and the stack slides down if it overflows the axes."""
-    entries = sorted(entries, key=lambda e: e[0])
-    ys = [e[0] for e in entries]
-    for i in range(1, len(ys)):
-        ys[i] = max(ys[i], ys[i - 1] + min_gap)
-    over = ys[-1] - 100 if ys else 0
-    if over > 0:
-        ys = [y - over for y in ys]
-    for (y0, text, color), y in zip(entries, ys):
-        ax.annotate(text, (x, y), xytext=(3, 0), textcoords="offset points",
-                    va="center", ha="left", fontsize=fontsize, color=color,
-                    annotation_clip=clip)
-
-
 def _k_axes(ax, ks, xlabel: bool) -> None:
     ax.set_ylim(-3, 103)
     ax.set_xlim(-0.15, ks[-1] + LABEL_MARGIN)
@@ -164,8 +148,7 @@ def _footnote(fig, runs: List[Run], base_style="dashed grey",
                      + f" in context ({ctx_style})")
     if extra:
         parts.append(extra)
-    fig.text(0.5, 0.01, "; ".join(parts), ha="center", fontsize=7,
-             color=INK_MUTED)
+    footnote(fig, parts)
 
 
 def _references(ax, run: Run, own: str, labels: list, ks_out: list) -> None:
@@ -173,12 +156,12 @@ def _references(ax, run: Run, own: str, labels: list, ks_out: list) -> None:
     if run.base is not None:
         ys = curve(run.base, own)
         ks_out[:] = list(range(len(ys)))
-        ax.plot(ks_out, ys, color=INK_MUTED, ls="--", lw=1.0)
+        ax.plot(ks_out, ys, **REF_BASE)
         labels.append((ys[-1], "base", INK_MUTED))
     for block in run.context.values():
         ys = curve(block, own)
         ks_out[:] = list(range(len(ys)))
-        ax.plot(ks_out, ys, color=ACCENT, ls=":", lw=1.0)
+        ax.plot(ks_out, ys, **REF_CONTEXT)
         labels.append((ys[-1], "+ctx", ACCENT))
 
 
