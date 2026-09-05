@@ -13,8 +13,12 @@ identity, and the results land at the mirrored path —
     -> eval_results/<results_root>/<subject>/<family>/<experiment>/
 Each root answers one question and fixes what its subject is:
     teacher_signal  base model + wording in context     subject = model token
-    post_training   what training installed, measured   subject = RUN_NAME;
-                    on the run's own training game      game axis = that game
+    post_training   what training installed, measured   subject = RUN_NAME, or
+                    on the training game                a model token for a
+                                                        sweep spanning runs; the
+                                                        game axis must be every
+                                                        checkpoint's training
+                                                        game (run-name field 4)
     transfer        does it carry to games never        subject = model token;
                     trained on                          checkpoints from any
                                                         run of that model
@@ -145,7 +149,7 @@ def sweep_identity(path: str) -> Tuple[str, str, str, str]:
 
 def subject_model(root: str, subject: str) -> str:
     """The model token a subject refers to; raises if none matches."""
-    if root in ("teacher_signal", "transfer"):
+    if root in ("teacher_signal", "transfer") or subject in MODEL_TOKENS:
         if subject not in MODEL_TOKENS:
             raise ValueError(f"{root} subject {subject!r} must be a model "
                              f"token: {MODEL_TOKENS}")
@@ -154,8 +158,8 @@ def subject_model(root: str, subject: str) -> str:
         if subject.startswith(token + "_"):
             return token
     raise ValueError(f"post_training subject {subject!r} must be a training "
-                     f"run name (<model>_<size>_<algo>_<game>_...); known "
-                     f"tokens: {MODEL_TOKENS}")
+                     f"run name (<model>_<size>_<algo>_<game>_...) or a "
+                     f"model token; known tokens: {MODEL_TOKENS}")
 
 
 def training_game(run_name: str) -> str:
@@ -259,20 +263,27 @@ def load_sweep(path: str) -> Dict:
         raise ValueError("checkpoint axis is not valid under "
                          "configs/eval/teacher_signal/ (base-model screens)")
     if root == "post_training":
-        stray = [c for c in checkpoints
-                 if not str(c).startswith(subject + "/")]
-        if stray:
-            raise ValueError(
-                f"checkpoint(s) {stray} do not belong to training run "
-                f"{subject!r}; sweeps across runs live under "
-                f"configs/eval/transfer/{model_token}/")
-        game = training_game(subject)
-        foreign = [g for g in spec["axes"]["game"] if g != game]
-        if foreign:
-            raise ValueError(
-                f"post_training evaluates a run on its training game "
-                f"({game}); game(s) {foreign} belong under "
-                f"configs/eval/transfer/{model_token}/")
+        if subject != model_token:
+            stray = [c for c in checkpoints
+                     if not str(c).startswith(subject + "/")]
+            if stray:
+                raise ValueError(
+                    f"checkpoint(s) {stray} do not belong to training run "
+                    f"{subject!r}; use post_training/{model_token}/ (several "
+                    f"runs, training game) or configs/eval/transfer/"
+                    f"{model_token}/ (held-out games)")
+        for c in checkpoints:
+            run = str(c).split("/", 1)[0]
+            if not run.startswith(model_token + "_"):
+                raise ValueError(f"checkpoint {c!r} is not from a "
+                                 f"{model_token} training run")
+            game = training_game(run)
+            foreign = [g for g in spec["axes"]["game"] if g != game]
+            if foreign:
+                raise ValueError(
+                    f"post_training evaluates checkpoints on their training "
+                    f"game ({run} -> {game}); game(s) {foreign} belong under "
+                    f"configs/eval/transfer/{model_token}/")
     elif root == "transfer":
         stray = [c for c in checkpoints
                  if not str(c).startswith(model_token + "_")]

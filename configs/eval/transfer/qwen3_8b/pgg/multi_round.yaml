@@ -1,0 +1,40 @@
+# Multi-round PGG, Qwen3-8B — which GovSim axis carried the transfer?
+# GovSim was OOD on N-players, repeated rounds, resource, and
+# communication at once; single-round PGG isolated the N-player axis
+# (GRPO: nothing). This isolates repeated interaction with no
+# communication: 5 live rounds, cold open, conversation accumulates,
+# decision_full, no moral text. Co-players (harness): full_contributor
+# (sustain parameter P(C|k=3) over rounds), free_rider (escape,
+# P(C|k=0)), noisy_conditional (repair in split states — the only
+# reactive group).
+#
+# Same 4 cells as the PD twin = one packed node. Multi-round PGG has
+# never run on GPU (tests only) — smoke on debug first:
+#   srun --account=aa004 --partition=debug --time=00:20:00 \
+#        --environment=moralgym_verl --gpus-per-task=1 --pty \
+#        python3 -m moralgym_verl.eval.behavioral \
+#        --config configs/eval/harness/qwen3_8b/pgg.yaml --checkpoint base \
+#        --game public_goods --moral-value none --protocol multi_round \
+#        --num-episodes 2 --temperature 0.7 --save-raw-responses \
+#        --output eval_results/_debug/pgg_multiround_smoke/behavioral.json
+#
+#   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/eval/transfer/qwen3_8b/pgg/multi_round.yaml --dry-run
+
+num_episodes: 20           # per co-player group; x3 x5 rounds = 300 decisions/cell
+
+axes:
+  game: [public_goods]
+  representation: [decision_full]
+  moral_value: [none]
+  protocol: [multi_round]
+  checkpoint:
+    - base
+    - qwen3_8b_grpo_pd_deon_tft_200/global_step_180
+    - qwen3_8b_sdpo_pd_deon-repair-gen_tft_200/global_step_110
+    - qwen3_8b_sdpo_pd_deon-repair-gen_tft_200/global_step_180
+
+env:
+  RUN_PROBES: "off"
+  GAME_DESCRIPTION: "off"    # matched to the single-round transfer
+extra_args: ["--temperature", "0.7"]

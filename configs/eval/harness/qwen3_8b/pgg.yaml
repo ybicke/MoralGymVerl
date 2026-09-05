@@ -61,9 +61,19 @@ evaluation:
   # resolution the 2026-08-23 screen used to establish the deontological
   # k-slope -- and between-cell contrasts pool 400 vs 400.
   num_episodes: 400
-  # single_round protocol pins opponents: [random] (the per-paradigm
-  # stochastic co-player; headline is opponent-independent single-shot).
-  opponents: [conditional_contributor]
+  # single_round pins opponents: [random], so this list is read by
+  # MULTI-ROUND runs only. The three co-player groups are the self-play
+  # sufficient statistics + the repair probe (all 3 bots share one policy):
+  #   full_contributor  k=3 forever -> P(C|k=3) over rounds = the sustain
+  #                     parameter (self-play survival ~ p^4 per round)
+  #   free_rider        k=0 forever -> P(C|k=0) = escape/disengagement
+  #   noisy_conditional majority-of-others rule + 0.2 flips: the only
+  #                     reactive group (flips split the lockstep, then the
+  #                     agent's vote is pivotal) -> repair in split states
+  # Plain conditional_contributor is deliberately absent: with 3 bots in
+  # lockstep its majority is met by the other two bots alone, so it never
+  # reacts to the agent and duplicates full_contributor.
+  opponents: [full_contributor, free_rider, noisy_conditional]
   temperature: 0.7
   max_new_tokens: 2048        # Qwen reasoning headroom (teacher_signal_qwen3_8b.yaml)
   # Presentation FIXED (Tennant-exact labels action3/action4, identity

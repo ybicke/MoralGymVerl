@@ -29,7 +29,7 @@ def is_flat_group(d: Path) -> bool:
 
 def main() -> int:
     sys.path.insert(0, str(REPO / "src"))
-    from moralgym_verl.eval.sweep import GAME_FAMILIES
+    from moralgym_verl.eval.sweep import GAME_FAMILIES, MODEL_TOKENS
 
     specs, results, legacy = set(), set(), []
     problems = 0
@@ -70,7 +70,8 @@ def main() -> int:
 
     run_configs = {p.stem for p in TRAINING.glob("[!_]*.yaml")}
     for root, subject, family, exp in sorted(specs):
-        if root == "post_training" and subject not in run_configs:
+        if (root == "post_training" and subject not in run_configs
+                and subject not in MODEL_TOKENS):
             print(f"UNKNOWN RUN: post_training subject {subject!r} has no "
                   f"configs/training/{subject}.yaml")
             problems += 1
