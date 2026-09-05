@@ -2,9 +2,8 @@
 # rounds, conversation accumulates (multi_round preset: nohist, so round 1
 # is the untrained cold open), vs the classic probe set from the harness:
 # tit_for_tat (cycle vs absorption: the state table predicts CC and DD
-# absorbing and a CD<->DC alternation from mismatched starts), noisy_tft
-# (recovery after forced defections), always_defect (retaliation),
-# always_cooperate (exploitation). No moral text.
+# absorbing and a CD<->DC alternation from mismatched starts),
+# always_defect (retaliation), always_cooperate (exploitation). No moral text.
 #
 # Cells: base + both channels + the SDPO recitation pair (110 = before the
 # verbatim-recitation jump, 180 = converged) = 4 cells, one packed node.
@@ -13,7 +12,7 @@
 #   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
 #       configs/eval/post_training/qwen3_8b/classic/multi_round.yaml --dry-run
 
-num_episodes: 20           # per opponent; x4 opponents x5 rounds = 400 decisions/cell
+num_episodes: 20           # per opponent; x3 opponents x5 rounds = 300 decisions/cell
 
 axes:
   game: [prisoners_dilemma]
