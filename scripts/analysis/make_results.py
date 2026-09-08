@@ -4,6 +4,7 @@
 One entrypoint for every kind of group. The kind is read from the group's
 sweep manifest (falling back to the first cell's metadata):
 
+    protocol == multi_round           -> specs/multi_round     results_<experiment>.md (in-play, any root/game)
     checkpoint axis + public_goods    -> specs/post_training_pgg  results_<experiment>.md (transfer/ groups)
     checkpoint axis present           -> specs/post_training   results_<experiment>.md
                                           + traces_checkpoints_*.md (+ traces_training_*.md with --rollouts)
@@ -36,7 +37,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from eval_cells import discover_run_dirs, load_json  # noqa: E402
 
-KINDS = ("post_training", "post_training_pgg", "screen_pgg", "screen_2x2")
+KINDS = ("post_training", "post_training_pgg", "multi_round", "screen_pgg", "screen_2x2")
 
 
 def detect_kind(paths) -> str:
@@ -46,6 +47,8 @@ def detect_kind(paths) -> str:
     manifest = group / "sweep_manifest.json"
     if manifest.exists():
         axes = json.loads(manifest.read_text()).get("sweep", {}).get("axes", {})
+        if axes.get("protocol") == ["multi_round"]:
+            return "multi_round"
         if "checkpoint" in axes:
             return ("post_training_pgg" if axes.get("game") == ["public_goods"]
                     else "post_training")
