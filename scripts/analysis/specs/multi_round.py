@@ -373,7 +373,7 @@ def build(args: argparse.Namespace) -> Path:
     md = [header(cells, group, opponents, n_rounds)]
     md.append(emit(per_round_table(cells, opponents, n_rounds)))
     fig = per_round_figure(cells, opponents, n_rounds, out_dir,
-                           group.parent.parent.name)
+                           f"{group.parent.parent.name}_{meta['game_type']}")
     print(f"saved -> {fig}")
     md.append("\n".join([
         "### Figure 1 — cooperation per round", "",

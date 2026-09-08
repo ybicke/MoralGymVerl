@@ -41,7 +41,7 @@ P(C) per round over that opponent's episodes (20 per cell, binomial s.e. ≤11 p
 
 ### Figure 1 — cooperation per round
 
-![P(C) per round per opponent](figures/multi_round_qwen3_8b.png)
+![P(C) per round per opponent](figures/multi_round_qwen3_8b_prisoners_dilemma.png)
 
 One panel per opponent, one line per policy (base dashed grey). An alternating line is the repair-retaliate 2-cycle; a rising flat-topped line is absorption into cooperation.
 
