@@ -285,6 +285,8 @@ def per_round_figure(cells, opponents: List[str], n_rounds: int,
         labels = []
         rounds = list(range(1, n_rounds + 1))
         for label, cell in cells:
+            label = label.split()[0] + (" " + label.split()[-1]
+                                        if label != "base" else "")
             pr = cell.blocks[opp].get("per_round") or {}
             ys = [100 * pr[f"round_{r}"]["p_C"] for r in rounds
                   if f"round_{r}" in pr]
@@ -292,7 +294,9 @@ def per_round_figure(cells, opponents: List[str], n_rounds: int,
                 ax.plot(rounds, ys, **REF_BASE)
                 labels.append((ys[-1], "base", REF_BASE["color"]))
             else:
-                i = [lbl for lbl, _ in trained].index(label)
+                shorts = [l.split()[0] + " " + l.split()[-1]
+                          for l, _ in trained]
+                i = shorts.index(label)
                 color = RUN_COLORS[i % len(RUN_COLORS)]
                 ax.plot(rounds, ys, color=color, marker="o", ms=3, lw=1.4)
                 labels.append((ys[-1], label, color))
@@ -497,22 +501,14 @@ def build(args: argparse.Namespace) -> Path:
     reactive = "noisy_conditional" if pgg else "tit_for_tat"
     fig2 = stacked_figure(cells, reactive, n_rounds, pgg, out_dir,
                           f"{group.parent.parent.name}_{game}")
-    raster_opp = "full_contributor" if pgg else "tit_for_tat"
-    fig3 = raster_figure(cells, raster_opp, n_rounds, out_dir,
-                         f"{group.parent.parent.name}_{game}")
-    print(f"saved -> {fig2}\nsaved -> {fig3}")
+    print(f"saved -> {fig2}")
     md.append("\n".join([
         "### Figure 2 — joint-outcome composition per round", "",
         f"![outcome shares vs {reactive}]({fig2.relative_to(out_dir)})", "",
         f"Vs `{reactive}` (the reactive opponent), each bar splits that "
         "round's episodes by joint outcome. Absorption = one band taking "
         "over; the repair-retaliate cycle = the exploiting and suckered "
-        "bands swapping between rounds.", "",
-        "### Figure 3 — every episode", "",
-        f"![episode raster vs {raster_opp}]({fig3.relative_to(out_dir)})", "",
-        f"Vs `{raster_opp}`: one row per episode (sorted by pattern), one "
-        "cell per round, colored by the agent's move. Shows absorption, "
-        "phase-locking and the sample size directly.", "", ""]))
+        "bands swapping between rounds.", "", ""]))
     md.append(emit(live_state_table(cells, refs)))
     md.append(emit(outcomes_table(cells, opponents, n_rounds, coop_obs)))
     md.append(emit(trace_table(cells, args.principle)))

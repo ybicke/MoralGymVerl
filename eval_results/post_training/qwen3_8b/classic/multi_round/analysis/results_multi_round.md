@@ -52,12 +52,6 @@ One panel per opponent, one line per policy (base dashed grey). An alternating l
 
 Vs `tit_for_tat` (the reactive opponent), each bar splits that round's episodes by joint outcome. Absorption = one band taking over; the repair-retaliate cycle = the exploiting and suckered bands swapping between rounds.
 
-### Figure 3 — every episode
-
-![episode raster vs tit_for_tat](figures/multi_round_raster_qwen3_8b_prisoners_dilemma.png)
-
-Vs `tit_for_tat`: one row per episode (sorted by pattern), one cell per round, colored by the agent's move. Shows absorption, phase-locking and the sample size directly.
-
 
 ### Table M2 — the state table measured in play
 
