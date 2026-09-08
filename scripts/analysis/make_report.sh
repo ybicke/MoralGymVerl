@@ -107,5 +107,8 @@ for f in $PT/qwen3_8b/classic/multi_round/analysis/figures/pdf/multi_round_*.pdf
          eval_results/transfer/qwen3_8b/pgg/multi_round/analysis/figures/pdf/multi_round_*.pdf; do
     cp "$f" ~/moralgym-report/figures/ && echo "mirrored $f"
 done
+cp $PT/qwen3_8b/classic/multi_round/analysis/generated/numbers_MRPD.tex \
+   eval_results/transfer/qwen3_8b/pgg/multi_round/analysis/generated/numbers_MRPGG.tex \
+   ~/moralgym-report/generated/ && echo "mirrored in-play number macros"
 
 echo "report regenerated; commit + push ~/moralgym-report to publish"
