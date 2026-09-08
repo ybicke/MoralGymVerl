@@ -371,9 +371,11 @@ def stacked_figure(cells, opp: str, n_rounds: int, pgg: bool,
     import matplotlib.patches as mp
     fig.legend([mp.Rectangle((0, 0), 1, 1, color=colors[c]) for c in cats],
                [JOINT_TEX[c] for c in cats], loc="upper center",
-               ncols=len(cats), frameon=False, bbox_to_anchor=(0.5, 1.12),
+               ncols=len(cats), frameon=False, bbox_to_anchor=(0.5, 1.02),
                fontsize=7)
-    fig.subplots_adjust(left=0.07, right=0.99, top=0.82, bottom=0.22)
+    fig.suptitle(f"joint outcome per round — vs {opp} only", y=1.12,
+                 fontsize=9)
+    fig.subplots_adjust(left=0.07, right=0.99, top=0.78, bottom=0.22)
     return save(fig, out_dir / "figures", f"multi_round_stacked_{name}")[0]
 
 
@@ -412,8 +414,10 @@ def raster_figure(cells, opp: str, n_rounds: int, out_dir: Path,
             ax.set_ylabel("episodes (sorted)", fontsize=7.5)
     fig.legend([mp.Rectangle((0, 0), 1, 1, color=cmap[c]) for c in "CD"],
                ["agent C", "agent D"], loc="upper center", ncols=2,
-               frameon=False, bbox_to_anchor=(0.5, 1.1), fontsize=7.5)
-    fig.subplots_adjust(left=0.05, right=0.99, top=0.8, bottom=0.2)
+               frameon=False, bbox_to_anchor=(0.5, 1.02), fontsize=7.5)
+    fig.suptitle(f"every episode's agent moves — vs {opp} only", y=1.12,
+                 fontsize=9)
+    fig.subplots_adjust(left=0.05, right=0.99, top=0.76, bottom=0.2)
     return save(fig, out_dir / "figures", f"multi_round_raster_{name}")[0]
 
 
