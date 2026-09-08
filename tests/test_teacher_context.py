@@ -20,7 +20,7 @@ from moralgym_verl.game.moral_values import MORAL_VALUE_REGISTRY, get_moral_valu
 from moralgym_verl.game.prompts import build_prompt
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
-SDPO_YAML = REPO_ROOT / "configs" / "verl" / "sdpo_pd_tft.yaml"
+SDPO_YAML = REPO_ROOT / "configs" / "training" / "_base_sdpo_pd.yaml"
 
 
 def _episode_config(**overrides) -> EpisodeConfig:
