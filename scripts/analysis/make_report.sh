@@ -96,4 +96,16 @@ $PY $MF trace-panels \
     --mark "norm=encourage A to act in good faith in future rounds" \
     --note "the norm in the model's own words: normative 100 percent at this step, verbatim recitation only 12 percent"
 
+# Multi-round (in-play) documents + figures: one spec for both roots
+# (specs/multi_round.py); figures mirrored by hand since make_results
+# has no report hook.
+$PY scripts/analysis/make_results.py $PT/qwen3_8b/classic/multi_round \
+    --reference $GRPO_QWEN --reference $SDPO_QWEN
+$PY scripts/analysis/make_results.py eval_results/transfer/qwen3_8b/pgg/multi_round \
+    --reference eval_results/transfer/qwen3_8b/pgg/single_round
+for f in $PT/qwen3_8b/classic/multi_round/analysis/figures/pdf/multi_round_*.pdf \
+         eval_results/transfer/qwen3_8b/pgg/multi_round/analysis/figures/pdf/multi_round_*.pdf; do
+    cp "$f" ~/moralgym-report/figures/ && echo "mirrored $f"
+done
+
 echo "report regenerated; commit + push ~/moralgym-report to publish"
