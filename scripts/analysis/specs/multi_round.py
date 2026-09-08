@@ -383,48 +383,6 @@ def stacked_figure(cells, opp: str, n_rounds: int, pgg: bool,
     return save(fig, out_dir / "figures", f"multi_round_stacked_{name}")[0]
 
 
-def raster_figure(cells, opp: str, n_rounds: int, out_dir: Path,
-                  name: str) -> Path:
-    """Every episode's agent moves as one row (sorted by pattern): the
-    honesty view -- absorption, phase-locking and n are all visible."""
-    from figure_style import WIDTHS, apply_style, save
-    import matplotlib.pyplot as plt
-    import matplotlib.patches as mp
-    apply_style()
-    cmap = {"C": "#2a78d6", "D": "#eda100", "i": "#bbbbbb"}
-    fig, axes = plt.subplots(1, len(cells), sharey=True, squeeze=False,
-                             figsize=(WIDTHS["wide"], 2.5),
-                             gridspec_kw={"wspace": 0.08})
-    for j, (label, cell) in enumerate(cells):
-        ax = axes[0][j]
-        eps = _episodes(cell, opp)
-        trajs = sorted("".join(
-            (e[r]["agent_move"] if e[r]["agent_move"] in "CD" else "i")
-            for r in range(1, n_rounds + 1)) for e in eps.values())
-        for y, tr in enumerate(trajs):
-            for x, mv in enumerate(tr):
-                ax.add_patch(mp.Rectangle((x + 0.6, y), 0.8, 0.86,
-                                          color=cmap[mv]))
-        ax.set_xlim(0.5, n_rounds + 0.6)
-        ax.set_ylim(-0.4, len(trajs) + 0.2)
-        ax.set_xticks(range(1, n_rounds + 1))
-        ax.set_yticks([])
-        ax.set_title(label, fontsize=8)
-        ax.set_xlabel("round", fontsize=7.5)
-        ax.grid(False)
-        for s in ax.spines.values():
-            s.set_visible(False)
-        if j == 0:
-            ax.set_ylabel("episodes (sorted)", fontsize=7.5)
-    fig.legend([mp.Rectangle((0, 0), 1, 1, color=cmap[c]) for c in "CD"],
-               ["agent C", "agent D"], loc="upper center", ncols=2,
-               frameon=False, bbox_to_anchor=(0.5, 1.02), fontsize=7.5)
-    fig.suptitle(f"every episode's agent moves — vs {opp} only", y=1.12,
-                 fontsize=9)
-    fig.subplots_adjust(left=0.05, right=0.99, top=0.76, bottom=0.2)
-    return save(fig, out_dir / "figures", f"multi_round_raster_{name}")[0]
-
-
 # --------------------------------------------------------------- header
 
 def header(cells, group: Path, opponents: List[str], n_rounds: int) -> str:
