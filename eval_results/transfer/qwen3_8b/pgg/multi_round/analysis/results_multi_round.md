@@ -46,6 +46,19 @@ P(C) per round over that opponent's episodes (20 per cell, binomial s.e. ≤11 p
 One panel per opponent, one line per policy (base dashed grey). An alternating line is the repair-retaliate 2-cycle; a rising flat-topped line is absorption into cooperation.
 
 
+### Figure 2 — joint-outcome composition per round
+
+![outcome shares vs noisy_conditional](figures/multi_round_stacked_qwen3_8b_public_goods.png)
+
+Vs `noisy_conditional` (the reactive opponent), each bar splits that round's episodes by joint outcome. Absorption = one band taking over; the repair-retaliate cycle = the exploiting and suckered bands swapping between rounds.
+
+### Figure 3 — every episode
+
+![episode raster vs full_contributor](figures/multi_round_raster_qwen3_8b_public_goods.png)
+
+Vs `full_contributor`: one row per episode (sorted by pattern), one cell per round, colored by the agent's move. Shows absorption, phase-locking and the sample size directly.
+
+
 ### Table M2 — the state table measured in play
 
 *Rounds \geq2 pooled over opponents and rounds; states are the episode's own realized (last move, observation) pairs, so their frequencies are policy-dependent and UNBALANCED.*

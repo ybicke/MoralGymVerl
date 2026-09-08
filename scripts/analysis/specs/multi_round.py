@@ -309,6 +309,114 @@ def per_round_figure(cells, opponents: List[str], n_rounds: int,
     return save(fig, out_dir / "figures", f"multi_round_{name}")[0]
 
 
+
+JOINT_TEX = {"CC": "CC (mutual coop)", "CD": "C vs D (suckered)",
+             "DC": "D vs C (exploiting)", "DD": "DD (mutual defect)",
+             "Chi": "C, k>=2", "Clo": "C, k<2",
+             "Dhi": "D, k>=2 (free-riding)", "Dlo": "D, k<2", "ill": "illegal"}
+
+
+def _episodes(cell: MultiCell, opp: str) -> Dict[int, Dict[int, Dict]]:
+    eps: Dict[int, Dict[int, Dict]] = {}
+    for d in cell.decisions:
+        if d["opponent"] == opp:
+            eps.setdefault(d["episode"], {})[d["round"]] = d
+    return eps
+
+
+def _joint(d: Dict, pgg: bool) -> str:
+    a = d["agent_move"]
+    if a not in ("C", "D"):
+        return "ill"
+    if not pgg:
+        return a + d["obs"]
+    return a + ("hi" if isinstance(d["obs"], int) and d["obs"] >= 2 else "lo")
+
+
+def stacked_figure(cells, opp: str, n_rounds: int, pgg: bool,
+                   out_dir: Path, name: str) -> Path:
+    """Joint-outcome composition per round vs the REACTIVE opponent: the
+    view that explains the per-round line (absorption = one band taking
+    over; the repair-retaliate cycle = DC and CD swapping per round)."""
+    from figure_style import STATE_COLORS, WIDTHS, apply_style, clean_axes, save
+    import matplotlib.pyplot as plt
+    import numpy as np
+    apply_style()
+    cats = (["Chi", "Clo", "Dhi", "Dlo", "ill"] if pgg
+            else ["CC", "CD", "DC", "DD", "ill"])
+    colors = dict(zip(cats[:4], [STATE_COLORS[s] for s in
+                                 ("CC", "CD", "DC", "DD")]), ill="#bbbbbb")
+    fig, axes = plt.subplots(1, len(cells), sharey=True, squeeze=False,
+                             figsize=(WIDTHS["wide"], 2.3),
+                             gridspec_kw={"wspace": 0.08})
+    rounds = list(range(1, n_rounds + 1))
+    for j, (label, cell) in enumerate(cells):
+        ax = axes[0][j]
+        eps = _episodes(cell, opp)
+        bottom = np.zeros(len(rounds))
+        for c in cats:
+            ys = [100 * sum(_joint(e[r], pgg) == c for e in eps.values())
+                  / len(eps) for r in rounds]
+            ax.bar(rounds, ys, bottom=bottom, color=colors[c], width=0.82,
+                   edgecolor="white", linewidth=0.4)
+            bottom += np.array(ys)
+        ax.set_title(label, fontsize=8)
+        ax.set_xticks(rounds)
+        ax.set_ylim(0, 100)
+        ax.set_xlabel("round", fontsize=7.5)
+        clean_axes(ax)
+        ax.grid(False)
+        if j == 0:
+            ax.set_ylabel("share of episodes (%)", fontsize=7.5)
+    import matplotlib.patches as mp
+    fig.legend([mp.Rectangle((0, 0), 1, 1, color=colors[c]) for c in cats],
+               [JOINT_TEX[c] for c in cats], loc="upper center",
+               ncols=len(cats), frameon=False, bbox_to_anchor=(0.5, 1.12),
+               fontsize=7)
+    fig.subplots_adjust(left=0.07, right=0.99, top=0.82, bottom=0.22)
+    return save(fig, out_dir / "figures", f"multi_round_stacked_{name}")[0]
+
+
+def raster_figure(cells, opp: str, n_rounds: int, out_dir: Path,
+                  name: str) -> Path:
+    """Every episode's agent moves as one row (sorted by pattern): the
+    honesty view -- absorption, phase-locking and n are all visible."""
+    from figure_style import WIDTHS, apply_style, save
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as mp
+    apply_style()
+    cmap = {"C": "#2a78d6", "D": "#eda100", "i": "#bbbbbb"}
+    fig, axes = plt.subplots(1, len(cells), sharey=True, squeeze=False,
+                             figsize=(WIDTHS["wide"], 2.5),
+                             gridspec_kw={"wspace": 0.08})
+    for j, (label, cell) in enumerate(cells):
+        ax = axes[0][j]
+        eps = _episodes(cell, opp)
+        trajs = sorted("".join(
+            (e[r]["agent_move"] if e[r]["agent_move"] in "CD" else "i")
+            for r in range(1, n_rounds + 1)) for e in eps.values())
+        for y, tr in enumerate(trajs):
+            for x, mv in enumerate(tr):
+                ax.add_patch(mp.Rectangle((x + 0.6, y), 0.8, 0.86,
+                                          color=cmap[mv]))
+        ax.set_xlim(0.5, n_rounds + 0.6)
+        ax.set_ylim(-0.4, len(trajs) + 0.2)
+        ax.set_xticks(range(1, n_rounds + 1))
+        ax.set_yticks([])
+        ax.set_title(label, fontsize=8)
+        ax.set_xlabel("round", fontsize=7.5)
+        ax.grid(False)
+        for s in ax.spines.values():
+            s.set_visible(False)
+        if j == 0:
+            ax.set_ylabel("episodes (sorted)", fontsize=7.5)
+    fig.legend([mp.Rectangle((0, 0), 1, 1, color=cmap[c]) for c in "CD"],
+               ["agent C", "agent D"], loc="upper center", ncols=2,
+               frameon=False, bbox_to_anchor=(0.5, 1.1), fontsize=7.5)
+    fig.subplots_adjust(left=0.05, right=0.99, top=0.8, bottom=0.2)
+    return save(fig, out_dir / "figures", f"multi_round_raster_{name}")[0]
+
+
 # --------------------------------------------------------------- header
 
 def header(cells, group: Path, opponents: List[str], n_rounds: int) -> str:
@@ -381,6 +489,26 @@ def build(args: argparse.Namespace) -> Path:
         "One panel per opponent, one line per policy (base dashed grey). "
         "An alternating line is the repair-retaliate 2-cycle; a rising "
         "flat-topped line is absorption into cooperation.", "", ""]))
+    pgg = game == "public_goods"
+    reactive = "noisy_conditional" if pgg else "tit_for_tat"
+    fig2 = stacked_figure(cells, reactive, n_rounds, pgg, out_dir,
+                          f"{group.parent.parent.name}_{game}")
+    raster_opp = "full_contributor" if pgg else "tit_for_tat"
+    fig3 = raster_figure(cells, raster_opp, n_rounds, out_dir,
+                         f"{group.parent.parent.name}_{game}")
+    print(f"saved -> {fig2}\nsaved -> {fig3}")
+    md.append("\n".join([
+        "### Figure 2 — joint-outcome composition per round", "",
+        f"![outcome shares vs {reactive}]({fig2.relative_to(out_dir)})", "",
+        f"Vs `{reactive}` (the reactive opponent), each bar splits that "
+        "round's episodes by joint outcome. Absorption = one band taking "
+        "over; the repair-retaliate cycle = the exploiting and suckered "
+        "bands swapping between rounds.", "",
+        "### Figure 3 — every episode", "",
+        f"![episode raster vs {raster_opp}]({fig3.relative_to(out_dir)})", "",
+        f"Vs `{raster_opp}`: one row per episode (sorted by pattern), one "
+        "cell per round, colored by the agent's move. Shows absorption, "
+        "phase-locking and the sample size directly.", "", ""]))
     md.append(emit(live_state_table(cells, refs)))
     md.append(emit(outcomes_table(cells, opponents, n_rounds, coop_obs)))
     md.append(emit(trace_table(cells, args.principle)))
