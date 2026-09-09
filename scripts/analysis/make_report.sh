@@ -54,6 +54,11 @@ $PY $MF transfer-grid --name pgg --principle deontological \
     --group eval_results/transfer/gemma3_12b/pgg/single_round \
     --reference eval_results/teacher_signal/qwen3_8b/pgg/single_turn_v3
 
+# Display prompt panel (list representation; the measured protocol is
+# prose -- the body caption says so, the prose verbatim panel is in the appendix).
+$PY scripts/analysis/render_prompt_panel.py --representation list --state CD \
+    --out eval_results/post_training/comparison/analysis/generated/panels/game_prompt_list.txt
+
 # Consolidated hyperparameter table, extracted from the flagship configs.
 $PY scripts/analysis/hyperparam_table.py \
     --grpo qwen3_8b_grpo_pd_deon_tft_200 \
