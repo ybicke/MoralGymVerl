@@ -1,26 +1,26 @@
-# MoralGymVerl
+# MoralGym: Fine-Tuning for Cooperation in Multi-Agent Systems
 
-Training language-model agents to cooperate in multi-agent systems, by fine-tuning on games. GRPO and self-distillation (SDPO) on top of [verl](https://github.com/volcengine/verl).
+Training language-model agents to cooperate in multi-agent systems through reasoning post-training on games: online RL with RLVR (GRPO) and RLRF self-distillation (SDPO) in [verl](https://github.com/volcengine/verl).
 
 ## Overview
 
-LLM agents increasingly act in multi-agent systems, negotiating, coordinating, and competing with other agents whose goals only partly align with their own. Cooperation in such mixed-motive settings is then a training target rather than a hope. This project trains it with reinforcement learning on games, and asks what the trained agent carries with it into new multi-agent interactions.
+LLM agents increasingly act in multi-agent systems, negotiating, coordinating, and competing with other agents whose goals only partly align with their own and may conflict outright. Training for cooperation in such mixed-motive settings is the target, and several approaches are possible. The first attempt trains cooperation guided by moral principles, with the hope that agents learn what is safe for the agent population, so that it does not collapse, and for their interaction environment, so that they do not collude. The project investigates online RL on games with reasoning fine-tuning algorithms: RLVR methods like GRPO and RLRF methods like SDPO.
 
 Game-theoretic games are the first testbed: an LLM plays repeated matrix games (Prisoner's Dilemma, Stag Hunt, Chicken) and an n-player Public Goods Game against scripted opponents. They are small, their equilibria are known, and cooperation in them has a precise meaning. The environment is designed to admit richer games later, from negotiation to multi-agent coordination.
 
 A moral principle such as *do not defect on a cooperator* is delivered through one of two training channels that share the same environment:
 
-- **Reward (GRPO).** Per-round reward is game payoff plus a weighted intrinsic term that scores the move against the principle.
-- **Teacher (SDPO).** The principle is written into a teacher context; the student distills the teacher's next-token distribution on its own rollouts.
+- **Reward (GRPO).** Per-round reward is game payoff plus a weighted intrinsic term motivated by the moral principle.
+- **Teacher (SDPO).** The moral principle is given in a teacher context; the student distills the teacher's next-token distribution.
 
-Evaluation asks whether the principle became a disposition: does trained behaviour track it conditionally, survive changes in prompt presentation, show up in the model's reasoning, and carry over to held-out games and multi-round play?
+Evaluation asks whether the moral principle became a disposition: does trained behaviour track it conditionally, survive changes in prompt presentation, show up in the model's reasoning, and carry over to held-out games and multi-round play?
 
 ## Research questions
 
 1. **Cooperation from games.** Can training on games make an LLM a cooperative agent in a multi-agent system?
-2. **Generalisation.** Does cooperative behaviour learned in one game transfer to unseen environments?
-3. **Moral principles as the signal.** Can cooperation in mixed-motive games, social dilemmas, and other games be taught from moral principles, delivered as reward or as text?
-4. **Safety.** How can cooperative behaviour in multi-agent systems be made safe, so that it does not collapse into exploitability or collusion?
+2. **Generalisation.** Does cooperative behaviour learned from games transfer to unseen environments?
+3. **Moral principles as the signal.** Can cooperation in mixed-motive games, social dilemmas, and other games be taught from moral principles, delivered as implicit reward or as moral teaching feedback in plain text?
+4. **Safety.** How can cooperative behaviour in multi-agent systems be made safe, so that agents do not collude and the system does not collapse?
 
 ## How it works
 
