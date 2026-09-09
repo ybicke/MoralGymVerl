@@ -54,6 +54,11 @@ $PY $MF transfer-grid --name pgg --principle deontological \
     --group eval_results/transfer/gemma3_12b/pgg/single_round \
     --reference eval_results/teacher_signal/qwen3_8b/pgg/single_turn_v3
 
+# Consolidated hyperparameter table, extracted from the flagship configs.
+$PY scripts/analysis/hyperparam_table.py \
+    --grpo qwen3_8b_grpo_pd_deon_tft_200 \
+    --sdpo qwen3_8b_sdpo_pd_deon-repair-gen_tft_200
+
 # Appendix run ledger (job ids, wall time, W&B) -- derived from the
 # training logs; mirrored with the comparison dir by the trace-table call.
 $PY scripts/analysis/run_ledger.py \

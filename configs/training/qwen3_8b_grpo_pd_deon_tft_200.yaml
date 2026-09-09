@@ -58,8 +58,13 @@ actor_rollout_ref:
     checkpoint:
       save_contents: [optimizer, extra]
     optim:
-      lr: 1.0e-5
-      lr_warmup_steps: 10
+      # Job 3138544 (the v2 run this file records) trained at 2.5e-5 /
+      # warmup 50 -- verified against the run's config dump in
+      # logs_verl/training/3138544_*.log. The naming migration had
+      # frozen the CANCELLED run-1 optimizer (1e-5 / 10) here by
+      # mistake; corrected 2026-09-09.
+      lr: 2.5e-5
+      lr_warmup_steps: 50
     # = train_batch_size: ONE gradient step per generation batch, fully
     # on-policy — same as the SDPO arm.
     ppo_mini_batch_size: 16
