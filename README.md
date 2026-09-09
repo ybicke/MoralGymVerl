@@ -1,10 +1,10 @@
 # MoralGymVerl
 
-Training cooperative behaviour into language-model agents by fine-tuning on games. GRPO and self-distillation (SDPO) on top of [verl](https://github.com/volcengine/verl).
+Training language-model agents to cooperate in multi-agent systems, by fine-tuning on games. GRPO and self-distillation (SDPO) on top of [verl](https://github.com/volcengine/verl).
 
 ## Overview
 
-As LLM agents increasingly act alongside other agents, cooperation in mixed-motive settings becomes a training target rather than a hope. This project trains it with reinforcement learning on games, and asks what the trained model carries with it into new interactions.
+LLM agents increasingly act in multi-agent systems, negotiating, coordinating, and competing with other agents whose goals only partly align with their own. Cooperation in such mixed-motive settings is then a training target rather than a hope. This project trains it with reinforcement learning on games, and asks what the trained agent carries with it into new multi-agent interactions.
 
 Game-theoretic games are the first testbed: an LLM plays repeated matrix games (Prisoner's Dilemma, Stag Hunt, Chicken) and an n-player Public Goods Game against scripted opponents. They are small, their equilibria are known, and cooperation in them has a precise meaning. The environment is designed to admit richer games later, from negotiation to multi-agent coordination.
 
