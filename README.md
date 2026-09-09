@@ -1,15 +1,22 @@
 # MoralGymVerl
 
-Fine-tuning language models to act on moral values in social-dilemma games, with GRPO and self-distillation (SDPO) on top of [verl](https://github.com/volcengine/verl).
+Training language models to be cooperative agents in multi-agent systems, by fine-tuning on social-dilemma games under moral principles. GRPO and self-distillation (SDPO) on top of [verl](https://github.com/volcengine/verl).
 
 ## Overview
 
-An LLM plays repeated matrix games (Prisoner's Dilemma, Stag Hunt, Chicken) and an n-player Public Goods Game against scripted opponents. A moral value such as *do not defect on a cooperator* is delivered through one of two training channels that share the same environment:
+As LLM agents increasingly act alongside other agents, cooperation in mixed-motive settings becomes a training target rather than a hope. Here an LLM plays repeated matrix games (Prisoner's Dilemma, Stag Hunt, Chicken) and an n-player Public Goods Game against scripted opponents. A moral principle such as *do not defect on a cooperator* is delivered through one of two training channels that share the same environment:
 
-- **Reward (GRPO).** Per-round reward is game payoff plus a weighted intrinsic term that scores the move against the value.
-- **Teacher (SDPO).** The value is written into a teacher context; the student distills the teacher's next-token distribution on its own rollouts.
+- **Reward (GRPO).** Per-round reward is game payoff plus a weighted intrinsic term that scores the move against the principle.
+- **Teacher (SDPO).** The principle is written into a teacher context; the student distills the teacher's next-token distribution on its own rollouts.
 
-The research question is whether the value becomes a disposition: does trained behaviour track the value conditionally, survive changes in prompt presentation, show up in the model's reasoning, and transfer to held-out games and multi-round play?
+Evaluation asks whether the principle became a disposition: does trained behaviour track it conditionally, survive changes in prompt presentation, show up in the model's reasoning, and carry over to held-out games and multi-round play?
+
+## Research questions
+
+1. **Cooperation from games.** Can training on games make an LLM a cooperative agent in a multi-agent system?
+2. **Generalisation.** Does cooperative behaviour learned in one game transfer to unseen environments?
+3. **Moral principles as the signal.** Can cooperation in mixed-motive and social-dilemma games be taught from moral principles, delivered as reward or as text?
+4. **Safety.** How can cooperative behaviour in multi-agent systems be made safe, so that it does not collapse into exploitability or collusion?
 
 ## How it works
 
