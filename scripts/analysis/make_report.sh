@@ -54,6 +54,14 @@ $PY $MF transfer-grid --name pgg --principle deontological \
     --group eval_results/transfer/gemma3_12b/pgg/single_round \
     --reference eval_results/teacher_signal/qwen3_8b/pgg/single_turn_v3
 
+# Appendix run ledger (job ids, wall time, W&B) -- derived from the
+# training logs; mirrored with the comparison dir by the trace-table call.
+$PY scripts/analysis/run_ledger.py \
+    --run qwen3_8b_grpo_pd_deon_tft_200 --run qwen3_8b_grpo_pd_util_tft_150 \
+    --run qwen3_8b_sdpo_pd_deon-repair-gen_tft_200 \
+    --run gemma2_9b_sdpo_pd_deon-repair-gen_tft_200 \
+    --run gemma3_12b_grpo_pd_deon_tft_150 --run llama31_8b_grpo_pd_deon_tft_150
+
 $PY $MF trace-table --steps 0,60,90,120,final \
     --ladder "Qwen3-8B GRPO=$GRPO_QWEN" \
     --ladder "Qwen3-8B SDPO=$SDPO_QWEN" \
