@@ -1,7 +1,8 @@
 """Evaluation package: three runnable experiments plus shared machinery.
 
 Experiment entry points (each runnable via ``python3 -m moralgym_verl.eval.<name>``;
-scripts/slurm/eval_teacher_signal.sh chains all three per (game, moral_value) cell):
+scripts/slurm/eval_pack.sh runs them per cell, one cell per GPU, from the
+batch payloads that scripts/slurm/submit_sweep.py expands out of a sweep YAML):
 
     behavioral             Rollout eval: what the model DOES. Plays episodes
                            against scripted opponents, reports cooperation /
@@ -16,8 +17,8 @@ scripts/slurm/eval_teacher_signal.sh chains all three per (game, moral_value) ce
                            -> probe_b.json / probe_b_episode.json (+traces)
 
 Canonical naming (one identifier per experiment, used verbatim as output
-filename, top-level JSON result key, metadata `probe` tag, and summary
-section in scripts/analysis/summarize_eval_cells.py):
+filename, top-level JSON result key and metadata `probe` tag; the
+analysis scripts under scripts/analysis/ read cells by these names):
 
     experiment              canonical id      launcher toggle
     behavioral              behavioral        (always runs)

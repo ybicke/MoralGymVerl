@@ -1,3 +1,4 @@
+import re
 """Public-goods game layer (P0): payoffs, policies, prompts, parity.
 
 The N=2 binary PGG is a PD with T=E+s, R=2s, P=E, S=s (strict iff
@@ -21,6 +22,7 @@ from moralgym_verl.game.opponents import (
 )
 from moralgym_verl.game.pgg_game import (
     PGG_PARAMS,
+    _composition_scores,
     get_score_pgg,
     group_payoff_pgg,
     pgg_fab_states,
@@ -156,22 +158,25 @@ def test_group_actions_unknown_policy_raises():
 
 def test_pgg_table_layout0():
     block = _build_payoff_block(make_pgg_config(representation="table"))
-    assert "rows: how many of the other 3 players choose action1" in block
-    assert "|   | action1 | action2 |" in block
-    assert "| 0 | 5 | 10 |" in block
-    assert "| 3 | 20 | 25 |" in block
+    assert ("rows: how many of the 4 of you choose action1 / how many "
+            "choose action2; columns: what each of those players gets") in block
+    assert "| action1 / action2 | action1 gets | action2 gets |" in block
+    assert "| 4 / 0 | 20 | - |" in block          # nobody chose action2
+    assert "| 2 / 2 | 10 | 20 |" in block
+    assert "| 0 / 4 | - | 10 |" in block
 
 
 def test_pgg_table_facets():
     # bit 0: k-row order reversed
     rev = _build_payoff_block(
         make_pgg_config(representation="table", matrix_layout=1))
-    assert rev.index("| 3 |") < rev.index("| 0 |")
-    # bit 1: action columns swapped
+    assert rev.index("| 0 / 4 |") < rev.index("| 4 / 0 |")
+    # bit 1: action columns swapped -- the row-label pair follows, so the
+    # counts stay in the order of the columns they describe
     swapped = _build_payoff_block(
         make_pgg_config(representation="table", matrix_layout=2))
-    assert "|   | action2 | action1 |" in swapped
-    assert "| 0 | 10 | 5 |" in swapped
+    assert "| action2 / action1 | action2 gets | action1 gets |" in swapped
+    assert "| 0 / 4 | - | 20 |" in swapped
 
 
 def test_pgg_representation_names():
@@ -179,23 +184,203 @@ def test_pgg_representation_names():
     assert _build_payoff_block(make_pgg_config(representation="matrix")) == \
         _build_payoff_block(make_pgg_config(representation="table"))
     with pytest.raises(ValueError):
-        _build_payoff_block(make_pgg_config(representation="list"))
+        _build_payoff_block(make_pgg_config(representation="bogus"))
 
 
-def test_pgg_prose_rule():
+# Both counts and every player's points, per k (2026-08-24). The earlier
+# wording counted only the contribute label and gave only the agent's own
+# row; test_pgg_wording_states_every_players_points holds the arithmetic
+# these sentences assert to the scoring function.
+# One sentence per group composition, high to low (2026-08-24, §9.5). Both
+# labels are named in every sentence and every player's points are stated;
+# test_pgg_wording_states_every_players_points holds the arithmetic to
+# get_score_pgg rather than to these literals.
+OUTCOME_SENTENCES = [
+    "If all 4 of you choose action1, you each get 20 points.",
+    "If 3 of you choose action1 and 1 chooses action2, the 3 who chose "
+    "action1 get 15 points each and the one who chose action2 gets 25 points.",
+    "If 2 of you choose action1 and 2 choose action2, the 2 who chose "
+    "action1 get 10 points each and the 2 who chose action2 get 20 points "
+    "each.",
+    "If 1 of you chooses action1 and 3 choose action2, the one who chose "
+    "action1 gets 5 points and the 3 who chose action2 get 15 points each.",
+    "If all 4 of you choose action2, you each get 10 points.",
+]
+
+DESCRIPTION = (
+    "If you choose action2, you keep your 10 points. If you choose "
+    "action1, your 10 points go into a group project that is multiplied "
+    "by 2 and shared equally among all 4 players. "
+)
+
+
+def test_pgg_prose_is_enumerated_outcomes():
+    """The screen's prose cell = the table's outcomes as sentences (the 2x2
+    prose convention): same information, different format. No mechanism
+    words, no arithmetic for the model to do (docs §9.4)."""
     block = _build_payoff_block(make_pgg_config(representation="prose"))
-    assert "each of the 4 players starts the round with 10 points" in block
-    assert "causes each of the 4 players to receive 5 points" in block
-    assert ("If you choose action1, you put your 10 points into a common "
-            "pool.") in block
-    # mention-order facet (bit 1): keep clause first
-    swapped = _build_payoff_block(
-        make_pgg_config(representation="prose", matrix_layout=2))
-    assert swapped.index("action2") < swapped.index("action1")
+    assert block == ("The points are awarded as follows: "
+                     + " ".join(OUTCOME_SENTENCES) + "\n\n")
+    for word in ("project", "multiplied", "share", "pool"):
+        assert word not in block
+
+
+def test_pgg_list_is_outcome_bullets():
+    block = _build_payoff_block(make_pgg_config(representation="list"))
+    assert block == ("The points are awarded as follows:\n\n"
+                     + "\n".join(f"- {x}" for x in OUTCOME_SENTENCES)
+                     + "\n\n")
+
+
+def test_pgg_prose_facets_mirror_table():
+    # bit 0: k order reversed (row order); bit 1: action order within each
+    # sentence swapped (column order)
+    rev = _build_payoff_block(make_pgg_config(representation="prose", matrix_layout=1))
+    assert rev.index("If all 4 of you choose action2") < rev.index(
+        "If all 4 of you choose action1")
+    swapped = _build_payoff_block(make_pgg_config(representation="prose", matrix_layout=2))
+    # condition clause and outcome clause both follow the action order
+    assert ("If 1 of you chooses action2 and 3 choose action1, the one who "
+            "chose action2 gets 25 points and the 3 who chose action1 get "
+            "15 points each") in swapped
+
+
+def test_pgg_wording_states_every_players_points():
+    """Every payoff the prompt asserts must come from the scoring function,
+    and the group total each row implies must equal the true one.
+
+    The 2026-08-23 screen measured the model deriving the others' payoffs
+    wrongly in a way that reverses the welfare ranking at every k (it
+    credited every other player with the agent's own payoff row). The
+    prompt now states them, so this pins the stated numbers to scoring
+    rather than to a literal: N*E + j*(s*N - E) with j contributors.
+    """
+    for n_players, endowment, share in ((4, 10, 5), (5, 10, 4), (3, 12, 5)):
+        cfg = make_pgg_config(representation="prose", n_players=n_players,
+                              endowment=endowment, share=share)
+        block = _build_payoff_block(cfg)
+        for j in range(n_players + 1):
+            pts = _composition_scores(j, cfg)
+            total = (j * pts[cfg.coop_label]
+                     + (n_players - j) * pts[cfg.defect_label])
+            assert total == n_players * endowment + j * (
+                share * n_players - endowment)
+            # the agent's own payoff is a row of this same table
+            for move, k in (("C", j - 1), ("D", j)):
+                if 0 <= k <= n_players - 1:
+                    label = cfg.coop_label if move == "C" else cfg.defect_label
+                    assert get_score_pgg(move, k, cfg) == pts[label]
+        assert str(_composition_scores(1, cfg)[cfg.coop_label]) in block
+
+
+def test_pgg_both_actions_are_counted():
+    """Neither label may appear only as one of the agent's own options: every
+    sentence and the history state how many chose each. Without this the
+    deontological wording -- phrased over the OTHERS' conduct -- has no
+    anchor for which label is the good-faith act, and the screen measured
+    ~23% of traces attaching exploitation to the contribute label."""
+    for rep in ("table", "prose", "list"):
+        cfg = make_pgg_config(representation=rep)
+        prompt = build_prompt(cfg, ["C"], [1])
+        assert ("you chose action1 and got 10 points. Of the other 3 "
+                "players, 1 chose action1 and got 10 points, and 2 chose "
+                "action2 and got 20 points each") in prompt
+        # both labels named in the payoff block, neither only as an agent
+        # option; the history states how many chose each -- the anchor
+        block = _build_payoff_block(cfg)
+        assert "action1" in block and "action2" in block
+        assert "Of the other 3 players, 1 chose action1" in prompt
+        assert "2 chose action2 and got 20 points each" in prompt
+
+
+def test_pgg_history_frame_matches_payoff_rows():
+    """The history names a composition from the payoff block AND states what
+    both groups scored.
+
+    The 2x2 history gives both sides' payoffs, which is what makes
+    exploitation visible without inference. PGG's used to give the agent's
+    alone; the 2026-08-24 smoke measured 33% of deontological traces reading
+    the label valence backwards as a result (docs/pgg_design.md §9.7). The
+    state grid stays keyed on k_prev -- only the surface counts all N.
+    """
+    cfg = make_pgg_config(representation="prose")
+    n = cfg.n_players
+    for own, k in pgg_fab_states(n):
+        j = k + (1 if own == "C" else 0)
+        prompt = build_prompt(cfg, [own], [k])
+        pts = _composition_scores(j, cfg)
+        mine = cfg.coop_label if own == "C" else cfg.defect_label
+        theirs = cfg.defect_label if own == "C" else cfg.coop_label
+        assert f"{pts[mine]} point" in prompt          # the agent's own score
+        assert pts[mine] == get_score_pgg(own, k, cfg)  # ... and it is correct
+        if 0 < j < n:                                   # both groups non-empty
+            # the other group's size and score -- which fixes the whole
+            # composition, so no separate census clause is needed
+            b = n - (j if own == "C" else n - j)
+            # k is stated as the OTHERS' count, so it is the projection
+            # base and never includes the agent (§9.7)
+            assert f"Of the other {n - 1} players" in prompt
+            if 0 < k < n - 1:
+                assert f"{k} chose {cfg.coop_label}" in prompt
+            assert (f"the one who chose {theirs}" if b == 1
+                    else f"the {b} who chose {theirs}") in prompt
+            assert f"{pts[theirs]} point" in prompt
+        else:                                           # everyone chose alike
+            alike = cfg.coop_label if k else cfg.defect_label
+            assert f"all {n - 1} chose {alike}" in prompt
+
+
+def test_pgg_decision_representation():
+    """"decision" = the agent-centric lookup table (rows: the OTHERS' count)
+    plus the composition list, so the agent's own payoff is read rather than
+    projected -- the 2x2 property PGG lost by indexing on the total
+    (docs/pgg_design.md §9.7). Both blocks must agree with scoring."""
+    cfg = make_pgg_config(representation="decision")
+    block = _build_payoff_block(cfg)
+    assert ("rows: how many of the other 3 players choose action1; "
+            "columns: your own choice") in block
+    # one frame only: the composition list is NOT carried, so nothing is
+    # indexed by the total (§9.7)
+    assert "Every player scores the same way" not in block
+    assert "of you choose" not in block
+    for k in range(cfg.n_players):
+        row = (f"| {k} | {get_score_pgg('C', k, cfg)} | "
+               f"{get_score_pgg('D', k, cfg)} |")
+        assert row in block
+    for sentence in OUTCOME_SENTENCES:
+        assert sentence not in block
+
+
+def test_pgg_game_description_switch():
+    """The concise mechanism preamble is prepended to EVERY representation,
+    only when the switch is on; keep/project order follows the facet."""
+    for rep in ("table", "prose", "list"):
+        off = _build_payoff_block(make_pgg_config(representation=rep))
+        on = _build_payoff_block(
+            make_pgg_config(representation=rep, game_description=True))
+        assert on == DESCRIPTION + off
+    on2 = _build_payoff_block(make_pgg_config(
+        representation="table", game_description=True, matrix_layout=2))
+    assert on2.startswith("If you choose action1, your 10 points go into")
+    with pytest.raises(ValueError):
+        _build_payoff_block(make_pgg_config(representation="rule"))
+
+
+def test_pgg_text_is_parameter_generated():
+    # (E=10, s=7, N=4): r = 2.8 in the preamble; N=5 prose has k = 0..4.
+    desc = _build_payoff_block(make_pgg_config(
+        representation="prose", share=7, game_description=True))
+    assert "multiplied by 2.8 and shared equally among all 4 players" in desc
+    prose5 = _build_payoff_block(make_pgg_config(
+        representation="prose", n_players=5, share=4))
+    assert "If all 5 of you choose action1, you each get 20 points." in prose5
+    assert ("If 1 of you chooses action1 and 4 choose action2, the one who "
+            "chose action1 gets 4 points and the 4 who chose action2 get "
+            "14 points each.") in prose5
 
 
 def test_opener_group_wording_and_no_game_name():
-    for rep in ("table", "prose"):
+    for rep in ("table", "prose", "list"):
         prompt = build_prompt(make_pgg_config(representation=rep), [], [])
         assert prompt.startswith(
             "You are playing a game in a group with 3 other players.")
@@ -208,19 +393,23 @@ def test_opener_group_wording_and_no_game_name():
 
 def test_history_sentence_matches_scoring():
     prompt = build_prompt(make_pgg_config(), ["D"], [2])
-    assert ("Last round, you played action2, 2 of the other 3 players "
-            "played action1, and you got 20 points.") in prompt
+    assert ("Last round, you chose action2 and got 20 points. Of the other "
+            "3 players, 2 chose action1 and got 10 points each, and 1 chose "
+            "action2 and got 20 points.") in prompt
 
 
 def test_env_message_content():
     cfg = make_pgg_config(num_rounds=3)
     msg = build_env_message(cfg, "D", 2, round_idx=2)
-    assert "2 of the other 3 players chose action1: you got 20 points." in msg
+    assert ("You chose action2 and got 20 points. Of the other 3 players, "
+            "2 chose action1 and got 10 points each, and 1 chose action2 "
+            "and got 20 points.") in msg
     assert "choose either action1 or action2" in msg
     assert RULES_MARKER not in msg
     # k = 0 must still render an outcome (0 is not None)
     zero = build_env_message(cfg, "C", 0, round_idx=2)
-    assert "0 of the other 3 players chose action1: you got 5 points." in zero
+    assert ("You chose action1 and got 5 points. Of the other 3 players, "
+            "all 3 chose action2 and got 15 points each.") in zero
 
 
 def test_reasoning_builder_pgg():
@@ -228,8 +417,9 @@ def test_reasoning_builder_pgg():
     assert prompt.startswith(
         "You are playing a game in a group with 3 other players.")
     assert "`Action: action1` or `Action: action2`" in prompt
-    assert ("Last round, you played action2, 2 of the other 3 players "
-            "played action1, and you got 20 points.") in prompt
+    assert ("Last round, you chose action2 and got 20 points. Of the other "
+            "3 players, 2 chose action1 and got 10 points each, and 1 chose "
+            "action2 and got 20 points.") in prompt
 
 
 # ------------------------------------------------ rewards
@@ -324,7 +514,8 @@ def test_run_episode_round2_is_env_message():
     assert RULES_MARKER in r1
     assert RULES_MARKER not in r2
     # No fabricated history: conditional bots open C -> k=3; agent C -> 20
-    assert "3 of the other 3 players chose action1: you got 20 points." in r2
+    assert ("You chose action1 and got 20 points. Of the other 3 players, "
+                "all 3 chose action1 and got 20 points each.") in r2
     assert HISTORY_MARKER not in r2
 
 
@@ -335,8 +526,8 @@ def test_run_episode_illegal_freezes_outcome():
     assert traj.per_round[0]["k_others"] is None
     r2 = traj.per_round[1]["prompt"]
     assert r2.startswith(parse_failure_feedback(cfg))
-    assert "players chose" not in r2   # state frozen: nothing to report
-    assert "players chose" in traj.per_round[2]["prompt"]
+    assert "Of the other" not in r2   # state frozen: nothing to report
+    assert "Of the other" in traj.per_round[2]["prompt"]
 
 
 def test_k_history_and_pair_metrics():
@@ -356,3 +547,45 @@ def test_pgg_fab_sampling_bounds():
     assert traj.fab_agent in ("C", "D")
     assert 0 <= traj.fab_k <= 3
     assert HISTORY_MARKER in traj.per_round[0]["prompt"]
+
+def test_pgg_decision_full_representation():
+    """"decision_full" = the "decision" k-table with every other player's
+    points inside each cell. Own payoff = get_score_pgg(own, k); a fellow
+    contributor sees k-1+[own==C] others, a keeper sees k+[own==C]."""
+    cfg = make_pgg_config(representation="decision_full")
+    block = _build_payoff_block(cfg)
+    assert "rows: how many of the other 3 players choose action1" in block
+    assert "of you choose" not in block                  # one frame only
+    n_o = cfg.n_players - 1
+    for k in range(n_o + 1):
+        cells = []
+        for own in ("C", "D"):
+            e = 1 if own == "C" else 0
+            parts = [f"you {get_score_pgg(own, k, cfg)}"]
+            if k == n_o:
+                parts.append(f"each other player (action1) {get_score_pgg('C', k - 1 + e, cfg)}")
+            elif k == 0:
+                parts.append(f"each other player (action2) {get_score_pgg('D', k + e, cfg)}")
+            else:
+                c = "the action1 player" if k == 1 else "each action1 player"
+                d = "the action2 player" if n_o - k == 1 else "each action2 player"
+                parts.append(f"{c} {get_score_pgg('C', k - 1 + e, cfg)}, "
+                             f"{d} {get_score_pgg('D', k + e, cfg)}")
+            cells.append("; ".join(parts[:1]) + "; " + parts[1])
+        assert f"| {k} | {cells[0]} | {cells[1]} |" in block, (k, block)
+    # canonical numbers, (E=10, s=5, N=4): row 1 / contribute
+    assert "| 1 | you 10; the action1 player 10, each action2 player 20 | you 15; the action1 player 5, each action2 player 15 |" in block
+    # group totals per cell obey N*E + j(sN - E), j = k + [own == C]
+    for m in re.finditer(r"\| (\d) \| you (\d+); (.*?) \| you (\d+); (.*?) \|$", block, re.M):
+        k = int(m.group(1))
+        for own, mine, rest in (("C", m.group(2), m.group(3)), ("D", m.group(4), m.group(5))):
+            j = k + (own == "C")
+            tot = int(mine)
+            for lab, cnt in ((cfg.coop_label, k), (cfg.defect_label, n_o - k)):
+                mm = re.search(rf"(?:the|each|each other player \()?{lab}\)? ?(?:player )?(\d+)", rest)
+                if cnt:
+                    tot += cnt * int(mm.group(1))
+            assert tot == cfg.n_players * cfg.endowment + j * (cfg.share * cfg.n_players - cfg.endowment), (k, own, rest)
+    # layout facets: bit 1 swaps the columns
+    swapped = _build_payoff_block(make_pgg_config(representation="decision_full", matrix_layout=2))
+    assert "| you choose action2 | you choose action1 |" in swapped

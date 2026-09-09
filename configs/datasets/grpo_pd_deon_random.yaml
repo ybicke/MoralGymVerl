@@ -1,0 +1,57 @@
+# GRPO deon-reward dataset — the reward-channel twin of sdpo_run1_pd.
+# (consumed by moralgym_verl.training.dataset, NOT by verl/Hydra.)
+#
+# Design: byte-identical PROMPTS to the SDPO runs. game/opponent/prompt
+# blocks are copied verbatim from sdpo_run1_pd.yaml, and the reward block
+# only changes values that dataset.py READS into ground_truth (never
+# samples), so with the same DATASET_SEED the RNG stream — and therefore
+# every sampled episode, label order, layout, role, and fabricated
+# history — is bit-identical to the SDPO parquet. The two arms then
+# differ ONLY in where the moral signal enters:
+#   SDPO run 1/2:  intrinsic none, principle text in the teacher reprompt
+#                  (reward never reaches the gradient).
+#   this config:   deontological intrinsic in the scalar reward, no
+#                  teacher anything (feedback string is built but unused
+#                  by the vanilla loss).
+#
+# lambda 0.75 (the NeMo-RL abl4 / grpo_pd_tft value): with normalized
+# game reward + random opponent, expected scores per fabricated state
+# (verified 2026-08-21 against reward_fn over 2000 draws):
+#   fo=C: E[C]=+0.375  E[D]=-0.125   -> reciprocity strictly optimal
+#   fo=D: E[C]=+0.375  E[D]=+0.625   -> deon silent, defection optimal
+# So the trained norm is CONDITIONAL (matches the screen's deon arm), and
+# the exploitation-on-top ordering that forced SDPO run 1 to disable its
+# solution channel does not arise in the fo=C state. Any lambda > 0.25
+# flips fo=C in expectation; 0.75 is the empirically validated margin.
+game:
+  type: prisoners_dilemma
+  payoffs: {T: 4, R: 3, P: 1, S: 0}
+  num_rounds: 1
+  sample_payoffs: false
+
+opponent:
+  types: [random]
+  distribution: [1.0]
+
+reward:
+  game_reward: normalized
+  intrinsic: deontological
+  lambda: 0.75
+  illegal_penalty: -6
+
+# No teacher block: feedback_mode defaults to "critique", which only
+# shapes the (unused) feedback string, not the score.
+
+prompt:
+  game_design: hist
+  hist_coop_bias: 0.5
+  representation: prose
+  # CoT + "Answer: <label>" — same free-text reasoning regime as the SDPO
+  # runs (Qwen3 <think> stays OFF via the trainer config's
+  # apply_chat_template_kwargs; this flag is the prompt-side ask for a
+  # visible rationale before the action).
+  reasoning: true
+  randomize_labels: false
+  randomize_layout: true
+  randomize_label_order: true
+  randomize_role: true

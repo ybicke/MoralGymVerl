@@ -36,19 +36,39 @@ def _fake_load_model_for_eval(checkpoint, base_model=None):
     return SimpleNamespace(device="cpu", eval=lambda: None), SimpleNamespace()
 
 
-def _fake_render_chat_inputs(tokenizer, messages, device):
+def _fake_render_chat_inputs(tokenizer, messages, device, enable_thinking=None):
     # Real version applies the chat template and tokenizes. Here the
     # messages pass straight through to _fake_generate as "inputs".
     return None, messages
 
 
 def _fake_generate(model, tokenizer, messages, max_new_tokens, temperature):
-    """Scripted tit-for-tat that plays by READING the prompt, like the model
-    must: extract the two labels, mirror the opponent's last move from the
-    Markov-1 history sentence, cooperate on a fresh round 1."""
+    """Scripted policy that plays by READING the prompt, like the model
+    must: extract the two labels, then
+
+      2x2:  tit-for-tat — mirror the opponent's move from the Markov-1
+            history sentence, cooperate on a fresh round 1.
+      PGG:  conditional contributor — contribute iff k_prev >= 2, read
+            off the "j of the N of you chose <label>" history sentence
+            (docs/pgg_design.md §9.5: the prompt counts all N, the state
+            grid counts the others, so k_prev = j - [own_prev == C]),
+            which yields a positive k-slope in the "pgg" metrics block.
+    """
     prompt = messages[-1]["content"]
     m = re.search(r"either (\w+) or (\w+)", prompt)
     coop, defect = m.groups() if m else ("action3", "action4")
+    pgg_hist = re.search(
+        r"you chose (\w+); (\d+) of the \d+ of you chose (\w+)", prompt)
+    if pgg_hist:
+        # The history names the CONTRIBUTE label in its count clause
+        # ("...of you chose <coop_label>") — identify it semantically;
+        # with label_order randomized, opener mention order is not it.
+        own_prev, j_prev, contribute = (
+            pgg_hist.group(1), int(pgg_hist.group(2)), pgg_hist.group(3))
+        keep = defect if contribute == coop else coop
+        k_prev = j_prev - (1 if own_prev == contribute else 0)
+        mine = contribute if k_prev >= 2 else keep
+        return f"Scripted conditional contributor.\nAction: {mine}"
     hist = re.search(r"they played (\w+)", prompt)
     mine = defect if (hist and hist.group(1) == defect) else coop
     return f"Scripted TFT: mirror the opponent's last move.\nAction: {mine}"
@@ -64,7 +84,7 @@ if __name__ == "__main__":
     # is appended after them, and argparse lets the later value win.
     sys.argv = [
         "behavioral",
-        "--config", "configs/eval/teacher_signal_9b.yaml",
+        "--config", "configs/eval/harness/gemma2_9b/classic.yaml",
         "--checkpoint", "base",
         "--num-episodes", "8",
         "--output", "eval_results/_debug/behavioral_stubbed.json",

@@ -27,7 +27,7 @@ Usage in verl config (multi-turn rollout, vllm backend):
           enable: True
           max_user_turns: 5       # >= num_rounds
           max_assistant_turns: 5
-          interaction_config_path: configs/verl/interaction_config/moralgym_interaction_config.yaml
+          interaction_config_path: configs/training/interaction_config/moralgym_interaction_config.yaml
 
 The interaction_config YAML maps name -> class_name (see that file).
 Each dataset row must carry extra_info.interaction_kwargs with

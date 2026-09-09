@@ -2,7 +2,7 @@
 
 Usage:
     python -m moralgym_verl.eval.behavioral \
-        --config configs/eval/teacher_signal_9b.yaml \
+        --config configs/eval/harness/gemma2_9b/classic.yaml \
         --checkpoint base --protocol single_round --moral-value deon_no_exploit
 
 Plays the model against each configured opponent and reports cooperation
@@ -37,12 +37,15 @@ from moralgym_verl.eval.config import (
 )
 from moralgym_verl.eval.generation import make_chat_policy_fn, make_policy_fn
 from moralgym_verl.eval.metrics import aggregate_rollout_metrics, per_round_breakdown
+from moralgym_verl.eval.scoring import iter_decisions
 from moralgym_verl.eval.model_loading import load_model_for_eval
 from moralgym_verl.eval.teacher_context import load_reprompt_template, wrap_prompt
 from moralgym_verl.game.moral_values import MORAL_VALUE_REGISTRY, get_moral_value
 from moralgym_verl.game.classic_games import FIXED_PAYOFFS
 from moralgym_verl.game.environment import EpisodeConfig
-from moralgym_verl.game.episode import FAB_STATES, TrajectoryResult, run_episode
+from moralgym_verl.game.episode import TrajectoryResult, run_episode
+from moralgym_verl.game.pgg_game import PGG_PARAMS
+from moralgym_verl.game.registry import get_game
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +59,7 @@ CFG_OVERRIDES = [
     ("game_design", "prompt", "game_design"),
     ("representation", "prompt", "representation"),
     ("restate_rules", "prompt", "restate_rules_per_round"),
+    ("game_description", "prompt", "game_description"),
     ("temperature", "evaluation", "temperature"),
     ("max_new_tokens", "evaluation", "max_new_tokens"),
     ("eval_labels", "evaluation", "labels"),
@@ -128,6 +132,16 @@ def build_policy(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] =
     moral_value_text = get_moral_value(moral_value_name)
     prompt_wrapper = None
     if moral_value_text:
+        # A value text that names a concrete label (the 'hint' rider) is
+        # only meaningful under fixed labels; under randomized labels it
+        # would name the wrong action in half the episodes.
+        if ("action3" in moral_value_text or "action4" in moral_value_text) \
+                and cfg.get("evaluation", {}).get("labels", "fixed") != "fixed":
+            raise ValueError(
+                f"moral_value {moral_value_name!r} names fixed labels "
+                f"(action3/action4) but evaluation.labels is "
+                f"{cfg['evaluation']['labels']!r} — the hint rider requires "
+                f"labels: fixed")
         template_source = teacher_cfg.get("template_source")
         if not template_source:
             raise ValueError(
@@ -178,6 +192,7 @@ def build_policy(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] =
 
 def run_opponent(
     cfg: Dict, opponent: str, policy_fn, presentation_rng: random.Random,
+    raw_log: Optional[list] = None,
 ) -> Dict:
     """Run all episodes against one opponent; return its result block.
 
@@ -195,8 +210,10 @@ def run_opponent(
     game_reward_type = cfg["reward"].get("game_reward", "raw")
     shaping = cfg["reward"].get("shaping") or {}
 
-    # 'balanced' (default) cycles FAB_STATES deterministically (n/4 per
-    # state, identical every run); 'random' = legacy uniform draw in run_episode.
+    # 'balanced' (default) cycles the game's fabricated-state grid
+    # deterministically (n/len per state, identical every run — 4 states
+    # for 2x2 games, 2N for PGG); 'random' = legacy uniform draw in
+    # run_episode.
     state_design = eval_cfg.get("state_design", "balanced")
     fabricate = game_design == "hist"
 
@@ -208,8 +225,15 @@ def run_opponent(
             policy_fn.reset()   # fresh conversation per episode
         config = build_eval_config(cfg, opponent, rng=presentation_rng)
         episode_configs.append(config)
-        fab_state = (FAB_STATES[ep_idx % len(FAB_STATES)]
+        states = get_game(config.game_type).fab_states(config)
+        if ep_idx == 0 and fabricate and state_design == "balanced" \
+                and num_episodes % len(states):
+            logger.warning(
+                "num_episodes=%d not divisible by %d fabricated states — "
+                "the balanced design is uneven", num_episodes, len(states))
+        fab_state = (states[ep_idx % len(states)]
                      if fabricate and state_design == "balanced" else None)
+        n_before = len(raw_log) if raw_log is not None else 0
         traj = run_episode(
             config, policy_fn,
             lambda_val=lambda_val,
@@ -220,6 +244,8 @@ def run_opponent(
             shaping=shaping,
         )
         trajectories.append(traj)
+        if raw_log is not None:
+            _tag_raw_records(raw_log[n_before:], traj, ep_idx, opponent)
 
     result = aggregate_rollout_metrics(trajectories, opponent, num_episodes)
     breakdown = per_round_breakdown(trajectories)
@@ -231,7 +257,8 @@ def run_opponent(
     # per-axis robustness slicing consumes); in fixed runs every episode
     # is identical, so it is written once at the result level instead.
     result["episode_moves"] = [
-        {"agent": t.agent_moves, "opp": t.opponent_moves}
+        {"agent": t.agent_moves, "opp": t.opponent_moves,
+         "fab_state": [t.fab_agent, t.fab_obs]}
         for t in trajectories
     ]
     randomized = any(
@@ -246,9 +273,42 @@ def run_opponent(
     return result
 
 
+def _tag_raw_records(records: List[Dict], traj: TrajectoryResult,
+                     ep_idx: int, opponent: str) -> None:
+    """Make the (prompt, raw) trail self-describing.
+
+    generation.py appends one {prompt, raw} record per model call and
+    knows nothing about the episode; run_episode makes exactly one call
+    per round. So the records appended during this episode line up with
+    its rounds, and each gets the round's conditioning state from
+    scoring.iter_decisions -- the single state-freeze convention -- plus
+    the parsed move and the labels. Offline analysis then reads structure
+    from the record instead of re-deriving it from the prompt text.
+    """
+    decisions = list(iter_decisions(traj))
+    if len(records) != len(decisions):
+        raise RuntimeError(
+            f"episode {ep_idx}: {len(records)} generation records for "
+            f"{len(decisions)} rounds -- the one-call-per-round invariant "
+            "behind responses.jsonl tagging is broken")
+    c = traj.config
+    for rec, d in zip(records, decisions):
+        rec.update({
+            "episode": ep_idx,
+            "round": d["round_idx"],
+            "opponent": opponent,
+            "agent_prev": d["agent_prev"],
+            "obs_prev": d["opp_prev"],
+            "agent_move": d["agent_move"],
+            "obs": d["obs"],
+            "coop_label": c.coop_label,
+            "defect_label": c.defect_label,
+        })
+
+
 def _presentation(c: EpisodeConfig) -> Dict:
     """JSON-serializable record of how one episode was rendered."""
-    return {
+    out = {
         "representation": c.representation,
         "coop_label": c.coop_label, "defect_label": c.defect_label,
         "matrix_layout": c.matrix_layout,
@@ -257,6 +317,10 @@ def _presentation(c: EpisodeConfig) -> Dict:
         "agent_is_row": c.agent_is_row,
         "payoffs": {"T": c.T, "R": c.R, "P": c.P, "S": c.S},
     }
+    if c.game_type == "public_goods":
+        out["payoffs"] = {"n_players": c.n_players,
+                          "endowment": c.endowment, "share": c.share}
+    return out
 
 
 def evaluate(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = None):
@@ -268,7 +332,7 @@ def evaluate(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = Non
 
     all_results = []
     for opp in opponents:
-        result = run_opponent(cfg, opp, policy_fn, presentation_rng)
+        result = run_opponent(cfg, opp, policy_fn, presentation_rng, raw_log=raw_log)
         all_results.append(result)
         _print_summary(opp, result)
     return all_results
@@ -364,7 +428,7 @@ def build_parser() -> argparse.ArgumentParser:
                              "individual overrides, which still win. Recorded "
                              "in metadata.")
     parser.add_argument("--game", type=str, default=None,
-                        choices=sorted(FIXED_PAYOFFS),
+                        choices=sorted(FIXED_PAYOFFS) + ["public_goods"],
                         help="Override game.type for cross-game eval. "
                              "Payoffs switch to FIXED_PAYOFFS[game] "
                              "(canonical per-game matrix); config's training "
@@ -383,14 +447,28 @@ def build_parser() -> argparse.ArgumentParser:
                              "round-1 history (Tennant); 'nohist' starts round 1 "
                              "fresh. Used for off-training-protocol eval.")
     parser.add_argument("--representation", type=str, default=None,
-                        choices=["matrix", "prose", "list"],
+                        choices=["matrix", "prose", "list", "table",
+                                 "decision", "decision_full"],
                         help="Override prompt.representation: how the payoff "
-                             "block is rendered. 'matrix' = markdown table "
-                             "(default); 'prose' = the four outcomes as one "
+                             "block is rendered. 'matrix'/'table' = markdown "
+                             "table (default); 'prose' = the outcomes as one "
                              "flowing paragraph; 'list' = same sentences "
-                             "bulleted. Everything outside the payoff block is "
-                             "identical across the three. Distinct from "
-                             "--eval-label-order (opener/closer label order).")
+                             "bulleted -- these three carry identical "
+                             "information and isolate FORMAT. 'decision' "
+                             "(public_goods only) additionally prepends the "
+                             "agent-centric lookup table indexed by the "
+                             "OTHERS' count, so the agent's own payoff is read "
+                             "rather than projected (docs/pgg_design.md §9.7); "
+                             "it is an information change, not a format one. "
+                             "'decision_full' (public_goods only) is the same "
+                             "table with every other player's points stated "
+                             "in each cell, so nothing is counted or derived. "
+                             "Distinct from --eval-label-order (opener/closer "
+                             "label order).")
+    parser.add_argument("--game-description", type=_bool_arg, default=None,
+                        help="public_goods only: prepend the mechanism "
+                             "preamble to the table/prose payoff block "
+                             "(docs/pgg_design.md §9.4). on|off.")
     parser.add_argument("--restate-rules", type=_bool_arg, default=None,
                         metavar="true|false",
                         help="Override prompt.restate_rules_per_round "
@@ -489,7 +567,14 @@ def apply_overrides(cfg: Dict, args: argparse.Namespace) -> None:
     if args.game is not None:
         cfg["game"]["type"] = args.game
         cfg["game"]["sample_payoffs"] = False
-        cfg["game"]["payoffs"] = dict(FIXED_PAYOFFS[args.game])
+        if args.game == "public_goods":
+            # Canonical (N, E, s) unless the YAML already pinned them
+            # (docs/pgg_design.md §3.1); no payoff matrix.
+            cfg["game"].pop("payoffs", None)
+            for key, value in PGG_PARAMS["canonical"].items():
+                cfg["game"].setdefault(key, value)
+        else:
+            cfg["game"]["payoffs"] = dict(FIXED_PAYOFFS[args.game])
     if args.opponent is not None:
         cfg.setdefault("evaluation", {})["opponents"] = [args.opponent]
 
@@ -540,6 +625,10 @@ def build_metadata(
         "eval_max_new_tokens": eval_block.get("max_new_tokens", 10),
         "minimal_parsing": cfg.get("prompt", {}).get("minimal_parsing", False),
         "reasoning": cfg.get("prompt", {}).get("reasoning", False),
+        # Hybrid-thinking switch (Qwen3) and the PGG mechanism preamble:
+        # both change what the model sees, so a result file must say.
+        "enable_thinking": cfg.get("prompt", {}).get("enable_thinking"),
+        "game_description": cfg.get("prompt", {}).get("game_description", False),
         "show_horizon": cfg.get("prompt", {}).get("show_horizon", False),
         # Multi-round rules-retention arm; inert at num_rounds=1 (no round >= 2),
         # but recorded unconditionally so cells stay distinguishable.
@@ -598,8 +687,11 @@ def main():
     logger.info("Results saved to %s", output_path)
 
     if raw_log is not None:
-        # Sibling JSONL with the full (prompt, raw) trail for offline inspection.
-        # One line per generation call (= one per round across all opponents).
+        # Sibling JSONL with the full (prompt, raw) trail for offline
+        # inspection: one line per generation call (= one per round across
+        # all opponents), tagged by _tag_raw_records with episode, round,
+        # opponent, conditioning state, parsed move and labels. Cells
+        # written before this tagging carry {prompt, raw} only.
         responses_path = output_path.with_suffix(".responses.jsonl")
         with open(responses_path, "w") as f:
             for rec in raw_log:

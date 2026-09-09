@@ -1,0 +1,30 @@
+# PD checkpoint ladder, gemma3_12b_grpo_pd_deon_tft_150 — Gemma-3-12B-IT GRPO deon arm. Training trajectory: CC/DC 99/95 by steps 61-90, CD/DD 2/2; converged ~step 90. base included: no base screen exists for this model. NOT yet run (step 2 candidate).
+#
+# Single-round none arm vs the random opponent (single_round pins it),
+# fixed prose presentation: the screen's own protocol, so each row drops
+# into Table 1 / the ladder figures. No moral text — cooperation is carried
+# by the weights. Behavioral only (RUN_PROBES=off). Held-out games are NOT
+# here: transfer sweeps live at the model level, post_training/<model>/.
+#
+# Submit (adapters on iopsstor — the eval container does not mount
+# /capstor/store). Results: eval_results/post_training/gemma3_12b_grpo_pd_deon_tft_150/classic/ckpt_ladder/.
+#   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/eval/post_training/gemma3_12b_grpo_pd_deon_tft_150/classic/ckpt_ladder.yaml --dry-run
+
+num_episodes: 400          # 100 decisions per fabricated state
+
+axes:
+  game: [prisoners_dilemma]
+  representation: [prose]
+  moral_value: [none]
+  protocol: [single_round]
+  checkpoint:
+    - base
+    - gemma3_12b_grpo_pd_deon_tft_150/global_step_60
+    - gemma3_12b_grpo_pd_deon_tft_150/global_step_120
+    - gemma3_12b_grpo_pd_deon_tft_150/global_step_150
+
+env:
+  RUN_PROBES: "off"
+
+extra_args: ["--temperature", "0.7"]

@@ -230,6 +230,23 @@ class ClassicGame(Game):
     ) -> _ClassicOpponent:
         return _ClassicOpponent(config, fab_obs)
 
+    # ---- game facts consumed by the eval layer ----
+
+    def fab_states(self, config: EpisodeConfig) -> List[Tuple[str, str]]:
+        return list(FAB_STATES)
+
+    def good_faith_fraction(self, config: EpisodeConfig, obs: str) -> float:
+        # The one opponent either cooperated or didn't: the binary
+        # special case of the graded rule.
+        return 1.0 if obs == "C" else 0.0
+
+    def max_social_payoff(self, config: EpisodeConfig) -> int:
+        # Best joint outcome: mutual cooperation (2R) for PD/stag hunt,
+        # but the mixed C/D outcome (T+S) for chicken. For the fixed
+        # Tennant payoffs this reproduces the historical MORAL_MAX
+        # constants (6/8/5) exactly — asserted in tests.
+        return max(2 * config.R, config.T + config.S)
+
     # ---- prompt text (verbatim from the pre-protocol prompts.py) ----
 
     def opener(self, config: EpisodeConfig) -> str:
@@ -346,7 +363,18 @@ class ClassicGame(Game):
         my_pts, opp_pts = get_score(
             action, obs, config.T, config.R, config.P, config.S
         )
-        return {"opp_move": obs, "opp_pts": opp_pts}
+        # obs / social_payoff: the uniform record keys the eval layer
+        # reads game-blind (obs duplicates opp_move; social_payoff is
+        # the joint total). See base.Game "game facts" section.
+        return {
+            "opp_move": obs,
+            "opp_pts": opp_pts,
+            "obs": obs,
+            "social_payoff": my_pts + opp_pts,
+        }
+
+    def illegal_extras(self) -> Dict:
+        return {"obs": None, "social_payoff": None}
 
     def result_extras(self, fab_obs, per_round: List[Dict]) -> Dict:
         return {"fab_opp": fab_obs}

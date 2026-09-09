@@ -1,0 +1,52 @@
+# PGG transfer, Qwen3-8B — do the PD-trained checkpoints generalize to a
+# game they never played? Both training channels of the same model, four
+# ladder points each (transfer targets = PD ladder points, docs/naming.md):
+#
+#   GRPO deon (reward channel):  60 emerging, 90 mid-transition, 120
+#                                converged, 180 the GovSim checkpoint
+#   SDPO (teacher channel):      60 emerging, 110 / 130 the recitation
+#                                inflection pair, 180 endpoint
+#
+# The training signal was applied ONLY in single-round 2-player PD. Here
+# the same weights play the 4-player binary public-goods game with NO
+# moral text in the prompt, so any cooperation is carried by the weights.
+# Reads against the v3 screen (teacher_signal/qwen3_8b/pgg/single_turn_v3,
+# job 3185343, decision_full):
+#   base, no context            none          P(C) 1|1 by own_prev, flat k
+#   trained @ step N, no text   THIS SWEEP
+#   base + principle in context deontological 62|40; k=0..3 -> 28..100 / 4..86
+# Headline is the k-slope within own_prev (the N-player analogue of D_opp),
+# never pooled P(C). Then recitation measured on THESE traces, GRPO vs SDPO.
+#
+# Protocol byte-identical to v3: same harness, 400 episodes (50 per
+# fabricated (own_prev, k) state over 8 states), decision_full, fixed
+# presentation, GAME_DESCRIPTION off, T=0.7. Do not change without
+# re-running the reference cells. 8 cells = 2 packed nodes; qwen PGG cells
+# run ~3.7 h at 400 episodes (5 h pack wall).
+#
+#   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/eval/transfer/qwen3_8b/pgg/single_round.yaml --dry-run
+
+num_episodes: 400          # 50 decisions per fabricated (own_prev, k) state
+
+axes:
+  game: [public_goods]
+  representation: [decision_full]
+  moral_value: [none]      # NO moral text: the transfer must come from the weights
+  protocol: [single_round]
+  checkpoint:
+    - qwen3_8b_grpo_pd_deon_tft_200/global_step_60
+    - qwen3_8b_grpo_pd_deon_tft_200/global_step_90
+    - qwen3_8b_grpo_pd_deon_tft_200/global_step_120
+    - qwen3_8b_grpo_pd_deon_tft_200/global_step_180
+    - qwen3_8b_sdpo_pd_deon-repair-gen_tft_200/global_step_60
+    - qwen3_8b_sdpo_pd_deon-repair-gen_tft_200/global_step_110
+    - qwen3_8b_sdpo_pd_deon-repair-gen_tft_200/global_step_130
+    - qwen3_8b_sdpo_pd_deon-repair-gen_tft_200/global_step_180
+
+env:
+  RUN_PROBES: "off"
+  RUN_PROBE_B_EPISODE: "off"
+  GAME_DESCRIPTION: "off"    # matched to the v3 screen
+
+extra_args: ["--temperature", "0.7"]

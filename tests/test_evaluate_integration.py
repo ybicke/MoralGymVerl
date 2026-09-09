@@ -31,7 +31,7 @@ BASE_CFG = {
     "reward": {"lambda": 0.0, "intrinsic": "deontological",
                "game_reward": "raw"},
     "teacher": {"moral_value": "none",
-                "template_source": "configs/verl/sdpo_pd_tft.yaml"},
+                "template_source": "configs/training/_base_sdpo_pd.yaml"},
 }
 
 

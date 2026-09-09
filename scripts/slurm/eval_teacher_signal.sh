@@ -64,11 +64,10 @@ mkdir -p "${LOG_BASE}"
 RUN_NAME="teacher_signal_${GAME}_${MORAL_VALUE}_${SLURM_JOB_ID}"
 exec > "${LOG_BASE}/${RUN_NAME}.out" 2> "${LOG_BASE}/${RUN_NAME}.err"
 
-CONFIG="${CONFIG:-configs/eval/teacher_signal_9b.yaml}"
-# Results layout: eval_results/teacher_signal/<EVAL_GROUP>/<cell>/
-#   EVAL_GROUP names the experiment campaign (single_round, multi_round,
-#   robustness, smoke, ...; default: adhoc). Set at
-#   submit time:  EVAL_GROUP=robustness sbatch ...
+CONFIG="${CONFIG:-configs/eval/harness/gemma2_9b/classic.yaml}"
+# Results layout: eval_results/<RESULTS_DIR>/<EVAL_GROUP>/cells/<cell>/
+#   EVAL_GROUP is <subject>/<experiment> (docs/naming.md); the sweep path
+#   normally derives it (submit_sweep.py). Hand submits land in adhoc/.
 # One directory per run cell; filenames inside say what they contain:
 #   behavioral.json / behavioral.responses.jsonl
 #   probe_a.json / probe_b.json / probe_b.traces.jsonl
@@ -82,7 +81,8 @@ if [ "${PROTOCOL:-}" = "single_round" ] && [ "${RUN_PROBE_B_EPISODE:-off}" = "on
     echo "       episode probe is multi-round only. Unset one of them." >&2
     exit 1
 fi
-RUN_DIR="${PROJECT_ROOT}/eval_results/teacher_signal/${EVAL_GROUP}/cells/${GAME}__${MORAL_VALUE}_${SLURM_JOB_ID}"
+RESULTS_DIR="${RESULTS_DIR:-teacher_signal}"   # post_training / transfer for checkpoint evals
+RUN_DIR="${PROJECT_ROOT}/eval_results/${RESULTS_DIR}/${EVAL_GROUP}/cells/${GAME}__${MORAL_VALUE}_${SLURM_JOB_ID}"
 OUTPUT="${RUN_DIR}/behavioral.json"
 mkdir -p "${RUN_DIR}"
 
@@ -119,17 +119,27 @@ echo "--- end fingerprint ---"
 # --save-raw-responses: keep every (wrapped prompt, reasoning trace) pair —
 # reading whether the model actually invokes the moral value is half the
 # point of the screening. Extra args after the 3 positionals are forwarded.
+# CHECKPOINT: "base" | absolute adapter dir | "<run>/global_step_N", the
+# latter resolved against CKPT_ROOT (verl run layout, train_verl.sh CKPT_DIR).
+CHECKPOINT="${CHECKPOINT:-base}"
+CKPT_ROOT="${CKPT_ROOT:-/iopsstor/scratch/cscs/${USER}/moralgym_verl_runs}"
+case "${CHECKPOINT}" in
+    base|/*) CKPT="${CHECKPOINT}" ;;
+    *)       CKPT="${CKPT_ROOT}/${CHECKPOINT}/actor/lora_adapter" ;;
+esac
+
 srun --environment=moralgym_verl \
     --gpus-per-task=1 \
     python3 -m moralgym_verl.eval.behavioral \
         --config "${PROJECT_ROOT}/${CONFIG}" \
-        --checkpoint base \
+        --checkpoint "${CKPT}" \
         --game "${GAME}" \
         --moral-value "${MORAL_VALUE}" \
         --num-episodes "${NUM_EPISODES}" \
         ${MODEL:+--model "${MODEL}"} \
         ${PROTOCOL:+--protocol "${PROTOCOL}"} \
         ${REPRESENTATION:+--representation "${REPRESENTATION}"} \
+        ${GAME_DESCRIPTION:+--game-description "${GAME_DESCRIPTION}"} \
         --save-raw-responses \
         --output "${OUTPUT}" \
         "${@:4}"
@@ -147,7 +157,7 @@ if [ "${MORAL_VALUE}" != "none" ] && [ "${RUN_PROBES:-on}" != "off" ]; then
         --gpus-per-task=1 \
         python3 -m moralgym_verl.eval.probe_a \
             --config "${PROJECT_ROOT}/${CONFIG}" \
-            --checkpoint base \
+            --checkpoint "${CKPT}" \
             --game "${GAME}" \
             --moral-value "${MORAL_VALUE}" \
             ${MODEL:+--model "${MODEL}"} \
@@ -158,7 +168,7 @@ if [ "${MORAL_VALUE}" != "none" ] && [ "${RUN_PROBES:-on}" != "off" ]; then
         --gpus-per-task=1 \
         python3 -m moralgym_verl.eval.probe_b \
             --config "${PROJECT_ROOT}/${CONFIG}" \
-            --checkpoint base \
+            --checkpoint "${CKPT}" \
             --game "${GAME}" \
             --moral-value "${MORAL_VALUE}" \
             --states fabricated \
@@ -178,7 +188,7 @@ if [ "${MORAL_VALUE}" != "none" ] && [ "${RUN_PROBE_B_EPISODE:-off}" = "on" ]; t
         --gpus-per-task=1 \
         python3 -m moralgym_verl.eval.probe_b \
             --config "${PROJECT_ROOT}/${CONFIG}" \
-            --checkpoint base \
+            --checkpoint "${CKPT}" \
             --game "${GAME}" \
             --moral-value "${MORAL_VALUE}" \
             --states episode \
@@ -192,7 +202,7 @@ fi
 
 # Stage out the whole run directory to $STORE (tape-backed) for durability.
 if [ -n "${STORE_BASE:-}" ] && [ -d "${RUN_DIR}" ]; then
-    STORE_EVAL_DIR="${STORE_BASE}/eval_results/teacher_signal/${EVAL_GROUP}"
+    STORE_EVAL_DIR="${STORE_BASE}/eval_results/${RESULTS_DIR}/${EVAL_GROUP}/cells"
     mkdir -p "${STORE_EVAL_DIR}"
     cp -r "${RUN_DIR}" "${STORE_EVAL_DIR}/"
     echo "Backed up run dir: ${EVAL_GROUP}/$(basename "${RUN_DIR}")"

@@ -35,6 +35,15 @@ def test_markdown_variants():
     assert parse("...\nAction - action4.") == "D"
 
 
+def test_heading_above_marker_does_not_hijack():
+    # `### Action:` heading directly above the real line: the heading's
+    # empty separator must not swallow the newline and capture "Action".
+    assert parse("...\n\n### Action:\n**Action: action3**") == "C"
+    assert parse("...\n\n### Action:\nAction: action4") == "D"
+    # A label on the line after a bare separator is not a marker.
+    assert parse("...\nAction:\naction3") is None
+
+
 def test_trailing_prose_mention_does_not_hijack():
     # Real Stage 1a failure: clean Action line followed by prose that
     # mentions a label — old regex (optional separator) matched the

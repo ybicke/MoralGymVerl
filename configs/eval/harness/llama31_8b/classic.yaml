@@ -1,0 +1,50 @@
+# =============================================================================
+# Eval harness — Llama-3.1-8B-Instruct (2x2 games). Same protocol as the Qwen3-8B and
+# gemma-2-9b-it screens (harness/qwen3_8b/classic.yaml):
+# only policy.model_name differs, and the Qwen-only enable_thinking switch
+# is dropped (this template has no thinking mode). No base-model screen was
+# run for this model; the profile exists so post_training sweeps under
+# post_training/llama31_8b_*/classic/ have a harness to fall back to
+# (sweep.harness_config), and so that base-vs-checkpoint rows share one
+# protocol. Base rows come from checkpoint: base cells in those sweeps.
+# =============================================================================
+
+seed: 42
+
+policy:
+  model_name: meta-llama/Llama-3.1-8B-Instruct
+
+game:
+  type: prisoners_dilemma        # swept via --game (chicken, stag_hunt);
+  payoffs: {T: 4, R: 3, P: 1, S: 0}   # --game switches to FIXED_PAYOFFS[game]
+  num_rounds: 5
+
+prompt:
+  game_design: nohist            # round 1 starts fresh (single_round protocol overrides)
+  reasoning: true                # CoT + "Action: <label>" — the regime GRPO trained in
+  minimal_parsing: false
+  show_horizon: false
+
+evaluation:
+  num_episodes: 25
+  opponents: [tit_for_tat, noisy_tft, always_defect, always_cooperate]
+  temperature: 0.7
+  # Training responses at the end of the GRPO run were ~300 tokens (956 chars mean, 2078 max at step 150 of the GRPO v2 run); 2048 is
+  # the training-time cap and leaves the tail uncensored. A bound, not a
+  # target — responses stop at EOS.
+  max_new_tokens: 2048
+
+# Rewards don't drive anything at eval; kept for metric parity with training.
+reward:
+  intrinsic: deontological
+  lambda: 0.75
+  game_reward: normalized
+
+probe_b:
+  num_traces: 32
+
+teacher:
+  moral_value: none
+  wrap_position: first
+  template_source: configs/training/_base_sdpo_pd.yaml
+  feedback_template: "\nMoral value to follow:\n{feedback_raw}\n"

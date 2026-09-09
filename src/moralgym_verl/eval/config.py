@@ -40,6 +40,7 @@ def git_provenance() -> Optional[str]:
 
 from moralgym_verl.game.classic_games import sample_payoffs
 from moralgym_verl.game.environment import EpisodeConfig, sample_labels
+from moralgym_verl.game.pgg_game import sample_pgg_params
 from moralgym_verl.game.prompts import sample_prompt_randomization
 
 # Named experiment protocols (--protocol): a protocol's flag bundle in
@@ -176,6 +177,51 @@ def build_eval_config(
         cl, dl = "action3", "action4"
 
     layout = r.randint(0, 3) if randomize_layout else 0
+
+    if game["type"] == "public_goods":
+        # PGG branch: (E, s) instead of a payoff matrix; agent_is_row is
+        # forced identity (no rows to play), so the role axis is invalid
+        # rather than silently ignored. Draw order mirrors the classic
+        # path (labels, layout, payoffs, opener/closer) so presentation
+        # streams stay comparable across games.
+        if eval_cfg.get("role", "fixed") == "randomize":
+            raise ValueError(
+                "evaluation.role=randomize is undefined for public_goods "
+                "(agent_is_row is forced identity)")
+        if eval_cfg.get("payoffs", "fixed") == "sample":
+            endowment, share = sample_pgg_params(
+                game.get("regime", "dilemma"), game["n_players"], rng=rng)
+        else:
+            endowment, share = game["endowment"], game["share"]
+        opener_order, closer_order, _ = sample_prompt_randomization(
+            cl, dl,
+            randomize_label_order=randomize_label_order,
+            randomize_role=False,
+            rng=rng,
+        )
+        return EpisodeConfig(
+            game_type=game["type"],
+            T=0, R=0, P=0, S=0,
+            opponent=opponent,
+            num_rounds=game["num_rounds"],
+            coop_label=cl,
+            defect_label=dl,
+            matrix_layout=layout,
+            opener_order=opener_order,
+            closer_order=closer_order,
+            agent_is_row=True,
+            show_horizon=prompt_cfg.get("show_horizon", False),
+            minimal_parsing=prompt_cfg.get("minimal_parsing", False),
+            reasoning=prompt_cfg.get("reasoning", False),
+            enable_thinking=prompt_cfg.get("enable_thinking"),
+            representation=prompt_cfg.get("representation", "table"),
+            restate_rules_per_round=prompt_cfg.get(
+                "restate_rules_per_round", False),
+            n_players=game["n_players"],
+            endowment=endowment,
+            share=share,
+            game_description=prompt_cfg.get("game_description", False),
+        )
 
     if eval_cfg.get("payoffs", "fixed") == "sample":
         T, R, P, S = sample_payoffs(game["type"], rng=rng)

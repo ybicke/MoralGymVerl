@@ -56,9 +56,15 @@ BATCH_JSON="${1:?Usage: eval_pack.sh <batch.json>}"
 # checkpoint evals.
 LOG_BASE="${HOME}/logs_verl/${EVAL_STAGE:-pre_eval}"
 mkdir -p "${LOG_BASE}"
-exec > "${LOG_BASE}/eval_pack_${SLURM_JOB_ID}.out" 2>&1
+# Tag the log with <subject>__<family>__<experiment>, read off the batch
+# path (eval_results/<root>/<subject>/<family>/<experiment>/
+# packed_node_batches/...), so ls of the log dir answers "which experiment
+# was job N" by itself.
+GROUP_DIR="$(dirname "$(dirname "${BATCH_JSON}")")"
+LOG_TAG="$(basename "$(dirname "$(dirname "${GROUP_DIR}")")")__$(basename "$(dirname "${GROUP_DIR}")")__$(basename "${GROUP_DIR}")"
+exec > "${LOG_BASE}/eval_pack_${SLURM_JOB_ID}_${LOG_TAG}.out" 2>&1
 
-CONFIG="${CONFIG:-configs/eval/teacher_signal_9b.yaml}"
+CONFIG="${CONFIG:-configs/eval/harness/gemma2_9b/classic.yaml}"
 WORKDIR="${LOG_BASE}/pack_${SLURM_JOB_ID}"
 mkdir -p "${WORKDIR}"
 
@@ -76,14 +82,23 @@ nvidia-smi --query-gpu=index,name,driver_version --format=csv
 # contain '+', args contain spaces) and leaves an inspectable artifact:
 # cat ${WORKDIR}/cell_N.sh shows exactly what that cell ran.
 /usr/bin/python3.11 - "${BATCH_JSON}" "${WORKDIR}" "${PROJECT_ROOT}" "${CONFIG}" <<'PYEOF'
-import json, shlex, sys
+import json, os, shlex, sys
 batch_path, workdir, root, config = sys.argv[1:5]
+CKPT_ROOT = os.environ.get("CKPT_ROOT",
+                           f"/iopsstor/scratch/cscs/{os.environ['USER']}/moralgym_verl_runs")
+
+def resolve_checkpoint(value):
+    """'base' | absolute adapter dir | '<run>/global_step_N' (verl layout)."""
+    if value == "base" or value.startswith("/"):
+        return value
+    return f"{CKPT_ROOT}/{value}/actor/lora_adapter"
 cells = json.load(open(batch_path))["cells"]
 
 for i, c in enumerate(cells):
     # cells/ keeps the machine-readable results in one place, so the group
     # root holds only the manifest, the batch payloads and analysis/.
-    run_dir = f"{root}/eval_results/teacher_signal/{c['eval_group']}/cells/{c['run_dir_stem']}_$SLURM_JOB_ID"
+    results = c.get("results_dir", "teacher_signal")
+    run_dir = f"{root}/eval_results/{results}/{c['eval_group']}/cells/{c['run_dir_stem']}_$SLURM_JOB_ID"
     env = c.get("env", {})
     args = [str(a) for a in c.get("args", [])]
     # A sweep's `config:` key travels in the cell env (sweep.cell_submission).
@@ -97,7 +112,7 @@ for i, c in enumerate(cells):
 
     common = " ".join(filter(None, [
         f'--config {shlex.quote(root)}/{shlex.quote(cell_config)}',
-        '--checkpoint base',
+        f'--checkpoint {shlex.quote(resolve_checkpoint(env.get("CHECKPOINT", "base")))}',
         f'--game {shlex.quote(c["game"])}',
         f'--moral-value {shlex.quote(c["moral_value"])}',
         flag('model', 'MODEL'),
@@ -117,6 +132,7 @@ for i, c in enumerate(cells):
         'echo "[cell %d] CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES start $(date +%%T)"' % i,
         # --- behavioral ---
         f'python3 -m moralgym_verl.eval.behavioral {common} '
+        f'{flag("game-description", "GAME_DESCRIPTION")} '
         f'--num-episodes {int(c["num_episodes"])} --save-raw-responses '
         f'--output "${{RUN_DIR}}/behavioral.json" {" ".join(shlex.quote(a) for a in args)} '
         f'|| {{ echo "[cell {i}] BEHAVIORAL FAILED"; exit 1; }}',
@@ -185,10 +201,14 @@ if [ -n "${STORE_BASE:-}" ]; then
 import json, os, shutil, sys
 batch_path, root, job_id, store = sys.argv[1:5]
 for c in json.load(open(batch_path))["cells"]:
-    src = f"{root}/eval_results/teacher_signal/{c['eval_group']}/{c['run_dir_stem']}_{job_id}"
+    results = c.get("results_dir", "teacher_signal")
+    # cells/ subdir, matching where the cell scripts write (a missing
+    # /cells/ here made every packed stage-out a silent no-op before
+    # 2026-08-24).
+    src = f"{root}/eval_results/{results}/{c['eval_group']}/cells/{c['run_dir_stem']}_{job_id}"
     if not os.path.isdir(src):
         continue
-    dst = f"{store}/eval_results/teacher_signal/{c['eval_group']}"
+    dst = f"{store}/eval_results/{results}/{c['eval_group']}/cells"
     os.makedirs(dst, exist_ok=True)
     shutil.copytree(src, f"{dst}/{os.path.basename(src)}", dirs_exist_ok=True)
     print(f"staged {os.path.basename(src)}")

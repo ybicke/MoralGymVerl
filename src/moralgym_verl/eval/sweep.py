@@ -1,14 +1,36 @@
 """Sweep declaration and grid expansion for eval campaigns.
 
-A sweep YAML (configs/sweeps/*.yaml) declares one experiment: the
-comparison axes and the constants. scripts/slurm/submit_sweep.py expands
-it, submits one eval_teacher_signal.sh job per cell, and writes
-sweep_manifest.json into the group's results directory.
+A sweep YAML declares one experiment: the comparison axes and the
+constants. scripts/slurm/submit_sweep.py expands it, submits one
+eval_teacher_signal.sh job per cell, and writes sweep_manifest.json into
+the group's results directory.
+
+Naming contract (docs/naming.md): the yaml's PATH is the experiment's
+identity, and the results land at the mirrored path —
+    configs/eval/teacher_signal/<model>/<family>/<experiment>.yaml
+    configs/eval/post_training/<run_name>/<family>/<experiment>.yaml
+    configs/eval/transfer/<model>/<family>/<experiment>.yaml
+    -> eval_results/<results_root>/<subject>/<family>/<experiment>/
+Each root answers one question and fixes what its subject is:
+    teacher_signal  base model + wording in context     subject = model token
+    post_training   what training installed, measured   subject = RUN_NAME, or
+                    on the training game                a model token for a
+                                                        sweep spanning runs; the
+                                                        game axis must be every
+                                                        checkpoint's training
+                                                        game (run-name field 4)
+    transfer        does it carry to games never        subject = model token;
+                    trained on                          checkpoints from any
+                                                        run of that model
+<family> is a game family (GAME_FAMILIES, mirroring src/moralgym_verl/
+game/). eval_group and results_dir are DERIVED from the path; a spec
+declaring either is refused, so config and results location cannot
+diverge. The measurement profile (harness) is likewise derived:
+configs/eval/harness/<model>/<family>.yaml.
 
 Spec schema:
-    name: tier1_pd                 # required; also the default eval_group
-    config: configs/eval/teacher_signal_9b.yaml   # optional (launcher default)
-    eval_group: tier1              # results subdir (default: name)
+    config: configs/eval/harness/<model>/<family>.yaml   # optional override;
+                                   # default derived from the subject's model token
     num_episodes: 100              # 3rd positional (default: launcher's 25)
     axes:                          # required; grid = cartesian product
       game: [prisoners_dilemma]    # game, moral_value, protocol are mandatory
@@ -42,6 +64,7 @@ episode mode additionally needs RUN_PROBE_B_EPISODE=on, off by default).
 from __future__ import annotations
 
 import itertools
+from pathlib import Path
 from typing import Dict, List, Tuple
 
 import yaml
@@ -51,6 +74,102 @@ from moralgym_verl.eval.config import PROTOCOL_PRESETS, resolve_presentation
 LAUNCHER = "scripts/slurm/eval_teacher_signal.sh"
 PACK_LAUNCHER = "scripts/slurm/eval_pack.sh"
 MANIFEST_NAME = "sweep_manifest.json"
+# Results roots under eval_results/: the sweep's `results_dir` key. One
+# question per root (module docstring): what the base model does with the
+# wording / what training installed on its own game / whether that carries
+# to games never trained on. Keeping them apart is the point.
+RESULTS_ROOTS = ("teacher_signal", "post_training", "transfer")
+# Canonical model tokens (docs/naming.md). teacher_signal and transfer
+# subjects are one of these; a post_training subject is a run name
+# starting with one.
+# Game field of a run name (docs/naming.md, field 4) -> game_type, so a
+# post_training sweep can be held to its run's training game.
+GAME_TOKENS = {"pd": "prisoners_dilemma", "sh": "stag_hunt", "ch": "chicken",
+               "pgg": "public_goods"}
+MODEL_TOKENS = ("gemma2_9b", "gemma3_12b", "llama31_8b", "qwen3_8b",
+                "qwen3_32b")
+# Game families, mirroring src/moralgym_verl/game/ (classic_games.py = 2x2
+# matrix games, pgg_game.py = n-player). The family is a path level between
+# subject and experiment; a sweep's game axis must stay inside its family.
+GAME_FAMILIES = {
+    "classic": ("prisoners_dilemma", "stag_hunt", "chicken"),
+    "pgg": ("public_goods",),
+}
+SWEEP_CONFIG_ROOT = "configs/eval"
+# Harness profiles: the model x game-family MEASUREMENT settings (HF id,
+# generation budget, prompt regime, presentation defaults). A harness carries
+# no experiment content -- no moral value, no checkpoint, no grid -- so it
+# lives outside both results roots, and every sweep of a model, base screen
+# or checkpoint eval, resolves to the same file. That shared file is what
+# makes base rows and trained rows comparable.
+HARNESS_ROOT = f"{SWEEP_CONFIG_ROOT}/harness"
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def harness_config(model_token: str, family: str) -> str:
+    """Repo-relative path of the harness profile:
+    configs/eval/harness/<model>/<family>.yaml. Raises if absent — a model
+    without a profile cannot be measured, and a sweep must not silently
+    borrow another model's settings."""
+    path = f"{HARNESS_ROOT}/{model_token}/{family}.yaml"
+    if not (_REPO_ROOT / path).exists():
+        raise ValueError(f"no harness profile for {model_token}/{family}: "
+                         f"expected {path}")
+    return path
+
+
+def results_dir(spec: Dict) -> str:
+    return str(spec["results_dir"])
+
+
+def sweep_identity(path: str) -> Tuple[str, str, str, str]:
+    """(results_root, subject, family, experiment) from the yaml's location.
+
+    The path IS the identity:
+    configs/eval/<root>/<subject>/<family>/<exp>.yaml. Raising here
+    (rather than defaulting) is what makes a misplaced spec unsubmittable
+    instead of silently creating a new results location.
+    """
+    parts = Path(path).resolve().parts
+    if len(parts) < 6 or parts[-6:-4] != ("configs", "eval"):
+        raise ValueError(
+            f"sweep spec must live at configs/eval/<results_root>/<subject>/"
+            f"<family>/<experiment>.yaml (docs/naming.md), got: {path}"
+        )
+    root, subject, family = parts[-4], parts[-3], parts[-2]
+    if root not in RESULTS_ROOTS:
+        raise ValueError(f"results root {root!r} must be one of "
+                         f"{RESULTS_ROOTS}, got path: {path}")
+    if family not in GAME_FAMILIES:
+        raise ValueError(f"game family {family!r} must be one of "
+                         f"{sorted(GAME_FAMILIES)} (src/moralgym_verl/game/),"
+                         f" got path: {path}")
+    return root, subject, family, Path(path).stem
+
+
+def subject_model(root: str, subject: str) -> str:
+    """The model token a subject refers to; raises if none matches."""
+    if root in ("teacher_signal", "transfer") or subject in MODEL_TOKENS:
+        if subject not in MODEL_TOKENS:
+            raise ValueError(f"{root} subject {subject!r} must be a model "
+                             f"token: {MODEL_TOKENS}")
+        return subject
+    for token in MODEL_TOKENS:
+        if subject.startswith(token + "_"):
+            return token
+    raise ValueError(f"post_training subject {subject!r} must be a training "
+                     f"run name (<model>_<size>_<algo>_<game>_...) or a "
+                     f"model token; known tokens: {MODEL_TOKENS}")
+
+
+def training_game(run_name: str) -> str:
+    """game_type a run was trained on, from field 4 of its name."""
+    fields = run_name.split("_")
+    if len(fields) < 4 or fields[3] not in GAME_TOKENS:
+        raise ValueError(f"cannot read the training game from run name "
+                         f"{run_name!r} (field 4 must be one of "
+                         f"{sorted(GAME_TOKENS)})")
+    return GAME_TOKENS[fields[3]]
 # Cells per packed job. 4 = one per GPU on a GH200 node. Clariden is
 # OverSubscribe=EXCLUSIVE, so a 1-GPU job is billed for all 4 GPUs; packing
 # cuts billed node-hours (and the fairshare hit that follows them) ~4x.
@@ -61,8 +180,13 @@ _POSITIONAL_AXES = ("game", "moral_value")
 # to behavioral only, so anything that defines what the cell IS (which model,
 # which turn structure, how the payoff block is rendered) travels by env.
 _ENV_AXES = {"representation": "REPRESENTATION",
+             "game_description": "GAME_DESCRIPTION",
              "model": "MODEL",
-             "protocol": "PROTOCOL"}
+             "protocol": "PROTOCOL",
+             # Trained-adapter cells: "base", an absolute adapter dir, or
+             # "<run>/global_step_N" resolved by the launcher against
+             # $CKPT_ROOT (the verl run layout, see train_verl.sh CKPT_DIR).
+             "checkpoint": "CHECKPOINT"}
 # Axes every sweep must declare, even single-valued. game/moral_value are the
 # launcher's positionals; protocol is required so a sweep can never silently
 # inherit the eval yaml's turn structure — the configs are 5-round, so an
@@ -74,9 +198,21 @@ _REQUIRED_AXES = _POSITIONAL_AXES + ("protocol",)
 def load_sweep(path: str) -> Dict:
     with open(path) as f:
         spec = yaml.safe_load(f)
-    for field in ("name", "axes"):
-        if field not in spec:
-            raise ValueError(f"sweep spec missing required field: {field}")
+    root, subject, family, experiment = sweep_identity(path)
+    model_token = subject_model(root, subject)
+    for field in ("name", "eval_group", "results_dir"):
+        if field in spec:
+            raise ValueError(
+                f"sweep spec declares {field!r}, but identity is derived "
+                f"from the path (docs/naming.md) — delete the field; this "
+                f"spec resolves to "
+                f"eval_results/{root}/{subject}/{family}/{experiment}"
+            )
+    spec["name"] = f"{subject}/{family}/{experiment}"
+    spec["eval_group"] = f"{subject}/{family}/{experiment}"
+    spec["results_dir"] = root
+    if "axes" not in spec:
+        raise ValueError("sweep spec missing required field: axes")
     for axis in _REQUIRED_AXES:
         if axis not in spec["axes"]:
             raise ValueError(f"sweep axes must include {axis} "
@@ -108,7 +244,54 @@ def load_sweep(path: str) -> Dict:
                 f"single-round; the episode probe measures per-round decay "
                 f"and needs a multi-round protocol"
             )
-    spec.setdefault("eval_group", spec["name"])
+    # The family dir claims a game family; the axis must not leave it —
+    # otherwise "which folder holds the PGG results" gets a wrong answer.
+    foreign = [g for g in spec["axes"]["game"]
+               if g not in GAME_FAMILIES[family]]
+    if foreign:
+        raise ValueError(f"game(s) {foreign} are not in family {family!r} "
+                         f"({GAME_FAMILIES[family]})")
+
+    # Checkpoint axis: trained weights are evaluated under post_training
+    # (the subject IS the run: every checkpoint must be its own, and the
+    # game must be the one it trained on -- the machine-checked
+    # training<->eval link) or under transfer (any run of the subject
+    # model, any game in the family). Screens never take checkpoints.
+    checkpoints = [c for c in spec["axes"].get("checkpoint", [])
+                   if c != "base" and not str(c).startswith("/")]
+    if checkpoints and root == "teacher_signal":
+        raise ValueError("checkpoint axis is not valid under "
+                         "configs/eval/teacher_signal/ (base-model screens)")
+    if root == "post_training":
+        if subject != model_token:
+            stray = [c for c in checkpoints
+                     if not str(c).startswith(subject + "/")]
+            if stray:
+                raise ValueError(
+                    f"checkpoint(s) {stray} do not belong to training run "
+                    f"{subject!r}; use post_training/{model_token}/ (several "
+                    f"runs, training game) or configs/eval/transfer/"
+                    f"{model_token}/ (held-out games)")
+        for c in checkpoints:
+            run = str(c).split("/", 1)[0]
+            if not run.startswith(model_token + "_"):
+                raise ValueError(f"checkpoint {c!r} is not from a "
+                                 f"{model_token} training run")
+            game = training_game(run)
+            foreign = [g for g in spec["axes"]["game"] if g != game]
+            if foreign:
+                raise ValueError(
+                    f"post_training evaluates checkpoints on their training "
+                    f"game ({run} -> {game}); game(s) {foreign} belong under "
+                    f"configs/eval/transfer/{model_token}/")
+    elif root == "transfer":
+        stray = [c for c in checkpoints
+                 if not str(c).startswith(model_token + "_")]
+        if stray:
+            raise ValueError(f"checkpoint(s) {stray} are not from a "
+                             f"{model_token} training run")
+
+    spec.setdefault("config", harness_config(model_token, family))
     return spec
 
 
@@ -126,7 +309,8 @@ def cell_submission(spec: Dict, cell: Dict) -> Tuple[Dict[str, str], List[str]]:
     Everything routes through the existing launcher so a sweep cell is
     byte-identical to a hand-submitted job with the same settings.
     """
-    env = {"EVAL_GROUP": str(spec["eval_group"])}
+    env = {"EVAL_GROUP": str(spec["eval_group"]),
+           "RESULTS_DIR": results_dir(spec)}
     for key, value in (spec.get("env") or {}).items():
         env[str(key)] = str(value)
 
@@ -167,7 +351,9 @@ def run_dir_stem(cell: Dict) -> str:
     `_<jobid>` and never derives a name itself (two implementations that
     can disagree would mean two cells writing one directory).
     """
-    rest = [str(v) for axis, v in cell.items() if axis not in _POSITIONAL_AXES]
+    # '/' would nest directories (checkpoint values are path-like).
+    rest = [str(v).replace("/", "-") for axis, v in cell.items()
+            if axis not in _POSITIONAL_AXES]
     stem = f"{cell['game']}__{cell['moral_value']}"
     return f"{stem}__{'__'.join(rest)}" if rest else stem
 
@@ -200,11 +386,13 @@ def batch_payload(spec: Dict, batch: List[Dict]) -> Dict:
         # argv = [sbatch, launcher, game, moral_value, num_episodes, *args]
         payload.append({
             "eval_group": str(spec["eval_group"]),
+            "results_dir": results_dir(spec),
             "run_dir_stem": run_dir_stem(cell),
             "game": str(cell["game"]),
             "moral_value": str(cell["moral_value"]),
             "num_episodes": int(spec.get("num_episodes", 25)),
-            "env": {k: v for k, v in env.items() if k != "EVAL_GROUP"},
+            "env": {k: v for k, v in env.items()
+                    if k not in ("EVAL_GROUP", "RESULTS_DIR")},
             "args": argv[5:],
             "axes": {k: str(v) for k, v in cell.items()},
         })

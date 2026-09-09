@@ -14,7 +14,7 @@ models — both are base gemma-2-9b-it. The names refer to prompt versions:
   environment's own `build_prompt()` (same code as training and the
   behavioral eval);
 - *teacher prompt* = the SAME string wrapped by `wrap_prompt()` in the
-  SDPO `reprompt_template` (from `configs/verl/sdpo_pd_tft.yaml`) with a
+  SDPO `reprompt_template` (from `configs/training/_base_sdpo_pd.yaml`) with a
   moral value in the `{feedback}` slot ("Moral value to follow: ...").
 
 "Building/making a prompt" is pure Python string construction — the
@@ -163,7 +163,7 @@ wording if this becomes interesting.)
 | parsing | `game/prompts_reasoning.py:77` | strict: final `Action: <label>` with required separator, else `illegal`; same parser as training |
 | aggregation | `eval/metrics.py` (`aggregate_rollout_metrics`) | all rates over legal moves, illegal reported separately; per state `p_C+p_D+p_illegal = 1`, so P(D\|state) = 1−P(C\|state) given a legal parse; episodes with zero legal decisions are excluded from the episode-mean rates (counted in `num_episodes_all_illegal` / `num_episodes_no_legal_pairs`, rates `null` if every episode is excluded) — never averaged in as 0.0 |
 | probes | `eval/probe_a.py` (A), `eval/probe_b.py` (B; `--states fabricated\|episode`), primitives in `eval/teacher_forcing.py` | formulas above; episode mode computes the probe-B pair per round with the value wrapped only into message 1 (training-exact `wrap_first`) |
-| offline analysis | `scripts/analysis/summarize_eval_cells.py` (cross-arm tables + comparability check), `scripts/analysis/recovery_rate.py` (multi-round dynamics) | commands in the index below; the one-off investigation scripts (teacher_signal_table, check_parsing, rebuild_state_table, robustness_slices) were removed 2026-08-08 — resurrect from git history if an old analysis must be reproduced |
+| offline analysis | `scripts/analysis/make_results.py` (one entrypoint: results doc + tables + example traces for screens, PGG and post-training groups; kind from the sweep manifest), `scripts/analysis/recovery_rate.py` (multi-round dynamics) | commands in the index below; the one-off investigation scripts (teacher_signal_table, check_parsing, rebuild_state_table, robustness_slices) were removed 2026-08-08 — resurrect from git history if an old analysis must be reproduced |
 
 ## Statistical properties (verified against code and data, 2026-07-16)
 
@@ -356,7 +356,7 @@ in git history) was the source of truth for their behavioral numbers.
 
 ```bash
 cd ~/MoralGymVerl
-/usr/bin/python3.11 scripts/analysis/summarize_eval_cells.py eval_results/teacher_signal/<group>
+/usr/bin/python3.11 scripts/analysis/make_results.py eval_results/teacher_signal/<group>   # results_*.md (+ traces_*.md), kind from the manifest
 /usr/bin/python3.11 scripts/analysis/recovery_rate.py       # multi-round recovery/sucker/drift from episode_moves
 ```
 

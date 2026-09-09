@@ -138,6 +138,12 @@ class EpisodeConfig:
     endowment: Optional[int] = None
     share: Optional[int] = None
 
+    # public_goods only: prepend a mechanism preamble (project, multiplied,
+    # split equally among all players) to the table/prose payoff block —
+    # a separate, measured switch (docs/pgg_design.md §9.4). Ignored by
+    # the classic games, whose prompts carry no narrative by design.
+    game_description: bool = False
+
     def __post_init__(self) -> None:
         # Paradigm-specific field validation lives with the Game
         # implementation. Lazy import: the game modules import this one.

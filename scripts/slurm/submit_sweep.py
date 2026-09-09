@@ -2,12 +2,15 @@
 """Submit an eval sweep: one sbatch job per cell of the declared grid.
 
 Usage (login node, from the repo root):
-    /usr/bin/python3.11 scripts/slurm/submit_sweep.py configs/sweeps/<name>.yaml
+    /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+        configs/eval/<teacher_signal|post_training|transfer>/<subject>/<family>/<experiment>.yaml
     ... --dry-run     # print the expansion without submitting
 
-Writes eval_results/teacher_signal/<eval_group>/sweep_manifest.json:
-the sweep spec, submission timestamp, git commit, and the job id + run
-dir of every cell — the experiment's own record of what was launched.
+The spec's path is its identity (docs/naming.md): results land at the
+mirrored path eval_results/<results_root>/<subject>/<experiment>/, where
+sweep_manifest.json records the sweep spec, submission timestamp, git
+commit, and the job id + run dir of every cell — the experiment's own
+record of what was launched.
 """
 
 from __future__ import annotations
@@ -27,13 +30,14 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 from moralgym_verl.eval.config import git_provenance          # noqa: E402
 from moralgym_verl.eval.sweep import (                        # noqa: E402
     MANIFEST_NAME, PACK_LAUNCHER, PACK_SIZE, batch_payload, cell_submission,
-    expand_cells, load_sweep, pack_batches, run_dir_stem,
+    expand_cells, load_sweep, pack_batches, results_dir, run_dir_stem,
 )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("spec", type=Path, help="sweep YAML (configs/sweeps/)")
+    parser.add_argument("spec", type=Path,
+                        help="sweep YAML (configs/eval/<root>/<subject>/)")
     parser.add_argument("--dry-run", action="store_true",
                         help="print the expansion and commands; submit nothing")
     parser.add_argument("--no-pack", action="store_true",
@@ -47,8 +51,12 @@ def main() -> None:
     args = parser.parse_args()
 
     spec = load_sweep(str(args.spec))
+    spec["sweep_path"] = str(args.spec)
+    if not (REPO_ROOT / spec["config"]).exists():
+        sys.exit(f"eval config not found: {spec['config']} "
+                 f"(harness profiles: configs/eval/harness/<model>/<family>.yaml)")
     cells = expand_cells(spec)
-    group_dir = REPO_ROOT / "eval_results" / "teacher_signal" / spec["eval_group"]
+    group_dir = REPO_ROOT / "eval_results" / results_dir(spec) / spec["eval_group"]
 
     if args.no_pack:
         return _submit_unpacked(spec, cells, group_dir, args.dry_run)

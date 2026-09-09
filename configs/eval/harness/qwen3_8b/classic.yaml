@@ -1,0 +1,71 @@
+# =============================================================================
+# Teacher-signal eval — Qwen3-8B. Second base model for the single-turn
+# screen, compared against gemma-2-9b-it (teacher_signal_9b.yaml) before
+# Session-2 training. Identical to that config except for the three fields
+# noted below: everything else is held constant so the model is the only
+# axis that moves.
+#
+# Sweep driver: configs/eval/teacher_signal/qwen3_8b/classic/single_turn_screen.yaml
+# =============================================================================
+
+seed: 42
+
+policy:
+  model_name: Qwen/Qwen3-8B
+
+game:
+  type: prisoners_dilemma        # swept via --game (chicken, stag_hunt);
+  payoffs: {T: 4, R: 3, P: 1, S: 0}   # --game switches to FIXED_PAYOFFS[game]
+  num_rounds: 5
+
+prompt:
+  game_design: nohist            # round 1 starts fresh (matches 5r-nohist base protocol)
+  reasoning: true                # CoT + "Action: <label>" — same regime as gemma
+  minimal_parsing: false
+  show_horizon: false
+  # Qwen3 is a hybrid-thinking model: its template defaults to
+  # enable_thinking=true and emits a <think> block. Smoke test 2026-08-12
+  # (job 3069760, n=8/condition, 1024-token cap):
+  #   thinking ON  —  1/16 parsed, 15/16 hit the cap, </think> closed in
+  #                   1/16; the rest have no Action line at all -> illegal.
+  #   thinking OFF — 16/16 parsed, 0 truncated.
+  # Off also keeps the CoT regime identical to gemma's, so screen cells
+  # stay comparable. Reaches the probes too — it travels on EpisodeConfig
+  # via build_eval_config, not as a forwarded flag.
+  enable_thinking: false
+
+evaluation:
+  num_episodes: 25
+  # Multi-round probe set (single_round pins [random], so this list is
+  # read by multi-round runs only): tit_for_tat = cycle vs absorption,
+  # always_defect = retaliation, always_cooperate = exploitation.
+  # noisy_tft (recovery after forced slips) dropped 2026-09-05 for the
+  # minimal bot eval -- re-add it for a recovery-focused run.
+  opponents: [tit_for_tat, always_defect, always_cooperate]
+  temperature: 0.7
+  # Raised from gemma's 512: Qwen3 reasons ~2.5x longer under the same
+  # "Concisely reason" prompt (mean 1495 vs 599 chars, run 3070132+).
+  # 768 still bound the tail — 13/11600 responses ran past it and lost
+  # their Action line (all 2700+ chars, i.e. truncations not format
+  # misses), concentrated in the verbose arms. The observed max (3101
+  # chars) IS the old cap, so the true tail is censored and unknown —
+  # hence generous headroom rather than a snug fit. max_new_tokens is a
+  # bound, not a target: ~99.7% of responses stop at EOS near 380 tokens
+  # and are unaffected. Only non-terminating runaways run to the cap, so
+  # the cost is ~0.3% of samples generating longer before being stopped.
+  max_new_tokens: 2048
+
+# Rewards don't drive anything at eval; kept for metric parity with training.
+reward:
+  intrinsic: deontological
+  lambda: 0.75
+  game_reward: normalized
+
+probe_b:
+  num_traces: 32
+
+teacher:
+  moral_value: none
+  wrap_position: first
+  template_source: configs/training/_base_sdpo_pd.yaml
+  feedback_template: "\nMoral value to follow:\n{feedback_raw}\n"
