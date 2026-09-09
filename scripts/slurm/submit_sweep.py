@@ -1,16 +1,24 @@
 #!/usr/bin/env python3.11
-"""Submit an eval sweep: one sbatch job per cell of the declared grid.
+"""Submit an eval sweep: the declared grid, packed 4 cells per node.
 
 Usage (login node, from the repo root):
     /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
         configs/eval/<teacher_signal|post_training|transfer>/<subject>/<family>/<experiment>.yaml
     ... --dry-run     # print the expansion without submitting
+    ... specA.yaml specB.yaml   # several specs: their cells share nodes
 
 The spec's path is its identity (docs/naming.md): results land at the
 mirrored path eval_results/<results_root>/<subject>/<experiment>/, where
 sweep_manifest.json records the sweep spec, submission timestamp, git
 commit, and the job id + run dir of every cell — the experiment's own
 record of what was launched.
+
+Several specs at once pool their cells into shared nodes (a spec cannot
+span game families, a node can): two 2-cell specs become one packed job
+instead of two half-empty nodes. Each spec keeps its own results dir and
+manifest; the manifest names the co-packed specs and where the batch
+payloads live (under the FIRST spec's group dir, whose name the pack log
+also carries).
 """
 
 from __future__ import annotations
@@ -29,52 +37,70 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from moralgym_verl.eval.config import git_provenance          # noqa: E402
 from moralgym_verl.eval.sweep import (                        # noqa: E402
-    MANIFEST_NAME, PACK_LAUNCHER, PACK_SIZE, batch_payload, cell_submission,
-    expand_cells, load_sweep, pack_batches, results_dir, run_dir_stem,
+    MANIFEST_NAME, PACK_LAUNCHER, PACK_SIZE, batch_payload_items,
+    cell_submission, expand_cells, load_sweep, pack_items, results_dir,
+    run_dir_stem,
 )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("spec", type=Path,
-                        help="sweep YAML (configs/eval/<root>/<subject>/)")
+    parser.add_argument("specs", type=Path, nargs="+", metavar="spec",
+                        help="sweep YAML(s) (configs/eval/<root>/<subject>/"
+                             "<family>/); several share nodes")
     parser.add_argument("--dry-run", action="store_true",
                         help="print the expansion and commands; submit nothing")
     parser.add_argument("--no-pack", action="store_true",
                         help="one job per cell (the old one-cell-per-node "
                              "path). Costs ~4x the billed node-hours, since "
                              "Clariden allocates whole 4-GPU nodes; use only "
-                             "to isolate a packing problem.")
+                             "to isolate a packing problem. Single spec only.")
     parser.add_argument("--pack-size", type=int, default=PACK_SIZE,
                         help=f"cells per node (default {PACK_SIZE} = one per "
                              f"GPU)")
     args = parser.parse_args()
 
-    spec = load_sweep(str(args.spec))
-    spec["sweep_path"] = str(args.spec)
-    if not (REPO_ROOT / spec["config"]).exists():
-        sys.exit(f"eval config not found: {spec['config']} "
-                 f"(harness profiles: configs/eval/harness/<model>/<family>.yaml)")
-    cells = expand_cells(spec)
-    group_dir = REPO_ROOT / "eval_results" / results_dir(spec) / spec["eval_group"]
+    specs, group_dirs, items = [], [], []
+    for path in args.specs:
+        spec = load_sweep(str(path))
+        spec["sweep_path"] = str(path)
+        if not (REPO_ROOT / spec["config"]).exists():
+            sys.exit(f"eval config not found: {spec['config']} (harness "
+                     f"profiles: configs/eval/harness/<model>/<family>.yaml)")
+        specs.append(spec)
+        group_dirs.append(REPO_ROOT / "eval_results" / results_dir(spec)
+                          / spec["eval_group"])
+        items += [(spec, cell) for cell in expand_cells(spec)]
+    if len({s["eval_group"] for s in specs}) != len(specs):
+        sys.exit("the same spec was given twice")
 
     if args.no_pack:
-        return _submit_unpacked(spec, cells, group_dir, args.dry_run)
+        if len(specs) != 1:
+            sys.exit("--no-pack takes a single spec")
+        cells = [cell for _, cell in items]
+        return _submit_unpacked(specs[0], cells, group_dirs[0], args.dry_run)
 
-    batches = pack_batches(spec, cells, args.pack_size)
-    print(f"sweep {spec['name']}: {len(cells)} cells in {len(batches)} packed "
-          f"jobs ({args.pack_size}/node) -> {group_dir}")
+    batches = pack_items(items, args.pack_size)
+    for spec, gdir in zip(specs, group_dirs):
+        n = sum(1 for s, _ in items if s is spec)
+        print(f"sweep {spec['name']}: {n} cells -> {gdir}")
+    print(f"{len(items)} cells in {len(batches)} packed jobs "
+          f"({args.pack_size}/node)"
+          + (f", {len(specs)} specs sharing nodes" if len(specs) > 1 else ""))
     # Per-node work orders, not results: kept out of the group root so it
     # holds only cells/, analysis/ and the manifest. One file per packed
-    # sbatch job = the 4 cells that share a node.
-    batch_dir = group_dir / "packed_node_batches"
+    # sbatch job = the cells that share a node. With several specs the
+    # payloads live under the FIRST spec's group dir; every manifest says so.
+    batch_dir = group_dirs[0] / "packed_node_batches"
     batch_dir.mkdir(parents=True, exist_ok=True)
 
-    records = []
+    records = {id(spec): [] for spec in specs}
     for b_idx, batch in enumerate(batches):
-        payload = batch_payload(spec, batch)
+        payload = batch_payload_items(batch)
         batch_path = batch_dir / f"batch_{b_idx:03d}.json"
-        desc = [" ".join(f"{k}={v}" for k, v in c.items()) for c in batch]
+        desc = [f"[{spec['name']}] "
+                + " ".join(f"{k}={v}" for k, v in cell.items())
+                for spec, cell in batch]
         if args.dry_run:
             print(f"  [dry] sbatch {PACK_LAUNCHER} {batch_path.name}"
                   f"  ({len(batch)} cells)")
@@ -93,17 +119,21 @@ def main() -> None:
                      f"{result.stdout}{result.stderr}")
         job_id = match.group(1)
         print(f"  {job_id}  batch {b_idx} ({len(batch)} cells)")
-        for cell, d in zip(batch, desc):
+        for (spec, cell), d in zip(batch, desc):
             # run_dir mirrors what the launcher builds: stem + _<jobid>.
-            records.append({**cell, "job_id": job_id,
-                            "run_dir": f"{run_dir_stem(cell)}_{job_id}",
-                            "batch": b_idx,
-                            "batch_file": batch_path.name})
+            records[id(spec)].append({**cell, "job_id": job_id,
+                                      "run_dir": f"{run_dir_stem(cell)}_{job_id}",
+                                      "batch": b_idx,
+                                      "batch_file": batch_path.name})
             print(f"          {d}")
 
     if args.dry_run:
         return
-    _write_manifest(spec, records, group_dir, packed=not args.no_pack)
+    for spec, gdir in zip(specs, group_dirs):
+        co_packed = ([s["name"] for s in specs if s is not spec]
+                     if len(specs) > 1 else None)
+        _write_manifest(spec, records[id(spec)], gdir, packed=True,
+                        batch_dir=batch_dir, co_packed=co_packed)
 
 
 def _submit_unpacked(spec, cells, group_dir, dry_run: bool) -> None:
@@ -136,7 +166,9 @@ def _submit_unpacked(spec, cells, group_dir, dry_run: bool) -> None:
     _write_manifest(spec, records, group_dir, packed=False)
 
 
-def _write_manifest(spec, records, group_dir, packed: bool) -> None:
+def _write_manifest(spec, records, group_dir, packed: bool,
+                    batch_dir: Path | None = None,
+                    co_packed: list | None = None) -> None:
     group_dir.mkdir(parents=True, exist_ok=True)
     manifest = {
         "sweep": spec,
@@ -145,6 +177,12 @@ def _write_manifest(spec, records, group_dir, packed: bool) -> None:
         "packed": packed,
         "cells": records,
     }
+    if batch_dir is not None and batch_dir.parent != group_dir:
+        # Co-packed submission: the batch payloads (and the pack log's
+        # name) belong to the first spec given on the command line.
+        manifest["batch_dir"] = str(batch_dir.relative_to(REPO_ROOT))
+    if co_packed:
+        manifest["co_packed_with"] = co_packed
     manifest_path = group_dir / MANIFEST_NAME
     with open(manifest_path, "w") as f:
         json.dump(manifest, f, indent=2)

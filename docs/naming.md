@@ -10,11 +10,29 @@ config ↔ job ↔ results is always a rename-free lookup, and the submit script
 - `_` separates fields; `-` joins words inside a field; `__` only between
   eval cell axes (`run_dir_stem`).
 - Token registry (extend here first, then `MODEL_TOKENS` in `eval/sweep.py`):
-  - models: `gemma2_9b`, `gemma3_12b`, `llama31_8b`, `qwen3_8b`, `qwen3_32b`
+  - models: `gemma2_9b`, `gemma3_12b`, `llama31_8b`, `qwen3_4b`, `qwen3_8b`, `qwen3_32b`
   - algos: `grpo`, `sdpo` · games: `pd`, `pgg`, `chicken`
   - game families (`GAME_FAMILIES`, mirrors `src/moralgym_verl/game/`):
     `classic` = 2x2 matrix games (pd, stag_hunt, chicken) · `pgg` = n-player
   - arms: `none`, `deon`, `util`, `deon-repair-gen`, … · opponents: `tft`, `random`, …
+  - external games (checkpoints trained outside MoralGym; never a
+    post_training subject, so not in `GAME_TOKENS`): `hanabi`
+
+**External checkpoints** (weights released by others, evaluated under
+`transfer/`): same grammar, staged by hand under `$CKPT_ROOT` in the verl
+run layout with the weights at `<RUN_NAME>/global_step_<N>/actor/huggingface`
+(full weights) or `.../actor/lora_adapter` (an adapter) — the launchers
+resolve a step by whichever exists. Field 7 is `ext-<firstauthor><year>`
+instead of a step count, the step dir is `global_step_final` when the
+release does not publish one (analysis prints it as `final` and orders it
+after numbered steps), and `PROVENANCE.md` at the run root records the
+source (HF repo + revision, paper, config signature, download date).
+E.g. `qwen3_4b_grpo_hanabi_o3ratings_selfplay_ext-ramesh2026` = the
+Hanabi-RL Qwen3-4B-Instruct-2507 of Ramesh et al. (ICML 2026).
+Transfer experiments of an external checkpoint carry its source as a
+suffix on the protocol name (`multi_round_hanabi_rl`, `pd_multi_round_hanabi_rl`)
+so `eval_results/transfer/<model>/<family>/` says what was transferred, not
+only under which protocol.
 
 **The primary key is the training run name:**
 
@@ -75,6 +93,9 @@ DRY_RUN=1 bash scripts/slurm/train_verl.sh <RUN_NAME>          # resolve only
 bash scripts/slurm/train_verl.sh <RUN_NAME>                    # submit
 /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
     configs/eval/<root>/<subject>/<experiment>.yaml --dry-run
+/usr/bin/python3.11 scripts/slurm/submit_sweep.py specA.yaml specB.yaml
+    # several specs share nodes (a spec cannot span families, a node can);
+    # each keeps its own results dir + manifest, payloads under specA's
 ```
 
 ## Legacy table (pre-2026-08-31 names)

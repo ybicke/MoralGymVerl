@@ -1,0 +1,30 @@
+# Multi-round PGG, Qwen3-4B — repeated-interaction twin of single_round.yaml
+# for the external Hanabi-RL checkpoint (Ramesh et al., ICML 2026; see
+# single_round.yaml for provenance). Hanabi training is itself multi-turn
+# and cooperative, so if anything carries over it should show here first:
+# 5 live rounds, cold open, conversation accumulates, decision_full, no moral
+# text. Co-players (harness/qwen3_4b/pgg.yaml): full_contributor (sustain,
+# P(C|k=3) over rounds), free_rider (escape, P(C|k=0)), noisy_conditional
+# (repair in split states — the only reactive group).
+#
+# Protocol byte-identical to transfer/qwen3_8b/pgg/multi_round.yaml. 2 cells
+# = half a packed node.
+#
+#   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/eval/transfer/qwen3_4b/pgg/multi_round_hanabi_rl.yaml --dry-run
+
+num_episodes: 20           # per co-player group; x3 x5 rounds = 300 decisions/cell
+
+axes:
+  game: [public_goods]
+  representation: [decision_full]
+  moral_value: [none]
+  protocol: [multi_round]
+  checkpoint:
+    - base                 # Qwen3-4B-Instruct-2507, untrained
+    - qwen3_4b_grpo_hanabi_o3ratings_selfplay_ext-ramesh2026/global_step_final
+
+env:
+  RUN_PROBES: "off"
+  GAME_DESCRIPTION: "off"    # matched to the qwen3_8b transfer cells
+extra_args: ["--temperature", "0.7"]

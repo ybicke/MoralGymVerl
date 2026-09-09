@@ -88,10 +88,21 @@ CKPT_ROOT = os.environ.get("CKPT_ROOT",
                            f"/iopsstor/scratch/cscs/{os.environ['USER']}/moralgym_verl_runs")
 
 def resolve_checkpoint(value):
-    """'base' | absolute adapter dir | '<run>/global_step_N' (verl layout)."""
+    """'base' | absolute checkpoint dir | '<run>/global_step_N' (verl run
+    layout under CKPT_ROOT). A run-layout step holds either
+    actor/lora_adapter (LoRA runs) or actor/huggingface (full weights, e.g.
+    an externally released model staged under CKPT_ROOT); the one that
+    exists is the checkpoint -- load_model_for_eval dispatches on the
+    directory contents the same way. Missing both is an error here, at job
+    start, rather than a from_pretrained traceback one phase in."""
     if value == "base" or value.startswith("/"):
         return value
-    return f"{CKPT_ROOT}/{value}/actor/lora_adapter"
+    actor = f"{CKPT_ROOT}/{value}/actor"
+    for layout in ("lora_adapter", "huggingface"):
+        if os.path.isdir(f"{actor}/{layout}"):
+            return f"{actor}/{layout}"
+    raise SystemExit(f"checkpoint {value!r}: neither {actor}/lora_adapter "
+                     f"nor {actor}/huggingface exists")
 cells = json.load(open(batch_path))["cells"]
 
 for i, c in enumerate(cells):
