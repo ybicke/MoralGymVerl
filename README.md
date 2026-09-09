@@ -1,10 +1,14 @@
 # MoralGymVerl
 
-Training language models to be cooperative agents in multi-agent systems, by fine-tuning on social-dilemma games under moral principles. GRPO and self-distillation (SDPO) on top of [verl](https://github.com/volcengine/verl).
+Training cooperative behaviour into language-model agents by fine-tuning on games. GRPO and self-distillation (SDPO) on top of [verl](https://github.com/volcengine/verl).
 
 ## Overview
 
-As LLM agents increasingly act alongside other agents, cooperation in mixed-motive settings becomes a training target rather than a hope. Here an LLM plays repeated matrix games (Prisoner's Dilemma, Stag Hunt, Chicken) and an n-player Public Goods Game against scripted opponents. A moral principle such as *do not defect on a cooperator* is delivered through one of two training channels that share the same environment:
+As LLM agents increasingly act alongside other agents, cooperation in mixed-motive settings becomes a training target rather than a hope. This project trains it with reinforcement learning on games, and asks what the trained model carries with it into new interactions.
+
+Game-theoretic games are the first testbed: an LLM plays repeated matrix games (Prisoner's Dilemma, Stag Hunt, Chicken) and an n-player Public Goods Game against scripted opponents. They are small, their equilibria are known, and cooperation in them has a precise meaning. The environment is designed to admit richer games later, from negotiation to multi-agent coordination.
+
+A moral principle such as *do not defect on a cooperator* is delivered through one of two training channels that share the same environment:
 
 - **Reward (GRPO).** Per-round reward is game payoff plus a weighted intrinsic term that scores the move against the principle.
 - **Teacher (SDPO).** The principle is written into a teacher context; the student distills the teacher's next-token distribution on its own rollouts.
@@ -15,7 +19,7 @@ Evaluation asks whether the principle became a disposition: does trained behavio
 
 1. **Cooperation from games.** Can training on games make an LLM a cooperative agent in a multi-agent system?
 2. **Generalisation.** Does cooperative behaviour learned in one game transfer to unseen environments?
-3. **Moral principles as the signal.** Can cooperation in mixed-motive and social-dilemma games be taught from moral principles, delivered as reward or as text?
+3. **Moral principles as the signal.** Can cooperation in mixed-motive games, social dilemmas, and other games be taught from moral principles, delivered as reward or as text?
 4. **Safety.** How can cooperative behaviour in multi-agent systems be made safe, so that it does not collapse into exploitability or collusion?
 
 ## How it works
