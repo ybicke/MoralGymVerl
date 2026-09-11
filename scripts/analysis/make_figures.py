@@ -36,6 +36,7 @@ from typing import Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from figure_style import (  # noqa: E402
+    footnote,
     ACCENT, INK, INK_MUTED, RUN_COLORS, STATE_COLORS, STATE_TEX, WIDTHS,
     apply_style, clean_axes, direct_labels, save,
 )
@@ -632,37 +633,59 @@ def trace_panels(args, out_dir: Path) -> None:
 
 
 def fig_dopp_compare(args, out_dir: Path) -> None:
-    """One line per trained run: the opponent-conditioning gap
-    D_opp = P(C|f_O=C) - P(C|f_O=D) over checkpoints (the reciprocity
-    signature), computed from each run's ckpt-ladder eval. --ladder
-    label=dir repeated; --reference groups supply each MODEL's base
-    cell and are searched for every ladder."""
+    """Small multiples, one panel per trained run, decomposing the
+    four-state profile into the two quantities that move: solid =
+    conditionality (the opponent-conditioning gap D_opp), dashed =
+    forgiveness (P(C | f_O=D)). The decomposition keeps the one-axis
+    comparison honest: an SDPO gap decline driven by rising forgiveness
+    is the teacher's repair/generosity component, not decay. Dotted
+    lines mark the initial teacher (+ctx) where a reference exists.
+    --ladder label=dir repeated; --reference groups supply each MODEL's
+    base cell and teacher cell."""
     ladders = parse_labeled(args.ladder)
     refs = [Path(p) for p in args.reference]
 
-    def d_opp(v):
+    def gap(v):
         return (v["CC"] + v["DC"]) / 2 - (v["CD"] + v["DD"]) / 2
 
-    fig, ax = plt.subplots(figsize=(WIDTHS["wide"], 2.6))
-    ends = []
+    def forgive(v):
+        return (v["CD"] + v["DD"]) / 2
+
+    fig, axes = plt.subplots(1, len(ladders), sharey=True, squeeze=False,
+                             figsize=(WIDTHS["wide"], 2.4),
+                             gridspec_kw={"wspace": 0.1})
     for i, (label, ladder) in enumerate(ladders):
+        ax = axes[0][i]
         model_refs = [r for r in refs
                       if r.parts[-3].split("_")[0] in ladder.parents[1].name]
-        steps, curves, _, has_base = load_ladder(
+        steps, curves, teacher, has_base = load_ladder(
             ladder, model_refs, args.principle)
         xs = ([0] if has_base else []) + steps
-        ys = [d_opp({s: curves[s][j] for s in curves})
-              for j in range(len(xs))]
+        profiles = [{s: curves[s][j] for s in curves} for j in range(len(xs))]
         color = RUN_COLORS[i % len(RUN_COLORS)]
-        ax.plot(xs, ys, color=color, marker="o", markersize=3.5)
-        ends.append((ys[-1], label, color))
-    direct_labels(ax, ends, x=max(x for _, l in ladders for x in [200]),
-                  min_gap=6, fontsize=7.5)
-    ax.legend([l for l, _ in ladders], loc="upper left", fontsize=7.5)
-    ax.set_ylabel(r"$\Delta_{\mathrm{opp}}$ (pp)")
-    ax.set_xlabel("checkpoint (training step)")
-    ax.axhline(0, color=INK_MUTED, linewidth=0.6)
-    clean_axes(ax)
+        gy = [gap(v) for v in profiles]
+        fy = [forgive(v) for v in profiles]
+        ax.plot(xs, gy, color=color, ls="-", marker="o", markersize=3)
+        ax.plot(xs, fy, color=color, ls="--", marker="s", markersize=3)
+        labels = [(gy[-1], r"$\Delta_{\mathrm{opp}}$", color),
+                  (fy[-1], "forgive", color)]
+        if teacher is not None:
+            ax.axhline(gap(teacher), ls=":", lw=1, **{"color": ACCENT})
+            ax.axhline(forgive(teacher), ls=":", lw=1, color=ACCENT)
+            labels += [(gap(teacher), "+ctx", ACCENT)]
+        direct_labels(ax, labels, x=xs[-1], min_gap=9, fontsize=7)
+        ax.set_xlim(-8, xs[-1] * 1.35)
+        ax.set_title(label, fontsize=8)
+        ax.set_xlabel("training step", fontsize=7.5)
+        ax.axhline(0, color=INK_MUTED, linewidth=0.6)
+        clean_axes(ax)
+        if i == 0:
+            ax.set_ylabel("percentage points", fontsize=7.5)
+    footnote(fig, ["solid = conditionality "
+                   r"$\Delta_{\mathrm{opp}}$",
+                   r"dashed = forgiveness $P(\mathrm{C}\mid f_O{=}D)$",
+                   "dotted = initial teacher (+ctx)"])
+    fig.subplots_adjust(left=0.07, right=0.99, top=0.88, bottom=0.28)
     for pth in save(fig, out_dir / "figures", "dopp_compare"):
         print(f"wrote {pth}")
 
