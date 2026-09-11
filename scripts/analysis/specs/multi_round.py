@@ -91,7 +91,7 @@ def policy_label(meta: Dict) -> str:
         return "base"
     fields = run.split("_")
     channel = f"{fields[2].upper()} {fields[4]}" if len(fields) >= 6 else run
-    return f"{channel} s{step}"
+    return f"{channel} {'final' if str(step) == 'final' else f's{step}'}"
 
 
 def collect(group: Path) -> List[Tuple[str, MultiCell]]:
@@ -271,7 +271,8 @@ def trace_table(cells, principle: str) -> Table:
 # -------------------------------------------------------------- figure
 
 def per_round_figure(cells, opponents: List[str], n_rounds: int,
-                     out_dir: Path, name: str) -> Path:
+                     out_dir: Path, name: str,
+                     model: str = "") -> Path:
     from figure_style import (REF_BASE, RUN_COLORS, WIDTHS, apply_style,
                               clean_axes, direct_labels, save)
     import matplotlib.pyplot as plt
@@ -309,6 +310,8 @@ def per_round_figure(cells, opponents: List[str], n_rounds: int,
         if j == 0:
             ax.set_ylabel("P(C) (%)", fontsize=7.5)
         clean_axes(ax)
+    if model:
+        fig.suptitle(model, y=1.04, fontsize=9)
     fig.subplots_adjust(left=0.07, right=0.99, top=0.86, bottom=0.22)
     return save(fig, out_dir / "figures", f"multi_round_{name}")[0]
 
@@ -390,12 +393,14 @@ OPP_TOKEN = {"tit_for_tat": "Tft", "always_defect": "Alld",
 
 
 def write_numbers(cells, opponents, n_rounds, coop_obs, refs,
-                  out_dir: Path, game: str) -> Path:
+                  out_dir: Path, game: str, prefix: str | None = None) -> Path:
     """LaTeX number macros for the report prose (letters-only names):
     \<prefix><Policy><Opp><Open|Final|Pooled|Mutual> in percent, plus
     per-policy live/fabricated state strings. Same data as the tables,
     so prose and figures cannot disagree."""
-    prefix = "MRPD" if game != "public_goods" else "MRPGG"
+    prefix = prefix or ("MRPD" if game != "public_goods" else "MRPGG")
+    if not prefix.isalpha():
+        raise SystemExit(f"--macro-prefix must be letters only, got {prefix!r}")
     # policy tokens: channel word; ordinal suffix when a channel repeats
     by_channel: Dict[str, List[str]] = {}
     for label, _ in cells:
@@ -497,6 +502,11 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
                         help="single-round eval group(s) holding the same "
                              "policies' fabricated-history cells (repeatable)")
     parser.add_argument("--principle", default="deontological+repair+generosity")
+    parser.add_argument("--macro-prefix", default=None,
+                        help="LaTeX macro prefix for generated/numbers_<prefix>.tex "
+                             "(letters only; default MRPD / MRPGG by game). Give a "
+                             "distinct prefix when several groups of one game are "
+                             "mirrored into the same report.")
 
 
 def build(args: argparse.Namespace) -> Path:
@@ -516,7 +526,7 @@ def build(args: argparse.Namespace) -> Path:
     game = meta["game_type"]
     coop_obs = ((lambda obs: obs == "C") if game != "public_goods"
                 else (lambda obs: isinstance(obs, int) and obs >= 2))
-    refs = reference_rows(args.reference, game)
+    refs = reference_rows(args.reference, game) if args.reference else {}
 
     out_dir = args.out or (group / "analysis")
     tex_dir = out_dir / "tex"
@@ -529,7 +539,8 @@ def build(args: argparse.Namespace) -> Path:
     md = [header(cells, group, opponents, n_rounds)]
     md.append(emit(per_round_table(cells, opponents, n_rounds)))
     fig = per_round_figure(cells, opponents, n_rounds, out_dir,
-                           f"{group.parent.parent.name}_{meta['game_type']}")
+                           f"{group.parent.parent.name}_{meta['game_type']}",
+                           model=meta["base_model"].rsplit("/", 1)[-1])
     print(f"saved -> {fig}")
     md.append("\n".join([
         "### Figure 1 — cooperation per round", "",
@@ -553,7 +564,7 @@ def build(args: argparse.Namespace) -> Path:
     md.append(emit(outcomes_table(cells, opponents, n_rounds, coop_obs)))
     md.append(emit(trace_table(cells, args.principle)))
     npath = write_numbers(cells, opponents, n_rounds, coop_obs, refs,
-                          out_dir, game)
+                          out_dir, game, args.macro_prefix)
     print(f"saved -> {npath}")
     path = out_dir / f"results_{group.name}.md"
     path.write_text("\n".join(md))
