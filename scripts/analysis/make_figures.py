@@ -706,8 +706,10 @@ def fig_dopp_compare(args, out_dir: Path) -> None:
 def fig_transfer_grid(args, out_dir: Path) -> None:
     """Cross-model transfer: --group <transfer group dir> repeated (one per
     model), --reference screen groups for the in-context rows. Columns are
-    every run across the groups, so the same figure shows replication
-    across models and the GRPO-vs-SDPO contrast within one."""
+    every run across the groups; call once per figure with the groups it
+    should show. Figure calls never write the summary table; a separate
+    --table-only call with all groups owns generated/tables/transfer_summary.tex
+    so the table always covers the full run set."""
     from transfer_figures import fig_curves, fig_final, fig_pooled, load_transfer
     runs = []
     for g in args.group:
@@ -716,11 +718,13 @@ def fig_transfer_grid(args, out_dir: Path) -> None:
                               [args.principle] if args.principle else None)
     if not runs:
         raise SystemExit("no transfer runs found under --group dirs")
+    if args.table_only:
+        from transfer_figures import transfer_summary_table
+        transfer_summary_table(runs, args.group, out_dir)
+        return
     for pth in (fig_pooled(runs, out_dir, args.name) + fig_final(runs, out_dir, args.name)
                 + fig_curves(runs, out_dir, args.name)):
         print(f"wrote {pth}")
-    from transfer_figures import transfer_summary_table
-    transfer_summary_table(runs, args.group, out_dir)
 
 
 def mirror_to_report(out_dir: Path, report_dir: Path) -> None:
@@ -810,6 +814,10 @@ def main() -> None:
                     help="moral_value of the optional base+principle "
                          "reference cell; drawn only if a --reference "
                          "group contains it")
+    ap.add_argument("--table-only", action="store_true",
+                    help="transfer-grid: write only "
+                         "generated/tables/transfer_summary.tex (no figures); "
+                         "pass every --group so the table covers all runs")
     ap.add_argument("--macro-prefix", default="",
                     help="letters-only namespace for numbers_<prefix>.tex "
                          "macros; one per experiment")

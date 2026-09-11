@@ -43,8 +43,19 @@ $PY $MF dopp-compare \
     --reference $SCREEN_QWEN --reference $SCREEN_GEMMA
 
 # Held-out-game transfer (eval_results/transfer/): pooled, last-checkpoint,
-# every-checkpoint figures across all runs; in-context row from the Qwen v3 screen.
-$PY $MF transfer-grid --name pgg --principle deontological \
+# every-checkpoint figures; in-context row from the Qwen v3 screen.
+# Main-text figure = Qwen3-8B only (the controlled channel contrast);
+# Gemma runs are the cross-model replication and render as the appendix figure.
+$PY $MF transfer-grid --name pgg_qwen3_8b --principle deontological \
+    --group eval_results/transfer/qwen3_8b/pgg/single_round \
+    --group eval_results/transfer/qwen3_8b/pgg/single_round_util \
+    --reference eval_results/teacher_signal/qwen3_8b/pgg/single_turn_v3
+$PY $MF transfer-grid --name pgg_gemma --principle deontological \
+    --group eval_results/transfer/gemma2_9b/pgg/single_round \
+    --group eval_results/transfer/gemma3_12b/pgg/single_round \
+    --reference eval_results/teacher_signal/qwen3_8b/pgg/single_turn_v3
+# Summary table stays whole (all runs, the citable anchor in the chapter).
+$PY $MF transfer-grid --table-only --principle deontological \
     --group eval_results/transfer/qwen3_8b/pgg/single_round \
     --group eval_results/transfer/qwen3_8b/pgg/single_round_util \
     --group eval_results/transfer/gemma2_9b/pgg/single_round \
