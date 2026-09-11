@@ -28,16 +28,13 @@ $PY $MF training-grid --name sdpo --window 5 \
     --run "Qwen3-8B SDPO=$RUNS/qwen3_8b_sdpo_pd_deon-repair-gen_tft_200" \
     --run "Gemma2-9B SDPO=$RUNS/gemma2_9b_sdpo_pd_deon-repair-gen_tft_200"
 
-$PY $MF ladder-grid --name grpo --macro-prefix GDT \
+$PY $MF ladder-grid --name all --ncols 3 --macro-prefix GDT \
     --ladder "Qwen3-8B GRPO=$GRPO_QWEN" \
-    --reference $SCREEN_QWEN
-
-$PY $MF ladder-grid --name sdpo \
-    --reference eval_results/teacher_signal/qwen3_8b/classic/pd_generosity_arm \
-    --reference eval_results/teacher_signal/gemma2_9b/classic/pd_generosity_arm \
     --ladder "Qwen3-8B SDPO=$SDPO_QWEN" \
     --ladder "Gemma2-9B SDPO=$SDPO_GEMMA" \
-    --reference $SCREEN_QWEN --reference $SCREEN_GEMMA
+    --reference $SCREEN_QWEN --reference $SCREEN_GEMMA \
+    --reference eval_results/teacher_signal/qwen3_8b/classic/pd_generosity_arm \
+    --reference eval_results/teacher_signal/gemma2_9b/classic/pd_generosity_arm
 
 $PY $MF dopp-compare \
     --ladder "Qwen3-8B GRPO=$GRPO_QWEN" \
@@ -128,5 +125,22 @@ done
 cp $PT/qwen3_8b/classic/multi_round/analysis/generated/numbers_MRPD.tex \
    eval_results/transfer/qwen3_8b/pgg/multi_round/analysis/generated/numbers_MRPGG.tex \
    ~/moralgym-report/generated/ && echo "mirrored in-play number macros"
+
+# Hanabi-RL transfer check (external checkpoint of Ramesh et al., ICML 2026,
+# staged as qwen3_4b_grpo_hanabi_o3ratings_selfplay_ext-ramesh2026): the
+# same in-play protocol on Qwen3-4B-Instruct-2507, base vs the released
+# Hanabi-RL weights, PD and PGG. No single-round reference cells for 4B, so
+# no --reference; distinct macro prefixes keep the 4B numbers apart from the
+# 8B MRPD/MRPGG ones in the report preamble.
+HANABI=eval_results/transfer/qwen3_4b
+$PY scripts/analysis/make_results.py $HANABI/classic/pd_multi_round_hanabi_rl --macro-prefix MRPDHanabi
+$PY scripts/analysis/make_results.py $HANABI/pgg/multi_round_hanabi_rl --macro-prefix MRPGGHanabi
+for f in $HANABI/classic/pd_multi_round_hanabi_rl/analysis/figures/pdf/multi_round_*.pdf \
+         $HANABI/pgg/multi_round_hanabi_rl/analysis/figures/pdf/multi_round_*.pdf; do
+    cp "$f" ~/moralgym-report/figures/ && echo "mirrored $f"
+done
+cp $HANABI/classic/pd_multi_round_hanabi_rl/analysis/generated/numbers_MRPDHanabi.tex \
+   $HANABI/pgg/multi_round_hanabi_rl/analysis/generated/numbers_MRPGGHanabi.tex \
+   ~/moralgym-report/generated/ && echo "mirrored Hanabi-RL number macros"
 
 echo "report regenerated; commit + push ~/moralgym-report to publish"
