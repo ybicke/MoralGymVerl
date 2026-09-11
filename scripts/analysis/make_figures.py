@@ -322,6 +322,11 @@ def fig_ladder_grid(args, out_dir: Path) -> None:
                       if r.parts[-3].split("_")[0] in ladder.parents[1].name]
         steps, curves, teacher, has_base = load_ladder(
             ladder, model_refs, args.principle)
+        # +ctx = base with the principle in context: the SDPO runs'
+        # initial teacher. For GRPO panels the principle plays no role
+        # in training, so the marker is suppressed.
+        if "_sdpo_" not in Path(ladder).name and "_sdpo_" not in str(ladder):
+            teacher = None
         xs = ([0] if has_base else []) + steps
         for st, ys in curves.items():
             ax.plot(xs, ys, color=STATE_COLORS[st], marker="o",
@@ -354,7 +359,13 @@ def fig_ladder_grid(args, out_dir: Path) -> None:
                bbox_to_anchor=(0.5, 1 + 0.16 / nrows), fontsize=8)
     for pth in save(fig, out_dir / "figures", f"ladder_grid_{args.name}"):
         print(f"wrote {pth}")
-    if args.macro_prefix and len(ladders) == 1:
+    if args.macro_prefix:
+        # Macros come from the FIRST ladder (the grid's leftmost panel).
+        steps, curves, _, _ = load_ladder(
+            Path(ladders[0][1]),
+            [r for r in refs
+             if r.parts[-3].split("_")[0] in Path(ladders[0][1]).parents[1].name],
+            args.principle)
         write_numbers(steps, curves, None, out_dir, args.macro_prefix)
 
 
