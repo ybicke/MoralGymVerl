@@ -1,0 +1,60 @@
+# =============================================================================
+# GRPO deon — Qwen3-4B-Instruct-2507. Trainability control for the
+# Hanabi-RL transfer check (report sec:hanabi-transfer, 2026-09-09).
+#
+# The released Hanabi-RL Qwen3-4B (Ramesh et al., ICML 2026) played PD and
+# PGG exactly like the untrained 4B: all-defect, no lift anywhere. That null
+# has two readings — common-payoff training does not install mixed-motive
+# cooperation, or a 4B model cannot be moved by fine-tuning at all. This run
+# separates them: the SAME reward-channel recipe that lifted Qwen3-8B
+# (qwen3_8b_grpo_pd_deon_tft_200: TFT in-play C 2% -> 34%, ckpt ladder
+# conditional by step 60-120), on the same base the Hanabi model started
+# from. If 4B lifts, size is not the block and the Hanabi null is a finding
+# about the training; if it does not, the 4B is the block.
+#
+# Everything except the model is _base_grpo_pd (optimizer 2.5e-5/warmup 50,
+# KL 0.04, vanilla loss, n=16, T=0.7, 2048-token responses, ckpt every 10).
+# Base model: Qwen/Qwen3-4B-Instruct-2507, the NON-thinking Qwen3 variant
+# (the Hanabi-RL weights are a LoRA merge onto it, see the eval harness
+# configs/eval/harness/qwen3_4b/). Its chat template has no enable_thinking
+# branch, so no apply_chat_template_kwargs here (the 8B config needs
+# enable_thinking: false because Qwen3-8B is the hybrid model). 4B is well
+# inside the 8B memory class; batch and vLLM settings carry over.
+#
+# 150 steps = the cross-arm comparison point (_base_grpo_pd: compare arms
+# at step 150; util, Llama-3.1 and Gemma-3 runs all stop there), past the 8B
+# deon ladder's converged point (120); ~2 h on one node (8B: 200 steps in 3h16, job 3138544).
+#
+# Preflight + smoke BEFORE the full run (new base model for training):
+#   /usr/bin/python3.11 scripts/preflight/check_model_template.py \
+#        --model Qwen/Qwen3-4B-Instruct-2507          # login node, pure Jinja
+#   PARTITION=debug TIME=00:30:00 bash scripts/slurm/train_verl.sh \
+#        qwen3_4b_grpo_pd_deon_tft_150 qwen3_4b_grpo_pd_deon_tft_smoke2 \
+#        trainer.total_training_steps=2
+# Full run:
+#   DRY_RUN=1 bash scripts/slurm/train_verl.sh qwen3_4b_grpo_pd_deon_tft_150
+#   TIME=03:00:00 bash scripts/slurm/train_verl.sh qwen3_4b_grpo_pd_deon_tft_150
+# =============================================================================
+defaults:
+  - _base_grpo_pd
+  - _self_
+
+actor_rollout_ref:
+  model:
+    path: Qwen/Qwen3-4B-Instruct-2507
+  rollout:
+    # Smoke job 3344687 (2026-09-09) died at vLLM init: "36.00 GiB KV cache
+    # is needed, available 24.63 GiB". verl overwrites rollout.max_model_len
+    # with the model's max_position_embeddings unconditionally
+    # (vllm_async_server.py, see the Llama-3.1 config header), and
+    # Instruct-2507's native context is 262144 -- 36 layers x 8 KV heads x
+    # 128 x 2 x bf16 = 147 KB/token -> 36 GiB for one full sequence. Same
+    # remedy as documented there: raise the fraction, not max_model_len
+    # (ignored). 0.6 leaves ~44 GiB for KV (>36 needed) and ~39 GB for the
+    # trainer, comparable to the 8B run's headroom (0.4, 16 GB weights).
+    # The proper fix is a verl patch honoring a configured max_model_len
+    # below max_position_embeddings; not taken here (verl patch policy).
+    gpu_memory_utilization: 0.6
+
+trainer:
+  total_training_steps: 150

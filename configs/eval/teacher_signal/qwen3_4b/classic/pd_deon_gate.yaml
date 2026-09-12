@@ -1,0 +1,30 @@
+# In-context deon gate — Qwen3-4B-Instruct-2507, PD only. Two questions in
+# one cheap sweep (2 cells, half a packed node):
+#   1. Capability: can the 4B execute conditional cooperation when the
+#      principle is IN CONTEXT? (The GRPO control shows the reward channel
+#      moves it, but ~4x slower than 8B; this measures the ceiling the
+#      teacher channel offers.)
+#   2. SDPO gate: the SDPO teacher IS this model with the principle in
+#      context. If the deon row does not separate from the none row here,
+#      a 4B SDPO run has no signal to distill and should not be submitted.
+# Reads against the 8B screen (teacher_signal/qwen3_8b/classic/
+# single_turn_screen, deon prose row) — protocol identical, PD/prose only,
+# probes off (gate, not screen; run the full screen later if 4B becomes a
+# lasting model axis).
+#
+#   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/eval/teacher_signal/qwen3_4b/classic/pd_deon_gate.yaml --dry-run
+
+num_episodes: 400          # 100 per fabricated state, same s.e. as the 8B screen
+
+axes:
+  game: [prisoners_dilemma]
+  representation: [prose]
+  moral_value: [none, deontological]
+  protocol: [single_round]
+
+env:
+  RUN_PROBES: "off"
+  RUN_PROBE_B_EPISODE: "off"
+
+extra_args: ["--temperature", "0.7"]

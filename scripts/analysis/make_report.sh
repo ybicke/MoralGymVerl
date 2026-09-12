@@ -146,12 +146,38 @@ cp $PT/qwen3_8b/classic/multi_round/analysis/generated/numbers_MRPD.tex \
 HANABI=eval_results/transfer/qwen3_4b
 $PY scripts/analysis/make_results.py $HANABI/classic/pd_multi_round_hanabi_rl --macro-prefix MRPDHanabi
 $PY scripts/analysis/make_results.py $HANABI/pgg/multi_round_hanabi_rl --macro-prefix MRPGGHanabi
-for f in $HANABI/classic/pd_multi_round_hanabi_rl/analysis/figures/pdf/multi_round_*.pdf \
-         $HANABI/pgg/multi_round_hanabi_rl/analysis/figures/pdf/multi_round_*.pdf; do
-    cp "$f" ~/moralgym-report/figures/ && echo "mirrored $f"
-done
 cp $HANABI/classic/pd_multi_round_hanabi_rl/analysis/generated/numbers_MRPDHanabi.tex \
    $HANABI/pgg/multi_round_hanabi_rl/analysis/generated/numbers_MRPGGHanabi.tex \
    ~/moralgym-report/generated/ && echo "mirrored Hanabi-RL number macros"
+
+# SDPO-4B control rows (same base, PD-trained via the teacher channel; base
+# cells are symlinked from the hanabi_rl groups, not re-run). Figures are
+# RENAMED on mirror: the spec derives figure names from <subject>_<game>, so
+# these groups' figures would otherwise overwrite the hanabi_rl ones.
+$PY scripts/analysis/make_results.py eval_results/post_training/qwen3_4b/classic/multi_round --macro-prefix MRPDFourB
+$PY scripts/analysis/make_results.py eval_results/transfer/qwen3_4b/pgg/multi_round --macro-prefix MRPGGFourB
+cp eval_results/post_training/qwen3_4b/classic/multi_round/analysis/generated/numbers_MRPDFourB.tex \
+   eval_results/transfer/qwen3_4b/pgg/multi_round/analysis/generated/numbers_MRPGGFourB.tex \
+   ~/moralgym-report/generated/ && echo "mirrored SDPO-4B number macros"
+
+# The report shows ONE combined in-play figure (fig:hanabi-transfer): base +
+# Hanabi-RL + SDPO s80/s150 across PD and PGG. Cells live in three groups,
+# so the per-group spec can't draw it; make_figures reads the cells directly
+# and mirrors the PDF itself.
+CELLS_HANABI_PD=$HANABI/classic/pd_multi_round_hanabi_rl/cells
+CELLS_HANABI_PGG=$HANABI/pgg/multi_round_hanabi_rl/cells
+CELLS_SDPO_PD=eval_results/post_training/qwen3_4b/classic/multi_round/cells
+CELLS_SDPO_PGG=eval_results/transfer/qwen3_4b/pgg/multi_round/cells
+$PY $MF multiround-compare --name qwen3_4b_hanabi \
+    --title "Qwen3-4B-Instruct-2507 — every policy is this base, differently fine-tuned" \
+    --footnote "Hanabi-RL = released checkpoint of Ramesh et al. (ICML 2026), GRPO on Hanabi with o3 move ratings; SDPO s80/s150 = this work, PD-trained; base = untrained" \
+    --cell "base=$CELLS_HANABI_PD/prisoners_dilemma__none__prose__multi_round__base_3338250" \
+    --cell "Hanabi-RL=$CELLS_HANABI_PD/prisoners_dilemma__none__prose__multi_round__qwen3_4b_grpo_hanabi_o3ratings_selfplay_ext-ramesh2026-global_step_final_3338250" \
+    --cell "SDPO s80=$CELLS_SDPO_PD/prisoners_dilemma__none__prose__multi_round__qwen3_4b_sdpo_pd_deon-repair-gen_tft_150-global_step_80_3357453" \
+    --cell "SDPO s150=$CELLS_SDPO_PD/prisoners_dilemma__none__prose__multi_round__qwen3_4b_sdpo_pd_deon-repair-gen_tft_150-global_step_150_3357453" \
+    --cell "base=$CELLS_HANABI_PGG/public_goods__none__decision_full__multi_round__base_3338250" \
+    --cell "Hanabi-RL=$CELLS_HANABI_PGG/public_goods__none__decision_full__multi_round__qwen3_4b_grpo_hanabi_o3ratings_selfplay_ext-ramesh2026-global_step_final_3338250" \
+    --cell "SDPO s80=$CELLS_SDPO_PGG/public_goods__none__decision_full__multi_round__qwen3_4b_sdpo_pd_deon-repair-gen_tft_150-global_step_80_3357453" \
+    --cell "SDPO s150=$CELLS_SDPO_PGG/public_goods__none__decision_full__multi_round__qwen3_4b_sdpo_pd_deon-repair-gen_tft_150-global_step_150_3357453"
 
 echo "report regenerated; commit + push ~/moralgym-report to publish"

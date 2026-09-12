@@ -54,6 +54,7 @@ HF_HOME = os.environ.get(
 # configs actually pass (configs/training/*.yaml -> data.apply_chat_template_kwargs).
 KNOWN = {
     "Qwen/Qwen3-8B": {"enable_thinking": False},
+    "Qwen/Qwen3-4B-Instruct-2507": {},   # non-thinking variant: no enable_thinking branch
     "meta-llama/Llama-3.1-8B-Instruct": {},
     "google/gemma-2-9b-it": {},
     "google/gemma-3-12b-it": {},

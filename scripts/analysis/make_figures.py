@@ -38,8 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from figure_style import (  # noqa: E402
     footnote,
     ACCENT, INK, INK_MUTED, RUN_COLORS, STATE_COLORS, STATE_TEX, WIDTHS,
-    apply_style, clean_axes, direct_labels, save,
-)
+    apply_style, clean_axes, direct_labels, save, REF_BASE)
 from training_trajectory import STATES, load_decisions, windows  # noqa: E402
 from eval_cells import discover_run_dirs, load_cell  # noqa: E402
 from specs.post_training import checkpoint_of, reference_rows  # noqa: E402
@@ -728,12 +727,29 @@ def fig_transfer_grid(args, out_dir: Path) -> None:
 
 
 def mirror_to_report(out_dir: Path, report_dir: Path) -> None:
-    """Copy PDFs + numbers.tex into the Overleaf clone, if it exists."""
+    """Copy PDFs + numbers.tex into the Overleaf clone, if it exists.
+
+    Figures are mirrored ONLY when the report references them
+    (\includegraphics of the basename in main.tex or generated/*.tex):
+    several commands share an analysis dir, so mirroring every sibling
+    PDF used to re-leak superseded variants into the repo on every
+    regeneration (the repo holds only what the report includes; the
+    full variant set stays in eval_results). A figure for a NEW report
+    section is therefore added to main.tex first, then generated.
+    """
     if not (report_dir / ".git").is_dir():
         print(f"note: {report_dir} not present, nothing mirrored")
         return
     import shutil
+    referenced = ""
+    for tex in ([report_dir / "main.tex"]
+                + sorted((report_dir / "generated").rglob("*.tex"))):
+        if tex.exists():
+            referenced += tex.read_text()
     for src in sorted((out_dir / "figures" / "pdf").glob("*.pdf")):
+        if src.stem not in referenced:
+            print(f"not referenced by the report, skipped: {src.name}")
+            continue
         dst = report_dir / "figures" / src.name
         dst.parent.mkdir(exist_ok=True)
         shutil.copy2(src, dst)
@@ -749,6 +765,75 @@ def mirror_to_report(out_dir: Path, report_dir: Path) -> None:
         print(f"mirrored {dst}")
 
 
+
+# ---------------------------------------------------------------------------
+
+def fig_multiround_compare(args, out_dir: Path) -> None:
+    """One combined in-play figure across eval GROUPS: --cell label=cell_dir
+    repeated; rows = games (in first-appearance order), cols = that game's
+    opponents, one line per label. Built for the Hanabi transfer check
+    (report fig:hanabi-transfer): base + Hanabi-RL + SDPO s80/s150 cells
+    live in three different groups, so the per-group multi_round spec can
+    never draw them together; this command reads the cells directly. A
+    label of 'base' gets the REF_BASE dashed style."""
+    import json
+    import matplotlib.pyplot as plt
+    cells = []          # (label, game, {opp: per_round dict})
+    games, opps = [], {}
+    for spec in args.cell:
+        label, _, path = spec.partition("=")
+        beh = json.loads((Path(path).expanduser() / "behavioral.json").read_text())
+        game = beh["metadata"]["game_type"]
+        if game not in games:
+            games.append(game)
+            opps[game] = [o["opponent"] for o in beh["opponents"]]
+        cells.append((label, game, {o["opponent"]: o["per_round"]
+                                    for o in beh["opponents"]}))
+    n_rounds = max(int(k.split("_")[1]) for _, _, bl in cells
+                   for pr in bl.values() for k in pr)
+    ncols = max(len(opps[g]) for g in games)
+    fig, axes = plt.subplots(len(games), ncols, sharey=True,
+                             figsize=(WIDTHS["wide"] + 1.6, 2.1 * len(games)),
+                             squeeze=False)
+    labels = list(dict.fromkeys(lbl for lbl, _, _ in cells))
+    colors = {lbl: RUN_COLORS[i % len(RUN_COLORS)]
+              for i, lbl in enumerate(l for l in labels if l != "base")}
+    xs = list(range(1, n_rounds + 1))
+    for r, game in enumerate(games):
+        for c, opp in enumerate(opps[game]):
+            ax = axes[r][c]
+            entries = []
+            for lbl, g, blocks in cells:
+                if g != game or opp not in blocks:
+                    continue
+                ys = [100 * blocks[opp][f"round_{k}"]["p_C"] for k in xs]
+                style = REF_BASE if lbl == "base" else {
+                    "color": colors[lbl], "lw": 1.4, "marker": "o", "ms": 3}
+                ax.plot(xs, ys, **style)
+                entries.append((ys[-1], lbl,
+                                REF_BASE["color"] if lbl == "base"
+                                else colors[lbl]))
+            if c == len(opps[game]) - 1:   # labels only where they have margin
+                direct_labels(ax, [(y, l, col) for y, l, col in entries],
+                              x=n_rounds)
+            ax.set_title(f"vs {opp}", fontsize=8.5)
+            ax.set_ylim(-4, 104)
+            ax.set_xticks(xs)
+            if r == len(games) - 1:
+                ax.set_xlabel("round")
+            if c == 0:
+                ax.set_ylabel(f"{'PD' if game == 'prisoners_dilemma' else 'PGG'}\nP(C) (%)")
+            clean_axes(ax)
+    if args.title:
+        fig.suptitle(args.title, fontsize=10, y=1.02)
+    if args.footnote:
+        footnote(fig, [args.footnote])
+        fig.subplots_adjust(bottom=0.14)
+    fig.subplots_adjust(hspace=0.55, wspace=0.12, right=0.86)
+    for pth in save(fig, out_dir / "figures", f"multi_round_compare_{args.name}"):
+        print(f"saved -> {pth}")
+
+
 FIGURES = {
     "training-curves": fig_training_curves,
     "training-grid": fig_training_grid,
@@ -759,6 +844,7 @@ FIGURES = {
     "trace-panels": trace_panels,
     "ckpt-ladder": fig_ckpt_ladder,
     "transfer-grid": lambda a, o: fig_transfer_grid(a, o),
+    "multiround-compare": fig_multiround_compare,
 }
 
 
@@ -818,6 +904,16 @@ def main() -> None:
                     help="transfer-grid: write only "
                          "generated/tables/transfer_summary.tex (no figures); "
                          "pass every --group so the table covers all runs")
+    ap.add_argument("--title", default="",
+                    help="multiround-compare: figure suptitle (e.g. the "
+                         "shared base model)")
+    ap.add_argument("--footnote", default="",
+                    help="multiround-compare: one muted provenance line "
+                         "under the panels")
+    ap.add_argument("--cell", action="append", default=[],
+                    help="multiround-compare: label=cell_dir (a dir holding "
+                         "behavioral.json of a multi_round cell), repeated; "
+                         "label 'base' draws dashed")
     ap.add_argument("--macro-prefix", default="",
                     help="letters-only namespace for numbers_<prefix>.tex "
                          "macros; one per experiment")
@@ -831,7 +927,7 @@ def main() -> None:
     elif args.figure in ("training-grid", "ladder-grid", "dopp-compare",
                          "trace-table", "prompt-panels", "trace-panels"):
         out_dir = Path("eval_results/post_training/comparison/analysis")
-    elif args.figure == "transfer-grid":
+    elif args.figure in ("transfer-grid", "multiround-compare"):
         out_dir = Path("eval_results/transfer/comparison/analysis")
     else:
         raise SystemExit("training-curves needs --analysis-dir "

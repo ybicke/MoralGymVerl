@@ -1,0 +1,41 @@
+# Multi-round PGG, Qwen3-4B — the PD-trained SDPO checkpoint in the commons,
+# the IPGG half of the pair the Hanabi-RL checkpoint was measured on
+# (transfer/qwen3_4b/pgg/multi_round_hanabi_rl). Protocol byte-identical to
+# that group and to transfer/qwen3_8b/pgg/multi_round.yaml: 5 live rounds,
+# cold open, decision_full, no moral text, T=0.7, co-players
+# full_contributor / free_rider / noisy_conditional, 20 episodes per group.
+#
+# Cells: SDPO s80 + s150, base linked from the hanabi_rl group (GRPO s200 skipped — unconverged; user
+# decision 2026-09-11). Read against the 8B rows (SDPO s180: 61% full /
+# 46% noisy) and the Hanabi-RL rows (0% everywhere).
+#
+#   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/eval/post_training/qwen3_4b/classic/multi_round.yaml \
+#       configs/eval/transfer/qwen3_4b/pgg/multi_round.yaml --dry-run
+
+num_episodes: 20           # per co-player group; x3 x5 rounds = 300 decisions/cell
+
+axes:
+  game: [public_goods]
+  representation: [decision_full]
+  moral_value: [none]
+  protocol: [multi_round]
+  checkpoint:
+    # NO base cell: the base rows come from the hanabi_rl group's cells
+    # (job 3338250, payload fields verified byte-identical) — linked into
+    # this group's cells/ before make_results so the document is complete
+    # (user decision 2026-09-11: don't re-measure what exists; the spare
+    # GPU slots carry a second SDPO step instead).
+    # s80 = the paraphrase peak (val coop 77%, train 82%, verbatim
+    # recitation 4.3%); s150 = endpoint (val 59%, recites 86%). Recitation
+    # explodes s80->110 (4->95%) and the val dip (77->48%) rides on it —
+    # the pair separates behavior from language mode in play (steps chosen
+    # 2026-09-11 from rollout trace measures).
+    - qwen3_4b_sdpo_pd_deon-repair-gen_tft_150/global_step_80
+    - qwen3_4b_sdpo_pd_deon-repair-gen_tft_150/global_step_150
+
+env:
+  RUN_PROBES: "off"
+  GAME_DESCRIPTION: "off"    # matched to the hanabi_rl + qwen3_8b transfer cells
+
+extra_args: ["--temperature", "0.7"]

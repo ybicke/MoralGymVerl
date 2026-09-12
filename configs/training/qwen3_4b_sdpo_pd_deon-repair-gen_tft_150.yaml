@@ -1,0 +1,51 @@
+# =============================================================================
+# SDPO — Qwen3-4B-Instruct-2507. Teacher-channel twin of the 4B GRPO deon
+# control (qwen3_4b_grpo_pd_deon_tft_150, extended to 200): the 4B row of
+# the size axis opened by the Hanabi-RL transfer check (report
+# sec:hanabi-transfer). GRPO moved the 4B ~4x slower than the 8B (coop 2%
+# -> 11% by step 129 vs 8B's takeoff at 50-80); this asks whether the
+# teacher channel moves it faster, as it did at 8B (SDPO s180: TFT in-play
+# 86% vs GRPO 34%).
+#
+# Decision 2026-09-10: submitted WITHOUT the in-context deon gate — the
+# SDPO teacher is this model with the principle in context, so if the run
+# stalls, read the teacher rows in the rollouts before blaming the
+# algorithm (the gate spec exists: teacher_signal/qwen3_4b/classic/
+# pd_deon_gate.yaml).
+#
+# Recipe = _base_sdpo_pd with the run-2 optimizer (lr 1e-5), so the
+# comparison rows are the 8B run-2 checkpoints. Overrides:
+#   - model path; no custom chat template (stock Qwen3 handles verl's
+#     consecutive-user-turn probe; preflight P1-P4 PASSED 2026-09-09).
+#   - NO apply_chat_template_kwargs: Instruct-2507 is the non-thinking
+#     variant, its template has no enable_thinking branch (the 8B config
+#     needs the kwarg because Qwen3-8B is hybrid).
+#   - rollout.gpu_memory_utilization 0.6: verl overwrites max_model_len
+#     with max_position_embeddings (262144 for 2507) -> 36 GiB KV needed;
+#     same fix as qwen3_4b_grpo_pd_deon_tft_150 (smoke 3344687 died at 0.4).
+#   - 150 steps (user decision 2026-09-10), ckpt every 10; the 8B SDPO
+#     inflection pair sits at 110/180, so read the 4B ladder rather than
+#     assuming the same steps.
+#
+# Smoke, then submit:
+#   PARTITION=debug TIME=00:30:00 bash scripts/slurm/train_verl.sh \
+#       qwen3_4b_sdpo_pd_deon-repair-gen_tft_150 qwen3_4b_sdpo_pd_deon-repair-gen_tft_smoke \
+#       trainer.total_training_steps=2
+#   TIME=05:00:00 bash scripts/slurm/train_verl.sh qwen3_4b_sdpo_pd_deon-repair-gen_tft_150
+# =============================================================================
+defaults:
+  - _base_sdpo_pd
+  - _self_
+
+actor_rollout_ref:
+  model:
+    path: Qwen/Qwen3-4B-Instruct-2507
+    custom_chat_template: null
+  actor:
+    optim:
+      lr: 1.0e-5
+  rollout:
+    gpu_memory_utilization: 0.6
+
+trainer:
+  total_training_steps: 150
