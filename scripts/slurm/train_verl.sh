@@ -150,8 +150,11 @@ TRAIN_CMD="python -m verl.trainer.main_ppo \
 # the first sdpo_run1 checkpoints, 2026-08-19). && gates it on success; after a
 # crash the checkpoints are still on SCRATCH, cp -r by hand if worth keeping.
 # CKPT_DIR must match vars.ckpt_dir in configs/training/_base_clariden.yaml.
+# STORE_CKPT is the MoralGymVerl-specific store folder (the sibling
+# checkpoints/ holds the NeMo-RL era runs); rollouts/ rides along with the
+# checkpoints since rollout_data_dir lives inside the run dir.
 CKPT_DIR="/iopsstor/scratch/cscs/${USER}/moralgym_verl_runs/${RUN_NAME}"
-STORE_CKPT="/capstor/store/cscs/swissai/aa004/${USER}/checkpoints/${RUN_NAME}"
+STORE_CKPT="/capstor/store/cscs/swissai/aa004/${USER}/moralgym_verl/checkpoints/${RUN_NAME}"
 STAGEOUT_CMD="if [ -d ${CKPT_DIR} ]; then mkdir -p ${STORE_CKPT} && cp -r ${CKPT_DIR}/. ${STORE_CKPT}/ && echo Checkpoints staged to ${STORE_CKPT}; else echo No checkpoint dir at ${CKPT_DIR} — skipping stage-out; fi"
 
 # Host-memory sampler (scripts/slurm/mem_sampler.sh): runs outside the
