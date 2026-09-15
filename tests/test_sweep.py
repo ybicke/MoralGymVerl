@@ -8,9 +8,11 @@ from moralgym_verl.eval.sweep import (
     run_dir_stem,
 )
 
+# An already-loaded spec, as load_sweep returns it (identity fields derived).
 SPEC = {
     "name": "unit_sweep",
     "eval_group": "unit_group",
+    "results_dir": "teacher_signal",
     "num_episodes": 50,
     "axes": {
         "game": ["prisoners_dilemma"],
@@ -22,43 +24,74 @@ SPEC = {
     "extra_args": ["--temperature", "0.7"],
 }
 
+# Minimal valid axes for a spec file.
+AXES = {"game": ["prisoners_dilemma"], "moral_value": ["none"],
+        "protocol": ["single_round"]}
+
+
+def _spec_file(tmp_path, body, root="teacher_signal", subject="qwen3_8b",
+               family="classic", experiment="s"):
+    """Write a sweep spec where the naming contract requires it,
+    configs/eval/<root>/<subject>/<family>/<experiment>.yaml, because the
+    path is the spec's identity and load_sweep refuses any other location."""
+    path = tmp_path / "configs" / "eval" / root / subject / family / f"{experiment}.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(body))
+    return str(path)
+
 
 def test_load_sweep_validates(tmp_path):
-    path = tmp_path / "s.yaml"
-    path.write_text(yaml.safe_dump({"name": "x", "axes": {"game": ["pd"]}}))
+    path = _spec_file(tmp_path, {"axes": {"game": ["prisoners_dilemma"]}})
     with pytest.raises(ValueError, match="moral_value"):
-        load_sweep(str(path))
-    path.write_text(yaml.safe_dump({"name": "x"}))
+        load_sweep(path)
+    path = _spec_file(tmp_path, {}, experiment="t")
     with pytest.raises(ValueError, match="axes"):
-        load_sweep(str(path))
+        load_sweep(path)
 
 
-def test_load_sweep_defaults_group_to_name(tmp_path):
+def test_load_sweep_derives_identity_from_path(tmp_path):
+    spec = load_sweep(_spec_file(tmp_path, {"axes": AXES}))
+    assert spec["eval_group"] == "qwen3_8b/classic/s"
+    assert spec["results_dir"] == "teacher_signal"
+    assert spec["config"] == "configs/eval/harness/qwen3_8b/classic.yaml"
+
+
+def test_load_sweep_rejects_declared_identity(tmp_path):
+    """Identity comes from the path; a spec that declares it could point
+    its results somewhere its config does not live."""
+    path = _spec_file(tmp_path, {"name": "x", "axes": AXES})
+    with pytest.raises(ValueError, match="declares 'name'"):
+        load_sweep(path)
+
+
+def test_load_sweep_rejects_misplaced_spec(tmp_path):
     path = tmp_path / "s.yaml"
-    path.write_text(yaml.safe_dump(
-        {"name": "x", "axes": {"game": ["pd"], "moral_value": ["none"],
-                               "protocol": ["single_round"]}}))
-    assert load_sweep(str(path))["eval_group"] == "x"
+    path.write_text(yaml.safe_dump({"axes": AXES}))
+    with pytest.raises(ValueError, match="must live at configs/eval"):
+        load_sweep(str(path))
 
 
 def test_protocol_axis_is_mandatory(tmp_path):
     """Phase separation: without a declared protocol the cells would inherit
     the eval yaml's turn structure (the configs are 5-round), so a sweep meant
     to be single-turn would silently be multi-round."""
-    path = tmp_path / "s.yaml"
-    path.write_text(yaml.safe_dump(
-        {"name": "x", "axes": {"game": ["pd"], "moral_value": ["none"]}}))
-    with pytest.raises(ValueError, match="protocol"):
-        load_sweep(str(path))
+    path = _spec_file(tmp_path, {"axes": {"game": ["prisoners_dilemma"],
+                                          "moral_value": ["none"]}})
+    with pytest.raises(ValueError, match="must include protocol"):
+        load_sweep(path)
 
 
 def test_load_sweep_rejects_unknown_protocol(tmp_path):
-    path = tmp_path / "s.yaml"
-    path.write_text(yaml.safe_dump(
-        {"name": "x", "axes": {"game": ["pd"], "moral_value": ["none"],
-                               "protocol": ["multi_round_conversation"]}}))
+    path = _spec_file(tmp_path, {"axes": {**AXES,
+                                          "protocol": ["multi_round_conversation"]}})
     with pytest.raises(ValueError, match="unknown protocol"):
-        load_sweep(str(path))
+        load_sweep(path)
+
+
+def test_game_axis_must_stay_in_family(tmp_path):
+    path = _spec_file(tmp_path, {"axes": {**AXES, "game": ["public_goods"]}})
+    with pytest.raises(ValueError, match="not in family"):
+        load_sweep(path)
 
 
 def test_expand_cells_cartesian():
@@ -84,6 +117,7 @@ def test_cell_submission_mapping():
     assert argv[:5] == ["sbatch", "scripts/slurm/eval_teacher_signal.sh",
                         "prisoners_dilemma", "deontological", "50"]
     assert env["EVAL_GROUP"] == "unit_group"
+    assert env["RESULTS_DIR"] == "teacher_signal"
     assert env["RUN_PROBES"] == "on"
     assert env["REPRESENTATION"] == "prose"      # env axis, reaches probes
     assert "--representation" not in argv
@@ -117,50 +151,38 @@ def test_model_axis_expands_the_grid():
 def test_episode_probe_rejected_in_a_single_round_sweep(tmp_path):
     """The episode probe measures per-round teacher decay; at num_rounds=1
     there is no curve, so a one-point 'decay' file must never be produced."""
-    path = tmp_path / "s.yaml"
-    path.write_text(yaml.safe_dump(
-        {"name": "x", "axes": {"game": ["pd"], "moral_value": ["none"],
-                               "protocol": ["single_round"]},
-         "env": {"RUN_PROBE_B_EPISODE": "on"}}))
+    path = _spec_file(tmp_path, {"axes": AXES,
+                                 "env": {"RUN_PROBE_B_EPISODE": "on"}})
     with pytest.raises(ValueError, match="single-round"):
-        load_sweep(str(path))
+        load_sweep(path)
 
 
 def test_episode_probe_allowed_under_multi_round(tmp_path):
-    path = tmp_path / "s.yaml"
-    path.write_text(yaml.safe_dump(
-        {"name": "x", "axes": {"game": ["pd"], "moral_value": ["none"],
-                               "protocol": ["multi_round"]},
-         "env": {"RUN_PROBE_B_EPISODE": "on"}}))
-    assert load_sweep(str(path))["axes"]["protocol"] == ["multi_round"]
+    path = _spec_file(tmp_path, {"axes": {**AXES, "protocol": ["multi_round"]},
+                                 "env": {"RUN_PROBE_B_EPISODE": "on"}})
+    assert load_sweep(path)["axes"]["protocol"] == ["multi_round"]
 
 
 def test_presentation_spec_validated_at_submit(tmp_path):
     """As a forwarded flag a typo would only surface once the cell is on a
     GPU; load_sweep catches it while the sweep is still on the login node."""
-    path = tmp_path / "s.yaml"
-    path.write_text(yaml.safe_dump(
-        {"name": "x", "axes": {"game": ["pd"], "moral_value": ["none"],
-                               "protocol": ["single_round"],
-                               "presentation": ["fixed_representation", "lables+role"]}}))
+    path = _spec_file(tmp_path, {"axes": {**AXES, "presentation":
+                                          ["fixed_representation", "lables+role"]}})
     with pytest.raises(ValueError, match="unknown presentation spec"):
-        load_sweep(str(path))
+        load_sweep(path)
 
 
 def test_presentation_spec_accepts_composites_and_keywords(tmp_path):
-    path = tmp_path / "s.yaml"
-    path.write_text(yaml.safe_dump(
-        {"name": "x", "axes": {"game": ["pd"], "moral_value": ["none"],
-                               "protocol": ["single_round"],
-                               "presentation": ["fixed_representation",
-                                                "surface_randomization",
-                                                "labels+layout+role"]}}))
-    assert len(load_sweep(str(path))["axes"]["presentation"]) == 3
+    path = _spec_file(tmp_path, {"axes": {**AXES, "presentation":
+                                          ["fixed_representation",
+                                           "surface_randomization",
+                                           "labels+layout+role"]}})
+    assert len(load_sweep(path)["axes"]["presentation"]) == 3
 
 
 def test_presentation_is_a_forwarded_flag_not_env():
     """Probes force fixed presentation by design, so this axis must NOT
-    travel by env — behavioral-only is the correct reach."""
+    travel by env; behavioral-only is the correct reach."""
     spec = {**SPEC, "axes": {**SPEC["axes"],
                              "presentation": ["surface_randomization"]}}
     env, argv = cell_submission(spec, expand_cells(spec)[0])
