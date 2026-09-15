@@ -324,7 +324,7 @@ def transfer_summary_table(runs: List[Run], groups, out_dir: Path) -> None:
         " (" + BS + "%) against the untrained base, and the k-gap"
         " $" + BS + "Delta_k = P(" + BS + "mathrm{C}" + BS + "mid k_O{=}3)"
         " - P(" + BS + "mathrm{C}" + BS + "mid k_O{=}0)$ within each own"
-        " previous move, in points --- the PGG analogue of"
+        " previous move, in points, the PGG analogue of"
         " $" + BS + "Delta_{" + BS + "mathrm{opp}}$ (0 = contributes"
         " regardless of the others; large = only when they do). Same"
         " cells as Fig.~" + BS + "ref{fig:transfer-final}.}",

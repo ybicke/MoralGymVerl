@@ -96,7 +96,7 @@ def main() -> None:
         ("KL / teacher anchor",
          f"KL to reference, $\\beta{{=}}{get(G, A+'actor.kl_loss_coef')}$",
          f"EMA teacher, rate {get(S, A+'actor.self_distillation.teacher_update_rate')}"),
-        ("Distillation", "---",
+        ("Distillation", "none",
          f"JSD $\\alpha{{=}}{get(S, A+'actor.self_distillation.alpha')}$, "
          f"top-{get(S, A+'actor.self_distillation.distillation_topk')}"
          f"{'+tail' if get(S, A+'actor.self_distillation.distillation_add_tail') else ''} logits"),
@@ -112,8 +112,8 @@ def main() -> None:
         "\\caption{Training configuration, extracted from the flagship run",
         f"configs (\\texttt{{{args.grpo.replace('_', '_')}}} /".replace("_", "\\_"),
         f"\\texttt{{{args.sdpo}}}).".replace("_", "\\_"),
-        "The upper block is shared by both channels; the lower block is",
-        "where the channels differ by design. Replication runs change only",
+        "The upper block is shared by both algorithms; the lower block is",
+        "where the algorithms differ by design. Replication runs change only",
         "the base model (and its memory accommodations); the GRPO",
         "utilitarian control changes only the reward.}",
         "\\label{tab:hyperparams}",

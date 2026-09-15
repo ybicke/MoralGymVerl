@@ -456,7 +456,7 @@ def trace_language_table(args, out_dir: Path) -> None:
            r" principle, fair, reciproc, wrong, obligat, betray, honest);"
            r" the untrained base rate is payoff-sense hits, mostly"
            r" `exploit'. \emph{Recites} = the trace quotes at least 6"
-           r" consecutive words of the teacher principle verbatim --- a"
+           r" consecutive words of the teacher principle verbatim; a"
            r" hit means word-for-word quoted \emph{clauses} (median run"
            r" 8, max 21 of the principle's ${\sim}90$ words), not the"
            r" full text, and a faithful paraphrase scores 0. `final' ="
@@ -553,7 +553,7 @@ def prompt_panels(args, out_dir: Path) -> None:
         (tdir / "principle.txt").write_text(principle + NL)
         lines.append(
             BS + "lstinputlisting[title={Moral principle"
-            " `" + args.principle.replace("_", " ") + "' --- shown ONLY in"
+            " `" + args.principle.replace("_", " ") + "', shown ONLY in"
             " the SDPO teacher context, never to the trained policy or in"
             " any evaluation prompt}]{generated/panels/principle.txt}")
     out = out_dir / "generated" / f"prompt_panels{sfx}.tex"
@@ -632,7 +632,7 @@ def trace_panels(args, out_dir: Path) -> None:
             st_tex = ("state " + BS + "(" + BS + "mathrm{" + state[0]
                       + "_A " + state[1] + "_O}" + BS + ")")
         entries.append(
-            BS + "lstinputlisting[title={" + label + " --- step " + step
+            BS + "lstinputlisting[title={" + label + ", step " + step
             + ", " + st_tex + ", move " + t.move
             + "}]{generated/panels/" + slug + ".txt}")
     (out_dir / "generated" / "trace_panels.tex").write_text(
