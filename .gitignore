@@ -26,3 +26,6 @@ eval_results/**
 
 # Local assistant instructions, not shared
 CLAUDE.md
+
+# Private cluster settings (template: scripts/slurm/cluster.env.example)
+scripts/slurm/cluster.env

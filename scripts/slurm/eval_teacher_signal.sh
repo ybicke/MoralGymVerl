@@ -1,6 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=teacher-signal
-#SBATCH --account=aa004
 #SBATCH --partition=normal
 #SBATCH --output=/dev/null
 #SBATCH --error=/dev/null
@@ -49,7 +48,9 @@ if [ ! -f "${PROJECT_ROOT}/pyproject.toml" ]; then
     echo "ERROR: sbatch must be run from the MoralGymVerl repo root." >&2
     exit 1
 fi
-export STORE_BASE="/capstor/store/cscs/swissai/aa004/${USER}"
+. "${PROJECT_ROOT}/scripts/slurm/cluster_env.sh" "${PROJECT_ROOT}"
+# Optional long-term copy of eval cells (scripts/slurm/cluster.env).
+export STORE_BASE="${MORALGYM_STORE_ROOT:-}"
 
 GAME="${1:?Usage: eval_teacher_signal.sh <game> <moral_value> [num_episodes]}"
 MORAL_VALUE="${2:?Usage: eval_teacher_signal.sh <game> <moral_value> [num_episodes]}"
@@ -126,7 +127,7 @@ echo "--- end fingerprint ---"
 # under CKPT_ROOT); whichever exists is the checkpoint -- the same rule as
 # eval_pack.sh resolve_checkpoint and load_model_for_eval.
 CHECKPOINT="${CHECKPOINT:-base}"
-CKPT_ROOT="${CKPT_ROOT:-/iopsstor/scratch/cscs/${USER}/moralgym_verl_runs}"
+CKPT_ROOT="${CKPT_ROOT:-${MORALGYM_CKPT_ROOT:-${SCRATCH:-/tmp}/moralgym_verl_runs}}"
 case "${CHECKPOINT}" in
     base|/*) CKPT="${CHECKPOINT}" ;;
     *)       ACTOR="${CKPT_ROOT}/${CHECKPOINT}/actor"

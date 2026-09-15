@@ -189,5 +189,23 @@ def _write_manifest(spec, records, group_dir, packed: bool,
     print(f"manifest: {manifest_path}")
 
 
+def _load_cluster_env() -> None:
+    """Read scripts/slurm/cluster.env (KEY=VALUE) into the environment
+    without overriding variables that are already set, and hand the account
+    to sbatch through its native SBATCH_ACCOUNT variable."""
+    path = Path(__file__).resolve().parent / "cluster.env"
+    if path.is_file():
+        for line in path.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            os.environ.setdefault(key.strip(),
+                                  os.path.expandvars(value.strip().strip('"')))
+    if os.environ.get("SLURM_ACCOUNT"):
+        os.environ.setdefault("SBATCH_ACCOUNT", os.environ["SLURM_ACCOUNT"])
+
+
 if __name__ == "__main__":
+    _load_cluster_env()
     main()

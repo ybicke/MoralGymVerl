@@ -1,14 +1,15 @@
 # =============================================================================
-# Clariden cluster paths — override before running.
+# Cluster paths, read from the environment that scripts/slurm/train_verl.sh
+# exports (values from scripts/slurm/cluster.env).
 # Referenced by grpo_pd_tft.yaml and sdpo_pd_tft.yaml via `defaults: - user`.
 # =============================================================================
 defaults:
   - _self_
 
 vars:
-  moralgym_dir: /users/${oc.env:USER}/MoralGymVerl
-  sdpo_dir: /users/${oc.env:USER}/SDPO
-  log_dir: /users/${oc.env:USER}/logs_verl/training
+  moralgym_dir: ${oc.env:MORALGYM_DIR}
+  sdpo_dir: ${oc.env:SDPO_DIR}
+  log_dir: ${oc.env:HOME}/logs_verl/training
   # Set by train_verl.sh: per-run dataset generated at submit time on SCRATCH.
   # For manual runs: export MORALGYM_DATASET_DIR=<dir with train/val.parquet>.
   dataset_dir: ${oc.env:MORALGYM_DATASET_DIR}
@@ -16,7 +17,7 @@ vars:
   # success. Must be a path bind-mounted in ~/.edf/moralgym_verl.toml — writes
   # to unmounted paths land in the container's RAM overlay and vanish at job
   # end (cost us the first sdpo_run1 checkpoints, 2026-08-19).
-  ckpt_dir: /iopsstor/scratch/cscs/${oc.env:USER}/moralgym_verl_runs
+  ckpt_dir: ${oc.env:MORALGYM_CKPT_ROOT}
   # Gemma-2's stock template minus its raise on non-alternating roles (see
   # the model block below). Held here so trainer configs that null the
   # template for other models (_base_grpo_pd) can restore it for a Gemma-2

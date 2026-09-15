@@ -3,8 +3,8 @@
 # Adds: moralgym_verl package on top of the SDPO/verl stack.
 #
 # Build:
-#   podman build /users/$USER/MoralGymVerl -f Dockerfile.gh200 \
-#     --build-arg SDPO_DIR=/users/$USER/SDPO -t moralgym-verl-gh200
+#   podman build <path to MoralGymVerl> -f Dockerfile.gh200 \
+#     --build-arg SDPO_DIR=<path to SDPO> -t moralgym-verl-gh200
 #
 # Export for EDF:
 #   enroot import -x mount -o ${SCRATCH}/containers/moralgym-verl-gh200.sqsh \

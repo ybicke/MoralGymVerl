@@ -1,6 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=eval-pack
-#SBATCH --account=aa004
 #SBATCH --partition=normal
 #SBATCH --output=/dev/null
 #SBATCH --error=/dev/null
@@ -47,7 +46,9 @@ if [ ! -f "${PROJECT_ROOT}/pyproject.toml" ]; then
     echo "ERROR: sbatch must be run from the MoralGymVerl repo root." >&2
     exit 1
 fi
-export STORE_BASE="/capstor/store/cscs/swissai/aa004/${USER}"
+. "${PROJECT_ROOT}/scripts/slurm/cluster_env.sh" "${PROJECT_ROOT}"
+# Optional long-term copy of eval cells (scripts/slurm/cluster.env).
+export STORE_BASE="${MORALGYM_STORE_ROOT:-}"
 
 BATCH_JSON="${1:?Usage: eval_pack.sh <batch.json>}"
 
@@ -84,8 +85,8 @@ nvidia-smi --query-gpu=index,name,driver_version --format=csv
 /usr/bin/python3.11 - "${BATCH_JSON}" "${WORKDIR}" "${PROJECT_ROOT}" "${CONFIG}" <<'PYEOF'
 import json, os, shlex, sys
 batch_path, workdir, root, config = sys.argv[1:5]
-CKPT_ROOT = os.environ.get("CKPT_ROOT",
-                           f"/iopsstor/scratch/cscs/{os.environ['USER']}/moralgym_verl_runs")
+CKPT_ROOT = (os.environ.get("CKPT_ROOT") or os.environ.get("MORALGYM_CKPT_ROOT")
+             or os.path.join(os.environ.get("SCRATCH", "/tmp"), "moralgym_verl_runs"))
 
 def resolve_checkpoint(value):
     """'base' | absolute checkpoint dir | '<run>/global_step_N' (verl run

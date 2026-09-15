@@ -10,7 +10,7 @@
 #
 # Same 4 cells as the PD twin = one packed node. Multi-round PGG has
 # never run on GPU (tests only) — smoke on debug first:
-#   srun --account=aa004 --partition=debug --time=00:20:00 \
+#   srun --account=$SLURM_ACCOUNT --partition=debug --time=00:20:00 \
 #        --environment=moralgym_verl --gpus-per-task=1 --pty \
 #        python3 -m moralgym_verl.eval.behavioral \
 #        --config configs/eval/harness/qwen3_8b/pgg.yaml --checkpoint base \
