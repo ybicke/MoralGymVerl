@@ -80,6 +80,19 @@ $PY scripts/analysis/run_ledger.py \
     --run gemma2_9b_sdpo_pd_deon-repair-gen_tft_200 \
     --run gemma3_12b_grpo_pd_deon_tft_150 --run llama31_8b_grpo_pd_deon_tft_150
 
+# Reasoning-trace length per checkpoint, with the final checkpoint split by
+# recitation (appendix table); mirrored with the comparison dir by the
+# trace-table call below.
+$PY scripts/analysis/trace_length_table.py \
+    --ladder "Qwen3-8B GRPO=$GRPO_QWEN" \
+    --ladder "Qwen3-8B SDPO=$SDPO_QWEN" \
+    --ladder "Gemma2-9B SDPO=$SDPO_GEMMA" \
+    --base "Qwen3-8B GRPO=$SCREEN_QWEN/cells/prisoners_dilemma__none__prose__single_round_3072557" \
+    --base "Qwen3-8B SDPO=$SCREEN_QWEN/cells/prisoners_dilemma__none__prose__single_round_3072557" \
+    --base "Gemma2-9B SDPO=$SCREEN_GEMMA/cells/prisoners_dilemma__none__prose__single_round_3049505" \
+    --teacher "Qwen3-8B SDPO=eval_results/teacher_signal/qwen3_8b/classic/pd_generosity_arm/cells/$(basename $(ls -d eval_results/teacher_signal/qwen3_8b/classic/pd_generosity_arm/cells/prisoners_dilemma__deontological+repair+generosity__prose__single_round_* | head -1))" \
+    --teacher "Gemma2-9B SDPO=eval_results/teacher_signal/gemma2_9b/classic/pd_generosity_arm/cells/$(basename $(ls -d eval_results/teacher_signal/gemma2_9b/classic/pd_generosity_arm/cells/prisoners_dilemma__deontological+repair+generosity__prose__single_round_* | head -1))"
+
 $PY $MF trace-table --steps 0,60,90,120,final \
     --ladder "Qwen3-8B GRPO=$GRPO_QWEN" \
     --ladder "Qwen3-8B SDPO=$SDPO_QWEN" \
@@ -131,6 +144,8 @@ $PY scripts/analysis/make_results.py eval_results/transfer/qwen3_8b/pgg/multi_ro
     --reference eval_results/transfer/qwen3_8b/pgg/single_round
 for f in $PT/qwen3_8b/classic/multi_round/analysis/figures/pdf/multi_round_*.pdf \
          eval_results/transfer/qwen3_8b/pgg/multi_round/analysis/figures/pdf/multi_round_*.pdf; do
+    # reference-gated like mirror_to_report: only figures main.tex names
+    grep -q "figures/$(basename "$f" .pdf)" ~/moralgym-report/main.tex || continue
     cp "$f" ~/moralgym-report/figures/ && echo "mirrored $f"
 done
 cp $PT/qwen3_8b/classic/multi_round/analysis/generated/numbers_MRPD.tex \
@@ -169,7 +184,7 @@ CELLS_HANABI_PGG=$HANABI/pgg/multi_round_hanabi_rl/cells
 CELLS_SDPO_PD=eval_results/post_training/qwen3_4b/classic/multi_round/cells
 CELLS_SDPO_PGG=eval_results/transfer/qwen3_4b/pgg/multi_round/cells
 $PY $MF multiround-compare --name qwen3_4b_hanabi \
-    --title "Qwen3-4B-Instruct-2507 — every policy is this base, differently fine-tuned" \
+    --title "Qwen3-4B-Instruct-2507" \
     --footnote "Hanabi-RL = released checkpoint of Ramesh et al. (ICML 2026), GRPO on Hanabi with o3 move ratings; SDPO s80/s150 = this work, PD-trained; base = untrained" \
     --cell "base=$CELLS_HANABI_PD/prisoners_dilemma__none__prose__multi_round__base_3338250" \
     --cell "Hanabi-RL=$CELLS_HANABI_PD/prisoners_dilemma__none__prose__multi_round__qwen3_4b_grpo_hanabi_o3ratings_selfplay_ext-ramesh2026-global_step_final_3338250" \
