@@ -21,11 +21,11 @@ eval_results/
 CLAUDE.md
 
 # Private working material, deliberately not published: design notes and
-# results write-ups (docs/), one-off debug harnesses, and the report
-# pipeline that mirrors figures into the private Overleaf clone.
+# results write-ups (docs/), one-off debug harnesses, and the publish
+# tooling itself. make_report.sh stays tracked (it is edited often) and is
+# dropped from the public tree by scripts/publish/make_public.sh.
 docs/
 scripts/debug/
-scripts/analysis/make_report.sh
 scripts/publish/
 
 # Private cluster settings (template: scripts/slurm/cluster.env.example)
