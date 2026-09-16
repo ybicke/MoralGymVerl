@@ -1,0 +1,47 @@
+# Iterated PD, Qwen3-4B — the 4B teacher-channel control IN PLAY (Hanabi-RL
+# transfer check follow-up, report sec:hanabi-transfer). Protocol
+# byte-identical to post_training/qwen3_8b/classic/multi_round.yaml AND to
+# the Hanabi checkpoint's own cells (transfer/qwen3_4b/classic/
+# pd_multi_round_hanabi_rl): 5 live rounds, cold open, prose, no moral
+# text, T=0.7, 20 episodes per opponent (tit_for_tat / always_defect /
+# always_cooperate).
+#
+# Cells: SDPO s80 + s150; base rows linked from the hanabi_rl group (see checkpoint axis). The GRPO
+# s200 checkpoint is deliberately NOT evaluated in play: at s200 it is
+# early-transition (train coop 21% and climbing, = 8B at ~s50), so an
+# in-play row would measure an unconverged policy; its trainability point
+# stands on the training curve. Twin: transfer/qwen3_4b/pgg/multi_round.yaml
+# (same policies in the commons — matching the two games the Hanabi-RL
+# checkpoint was measured on). Read against the 8B rows: base 2-4%, SDPO
+# s180 TFT pooled 86%.
+#
+# Submit both specs on one node:
+#   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/eval/post_training/qwen3_4b/classic/multi_round.yaml \
+#       configs/eval/transfer/qwen3_4b/pgg/multi_round.yaml --dry-run
+
+num_episodes: 20           # per opponent; x3 opponents x5 rounds = 300 decisions/cell
+
+axes:
+  game: [prisoners_dilemma]
+  representation: [prose]
+  moral_value: [none]
+  protocol: [multi_round]
+  checkpoint:
+    # NO base cell: the base rows come from the hanabi_rl group's cells
+    # (job 3338250, payload fields verified byte-identical) — linked into
+    # this group's cells/ before make_results so the document is complete
+    # (user decision 2026-09-11: don't re-measure what exists; the spare
+    # GPU slots carry a second SDPO step instead).
+    # s80 = the paraphrase peak (val coop 77%, train 82%, verbatim
+    # recitation 4.3%); s150 = endpoint (val 59%, recites 86%). Recitation
+    # explodes s80->110 (4->95%) and the val dip (77->48%) rides on it —
+    # the pair separates behavior from language mode in play (steps chosen
+    # 2026-09-11 from rollout trace measures).
+    - qwen3_4b_sdpo_pd_deon-repair-gen_tft_150/global_step_80
+    - qwen3_4b_sdpo_pd_deon-repair-gen_tft_150/global_step_150
+
+env:
+  RUN_PROBES: "off"
+
+extra_args: ["--temperature", "0.7"]

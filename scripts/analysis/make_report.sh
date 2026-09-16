@@ -28,16 +28,13 @@ $PY $MF training-grid --name sdpo --window 5 \
     --run "Qwen3-8B SDPO=$RUNS/qwen3_8b_sdpo_pd_deon-repair-gen_tft_200" \
     --run "Gemma2-9B SDPO=$RUNS/gemma2_9b_sdpo_pd_deon-repair-gen_tft_200"
 
-$PY $MF ladder-grid --name grpo --macro-prefix GDT \
+$PY $MF ladder-grid --name all --ncols 3 --macro-prefix GDT \
     --ladder "Qwen3-8B GRPO=$GRPO_QWEN" \
-    --reference $SCREEN_QWEN
-
-$PY $MF ladder-grid --name sdpo \
-    --reference eval_results/teacher_signal/qwen3_8b/classic/pd_generosity_arm \
-    --reference eval_results/teacher_signal/gemma2_9b/classic/pd_generosity_arm \
     --ladder "Qwen3-8B SDPO=$SDPO_QWEN" \
     --ladder "Gemma2-9B SDPO=$SDPO_GEMMA" \
-    --reference $SCREEN_QWEN --reference $SCREEN_GEMMA
+    --reference $SCREEN_QWEN --reference $SCREEN_GEMMA \
+    --reference eval_results/teacher_signal/qwen3_8b/classic/pd_generosity_arm \
+    --reference eval_results/teacher_signal/gemma2_9b/classic/pd_generosity_arm
 
 $PY $MF dopp-compare \
     --ladder "Qwen3-8B GRPO=$GRPO_QWEN" \
@@ -46,13 +43,55 @@ $PY $MF dopp-compare \
     --reference $SCREEN_QWEN --reference $SCREEN_GEMMA
 
 # Held-out-game transfer (eval_results/transfer/): pooled, last-checkpoint,
-# every-checkpoint figures across all runs; in-context row from the Qwen v3 screen.
-$PY $MF transfer-grid --name pgg --principle deontological \
+# every-checkpoint figures; in-context row from the Qwen v3 screen.
+# Main-text figure = Qwen3-8B only (the controlled channel contrast);
+# Gemma runs are the cross-model replication and render as the appendix figure.
+$PY $MF transfer-grid --name pgg_qwen3_8b --principle deontological \
+    --group eval_results/transfer/qwen3_8b/pgg/single_round \
+    --group eval_results/transfer/qwen3_8b/pgg/single_round_util \
+    --reference eval_results/teacher_signal/qwen3_8b/pgg/single_turn_v3
+$PY $MF transfer-grid --name pgg_gemma --principle deontological \
+    --group eval_results/transfer/gemma2_9b/pgg/single_round \
+    --group eval_results/transfer/gemma3_12b/pgg/single_round \
+    --reference eval_results/teacher_signal/qwen3_8b/pgg/single_turn_v3
+# Summary table stays whole (all runs, the citable anchor in the chapter).
+$PY $MF transfer-grid --table-only --principle deontological \
     --group eval_results/transfer/qwen3_8b/pgg/single_round \
     --group eval_results/transfer/qwen3_8b/pgg/single_round_util \
     --group eval_results/transfer/gemma2_9b/pgg/single_round \
     --group eval_results/transfer/gemma3_12b/pgg/single_round \
     --reference eval_results/teacher_signal/qwen3_8b/pgg/single_turn_v3
+
+# Display prompt panel (list representation; the measured protocol is
+# prose -- the body caption says so, the prose verbatim panel is in the appendix).
+$PY scripts/analysis/render_prompt_panel.py --representation list --state CD \
+    --out eval_results/post_training/comparison/analysis/generated/panels/game_prompt_list.txt
+
+# Consolidated hyperparameter table, extracted from the flagship configs.
+$PY scripts/analysis/hyperparam_table.py \
+    --grpo qwen3_8b_grpo_pd_deon_tft_200 \
+    --sdpo qwen3_8b_sdpo_pd_deon-repair-gen_tft_200
+
+# Appendix run ledger (job ids, wall time, W&B) -- derived from the
+# training logs; mirrored with the comparison dir by the trace-table call.
+$PY scripts/analysis/run_ledger.py \
+    --run qwen3_8b_grpo_pd_deon_tft_200 --run qwen3_8b_grpo_pd_util_tft_150 \
+    --run qwen3_8b_sdpo_pd_deon-repair-gen_tft_200 \
+    --run gemma2_9b_sdpo_pd_deon-repair-gen_tft_200 \
+    --run gemma3_12b_grpo_pd_deon_tft_150 --run llama31_8b_grpo_pd_deon_tft_150
+
+# Reasoning-trace length per checkpoint, with the final checkpoint split by
+# recitation (appendix table); mirrored with the comparison dir by the
+# trace-table call below.
+$PY scripts/analysis/trace_length_table.py \
+    --ladder "Qwen3-8B GRPO=$GRPO_QWEN" \
+    --ladder "Qwen3-8B SDPO=$SDPO_QWEN" \
+    --ladder "Gemma2-9B SDPO=$SDPO_GEMMA" \
+    --base "Qwen3-8B GRPO=$SCREEN_QWEN/cells/prisoners_dilemma__none__prose__single_round_3072557" \
+    --base "Qwen3-8B SDPO=$SCREEN_QWEN/cells/prisoners_dilemma__none__prose__single_round_3072557" \
+    --base "Gemma2-9B SDPO=$SCREEN_GEMMA/cells/prisoners_dilemma__none__prose__single_round_3049505" \
+    --teacher "Qwen3-8B SDPO=eval_results/teacher_signal/qwen3_8b/classic/pd_generosity_arm/cells/$(basename $(ls -d eval_results/teacher_signal/qwen3_8b/classic/pd_generosity_arm/cells/prisoners_dilemma__deontological+repair+generosity__prose__single_round_* | head -1))" \
+    --teacher "Gemma2-9B SDPO=eval_results/teacher_signal/gemma2_9b/classic/pd_generosity_arm/cells/$(basename $(ls -d eval_results/teacher_signal/gemma2_9b/classic/pd_generosity_arm/cells/prisoners_dilemma__deontological+repair+generosity__prose__single_round_* | head -1))"
 
 $PY $MF trace-table --steps 0,60,90,120,final \
     --ladder "Qwen3-8B GRPO=$GRPO_QWEN" \
@@ -105,10 +144,55 @@ $PY scripts/analysis/make_results.py eval_results/transfer/qwen3_8b/pgg/multi_ro
     --reference eval_results/transfer/qwen3_8b/pgg/single_round
 for f in $PT/qwen3_8b/classic/multi_round/analysis/figures/pdf/multi_round_*.pdf \
          eval_results/transfer/qwen3_8b/pgg/multi_round/analysis/figures/pdf/multi_round_*.pdf; do
+    # reference-gated like mirror_to_report: only figures main.tex names
+    grep -q "figures/$(basename "$f" .pdf)" ~/moralgym-report/main.tex || continue
     cp "$f" ~/moralgym-report/figures/ && echo "mirrored $f"
 done
 cp $PT/qwen3_8b/classic/multi_round/analysis/generated/numbers_MRPD.tex \
    eval_results/transfer/qwen3_8b/pgg/multi_round/analysis/generated/numbers_MRPGG.tex \
    ~/moralgym-report/generated/ && echo "mirrored in-play number macros"
+
+# Hanabi-RL transfer check (external checkpoint of Ramesh et al., ICML 2026,
+# staged as qwen3_4b_grpo_hanabi_o3ratings_selfplay_ext-ramesh2026): the
+# same in-play protocol on Qwen3-4B-Instruct-2507, base vs the released
+# Hanabi-RL weights, PD and PGG. No single-round reference cells for 4B, so
+# no --reference; distinct macro prefixes keep the 4B numbers apart from the
+# 8B MRPD/MRPGG ones in the report preamble.
+HANABI=eval_results/transfer/qwen3_4b
+$PY scripts/analysis/make_results.py $HANABI/classic/pd_multi_round_hanabi_rl --macro-prefix MRPDHanabi
+$PY scripts/analysis/make_results.py $HANABI/pgg/multi_round_hanabi_rl --macro-prefix MRPGGHanabi
+cp $HANABI/classic/pd_multi_round_hanabi_rl/analysis/generated/numbers_MRPDHanabi.tex \
+   $HANABI/pgg/multi_round_hanabi_rl/analysis/generated/numbers_MRPGGHanabi.tex \
+   ~/moralgym-report/generated/ && echo "mirrored Hanabi-RL number macros"
+
+# SDPO-4B control rows (same base, PD-trained via the teacher channel; base
+# cells are symlinked from the hanabi_rl groups, not re-run). Figures are
+# RENAMED on mirror: the spec derives figure names from <subject>_<game>, so
+# these groups' figures would otherwise overwrite the hanabi_rl ones.
+$PY scripts/analysis/make_results.py eval_results/post_training/qwen3_4b/classic/multi_round --macro-prefix MRPDFourB
+$PY scripts/analysis/make_results.py eval_results/transfer/qwen3_4b/pgg/multi_round --macro-prefix MRPGGFourB
+cp eval_results/post_training/qwen3_4b/classic/multi_round/analysis/generated/numbers_MRPDFourB.tex \
+   eval_results/transfer/qwen3_4b/pgg/multi_round/analysis/generated/numbers_MRPGGFourB.tex \
+   ~/moralgym-report/generated/ && echo "mirrored SDPO-4B number macros"
+
+# The report shows ONE combined in-play figure (fig:hanabi-transfer): base +
+# Hanabi-RL + SDPO s80/s150 across PD and PGG. Cells live in three groups,
+# so the per-group spec can't draw it; make_figures reads the cells directly
+# and mirrors the PDF itself.
+CELLS_HANABI_PD=$HANABI/classic/pd_multi_round_hanabi_rl/cells
+CELLS_HANABI_PGG=$HANABI/pgg/multi_round_hanabi_rl/cells
+CELLS_SDPO_PD=eval_results/post_training/qwen3_4b/classic/multi_round/cells
+CELLS_SDPO_PGG=eval_results/transfer/qwen3_4b/pgg/multi_round/cells
+$PY $MF multiround-compare --name qwen3_4b_hanabi \
+    --title "Qwen3-4B-Instruct-2507" \
+    --footnote "Hanabi-RL = released checkpoint of Ramesh et al. (ICML 2026), GRPO on Hanabi with o3 move ratings; SDPO s80/s150 = this work, PD-trained; base = untrained" \
+    --cell "base=$CELLS_HANABI_PD/prisoners_dilemma__none__prose__multi_round__base_3338250" \
+    --cell "Hanabi-RL=$CELLS_HANABI_PD/prisoners_dilemma__none__prose__multi_round__qwen3_4b_grpo_hanabi_o3ratings_selfplay_ext-ramesh2026-global_step_final_3338250" \
+    --cell "SDPO s80=$CELLS_SDPO_PD/prisoners_dilemma__none__prose__multi_round__qwen3_4b_sdpo_pd_deon-repair-gen_tft_150-global_step_80_3357453" \
+    --cell "SDPO s150=$CELLS_SDPO_PD/prisoners_dilemma__none__prose__multi_round__qwen3_4b_sdpo_pd_deon-repair-gen_tft_150-global_step_150_3357453" \
+    --cell "base=$CELLS_HANABI_PGG/public_goods__none__decision_full__multi_round__base_3338250" \
+    --cell "Hanabi-RL=$CELLS_HANABI_PGG/public_goods__none__decision_full__multi_round__qwen3_4b_grpo_hanabi_o3ratings_selfplay_ext-ramesh2026-global_step_final_3338250" \
+    --cell "SDPO s80=$CELLS_SDPO_PGG/public_goods__none__decision_full__multi_round__qwen3_4b_sdpo_pd_deon-repair-gen_tft_150-global_step_80_3357453" \
+    --cell "SDPO s150=$CELLS_SDPO_PGG/public_goods__none__decision_full__multi_round__qwen3_4b_sdpo_pd_deon-repair-gen_tft_150-global_step_150_3357453"
 
 echo "report regenerated; commit + push ~/moralgym-report to publish"

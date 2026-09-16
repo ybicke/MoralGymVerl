@@ -23,3 +23,9 @@ eval_results/**
 # Editor config (interpreter pin + debug launch configs, machine-specific)
 .vscode/
 
+
+# Local assistant instructions, not shared
+CLAUDE.md
+
+# Private cluster settings (template: scripts/slurm/cluster.env.example)
+scripts/slurm/cluster.env

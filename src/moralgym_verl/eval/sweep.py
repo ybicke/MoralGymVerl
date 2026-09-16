@@ -86,7 +86,7 @@ RESULTS_ROOTS = ("teacher_signal", "post_training", "transfer")
 # post_training sweep can be held to its run's training game.
 GAME_TOKENS = {"pd": "prisoners_dilemma", "sh": "stag_hunt", "ch": "chicken",
                "pgg": "public_goods"}
-MODEL_TOKENS = ("gemma2_9b", "gemma3_12b", "llama31_8b", "qwen3_8b",
+MODEL_TOKENS = ("gemma2_9b", "gemma3_12b", "llama31_8b", "qwen3_4b", "qwen3_8b",
                 "qwen3_32b")
 # Game families, mirroring src/moralgym_verl/game/ (classic_games.py = 2x2
 # matrix games, pgg_game.py = n-player). The family is a path level between
@@ -358,30 +358,46 @@ def run_dir_stem(cell: Dict) -> str:
     return f"{stem}__{'__'.join(rest)}" if rest else stem
 
 
-def pack_batches(spec: Dict, cells: List[Dict],
-                 pack_size: int = PACK_SIZE) -> List[List[Dict]]:
-    """Group cells into per-node batches, heaviest first.
+def pack_items(items: List[Tuple[Dict, Dict]],
+               pack_size: int = PACK_SIZE) -> List[List[Tuple[Dict, Dict]]]:
+    """Group (spec, cell) items into per-node batches, heaviest first.
 
     A batch holds the node until its SLOWEST cell finishes, so mixing a
     ~85min probe cell with a ~60min probe-less one wastes the difference on
     an idle GPU. Sorting by whether the cell runs probes clusters like with
     like; the only ragged batch is then at the boundary.
+
+    Items may come from several specs: a spec cannot span game families
+    (its path is its identity), but a node can -- every cell carries its own
+    results dir, harness and env in the batch payload, so co-packing two
+    half-empty specs onto one node changes nothing about what each cell
+    runs or where it writes.
     """
-    def has_probes(cell: Dict) -> bool:
+    def has_probes(item: Tuple[Dict, Dict]) -> bool:
+        spec, cell = item
         env = spec.get("env") or {}
         return (cell["moral_value"] != "none"
                 and str(env.get("RUN_PROBES", "on")) != "off")
 
-    ordered = sorted(cells, key=lambda c: not has_probes(c))
+    ordered = sorted(items, key=lambda it: not has_probes(it))
     return [ordered[i:i + pack_size]
             for i in range(0, len(ordered), pack_size)]
 
 
-def batch_payload(spec: Dict, batch: List[Dict]) -> Dict:
+def pack_batches(spec: Dict, cells: List[Dict],
+                 pack_size: int = PACK_SIZE) -> List[List[Dict]]:
+    """Single-spec form of pack_items (cells only)."""
+    return [[cell for _, cell in batch]
+            for batch in pack_items([(spec, c) for c in cells], pack_size)]
+
+
+def batch_payload_items(items: List[Tuple[Dict, Dict]]) -> Dict:
     """The batch.json eval_pack.sh consumes: per cell, the resolved run-dir
-    stem plus the same env/args the single-cell launcher would have used."""
+    stem plus the same env/args the single-cell launcher would have used.
+    Each cell names its own eval_group/results_dir, so a batch may hold
+    cells of several specs (pack_items)."""
     payload = []
-    for cell in batch:
+    for spec, cell in items:
         env, argv = cell_submission(spec, cell)
         # argv = [sbatch, launcher, game, moral_value, num_episodes, *args]
         payload.append({
@@ -397,3 +413,8 @@ def batch_payload(spec: Dict, batch: List[Dict]) -> Dict:
             "axes": {k: str(v) for k, v in cell.items()},
         })
     return {"cells": payload}
+
+
+def batch_payload(spec: Dict, batch: List[Dict]) -> Dict:
+    """Single-spec form of batch_payload_items."""
+    return batch_payload_items([(spec, c) for c in batch])

@@ -5,8 +5,8 @@
 # the none arm never runs probes (signal extractability is the wrong
 # question for a trained model); RUN_PROBES=off restates that.
 #
-# Submit (adapters on iopsstor — the eval container does not mount
-# /capstor/store). Results: eval_results/post_training/qwen3_8b_grpo_pd_deon_tft_200/classic/ckpt_ladder/.
+# Submit (adapters are read from MORALGYM_CKPT_ROOT, which the eval
+# container mounts). Results: eval_results/post_training/qwen3_8b_grpo_pd_deon_tft_200/classic/ckpt_ladder/.
 #   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
 #       configs/eval/post_training/qwen3_8b_grpo_pd_deon_tft_200/classic/ckpt_ladder.yaml --dry-run
 #

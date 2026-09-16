@@ -7,8 +7,8 @@
 # Four cells = one packed node (billed the same as one cell).
 # No probes (nothing to contrast without teacher text).
 #
-# Submit (adapter lives on iopsstor — the eval container does not mount
-# /capstor/store). Results: eval_results/post_training/qwen3_8b_sdpo_pd_deon-repair-gen_tft_200/classic/ckpt_ladder/.
+# Submit (adapters are read from MORALGYM_CKPT_ROOT, which the eval
+# container mounts). Results: eval_results/post_training/qwen3_8b_sdpo_pd_deon-repair-gen_tft_200/classic/ckpt_ladder/.
 #   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
 #       configs/eval/post_training/qwen3_8b_sdpo_pd_deon-repair-gen_tft_200/classic/ckpt_ladder.yaml --dry-run
 #

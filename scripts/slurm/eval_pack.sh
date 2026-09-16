@@ -1,6 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=eval-pack
-#SBATCH --account=aa004
 #SBATCH --partition=normal
 #SBATCH --output=/dev/null
 #SBATCH --error=/dev/null
@@ -47,7 +46,9 @@ if [ ! -f "${PROJECT_ROOT}/pyproject.toml" ]; then
     echo "ERROR: sbatch must be run from the MoralGymVerl repo root." >&2
     exit 1
 fi
-export STORE_BASE="/capstor/store/cscs/swissai/aa004/${USER}"
+. "${PROJECT_ROOT}/scripts/slurm/cluster_env.sh" "${PROJECT_ROOT}"
+# Optional long-term copy of eval cells (scripts/slurm/cluster.env).
+export STORE_BASE="${MORALGYM_STORE_ROOT:-}"
 
 BATCH_JSON="${1:?Usage: eval_pack.sh <batch.json>}"
 
@@ -84,14 +85,25 @@ nvidia-smi --query-gpu=index,name,driver_version --format=csv
 /usr/bin/python3.11 - "${BATCH_JSON}" "${WORKDIR}" "${PROJECT_ROOT}" "${CONFIG}" <<'PYEOF'
 import json, os, shlex, sys
 batch_path, workdir, root, config = sys.argv[1:5]
-CKPT_ROOT = os.environ.get("CKPT_ROOT",
-                           f"/iopsstor/scratch/cscs/{os.environ['USER']}/moralgym_verl_runs")
+CKPT_ROOT = (os.environ.get("CKPT_ROOT") or os.environ.get("MORALGYM_CKPT_ROOT")
+             or os.path.join(os.environ.get("SCRATCH", "/tmp"), "moralgym_verl_runs"))
 
 def resolve_checkpoint(value):
-    """'base' | absolute adapter dir | '<run>/global_step_N' (verl layout)."""
+    """'base' | absolute checkpoint dir | '<run>/global_step_N' (verl run
+    layout under CKPT_ROOT). A run-layout step holds either
+    actor/lora_adapter (LoRA runs) or actor/huggingface (full weights, e.g.
+    an externally released model staged under CKPT_ROOT); the one that
+    exists is the checkpoint -- load_model_for_eval dispatches on the
+    directory contents the same way. Missing both is an error here, at job
+    start, rather than a from_pretrained traceback one phase in."""
     if value == "base" or value.startswith("/"):
         return value
-    return f"{CKPT_ROOT}/{value}/actor/lora_adapter"
+    actor = f"{CKPT_ROOT}/{value}/actor"
+    for layout in ("lora_adapter", "huggingface"):
+        if os.path.isdir(f"{actor}/{layout}"):
+            return f"{actor}/{layout}"
+    raise SystemExit(f"checkpoint {value!r}: neither {actor}/lora_adapter "
+                     f"nor {actor}/huggingface exists")
 cells = json.load(open(batch_path))["cells"]
 
 for i, c in enumerate(cells):

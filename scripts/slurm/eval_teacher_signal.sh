@@ -1,6 +1,5 @@
 #!/bin/bash
 #SBATCH --job-name=teacher-signal
-#SBATCH --account=aa004
 #SBATCH --partition=normal
 #SBATCH --output=/dev/null
 #SBATCH --error=/dev/null
@@ -49,7 +48,9 @@ if [ ! -f "${PROJECT_ROOT}/pyproject.toml" ]; then
     echo "ERROR: sbatch must be run from the MoralGymVerl repo root." >&2
     exit 1
 fi
-export STORE_BASE="/capstor/store/cscs/swissai/aa004/${USER}"
+. "${PROJECT_ROOT}/scripts/slurm/cluster_env.sh" "${PROJECT_ROOT}"
+# Optional long-term copy of eval cells (scripts/slurm/cluster.env).
+export STORE_BASE="${MORALGYM_STORE_ROOT:-}"
 
 GAME="${1:?Usage: eval_teacher_signal.sh <game> <moral_value> [num_episodes]}"
 MORAL_VALUE="${2:?Usage: eval_teacher_signal.sh <game> <moral_value> [num_episodes]}"
@@ -119,13 +120,21 @@ echo "--- end fingerprint ---"
 # --save-raw-responses: keep every (wrapped prompt, reasoning trace) pair —
 # reading whether the model actually invokes the moral value is half the
 # point of the screening. Extra args after the 3 positionals are forwarded.
-# CHECKPOINT: "base" | absolute adapter dir | "<run>/global_step_N", the
+# CHECKPOINT: "base" | absolute checkpoint dir | "<run>/global_step_N", the
 # latter resolved against CKPT_ROOT (verl run layout, train_verl.sh CKPT_DIR).
+# A run-layout step holds either actor/lora_adapter (LoRA runs) or
+# actor/huggingface (full weights, e.g. an externally released model staged
+# under CKPT_ROOT); whichever exists is the checkpoint -- the same rule as
+# eval_pack.sh resolve_checkpoint and load_model_for_eval.
 CHECKPOINT="${CHECKPOINT:-base}"
-CKPT_ROOT="${CKPT_ROOT:-/iopsstor/scratch/cscs/${USER}/moralgym_verl_runs}"
+CKPT_ROOT="${CKPT_ROOT:-${MORALGYM_CKPT_ROOT:-${SCRATCH:-/tmp}/moralgym_verl_runs}}"
 case "${CHECKPOINT}" in
     base|/*) CKPT="${CHECKPOINT}" ;;
-    *)       CKPT="${CKPT_ROOT}/${CHECKPOINT}/actor/lora_adapter" ;;
+    *)       ACTOR="${CKPT_ROOT}/${CHECKPOINT}/actor"
+             if   [ -d "${ACTOR}/lora_adapter" ]; then CKPT="${ACTOR}/lora_adapter"
+             elif [ -d "${ACTOR}/huggingface" ];  then CKPT="${ACTOR}/huggingface"
+             else echo "ERROR: checkpoint ${CHECKPOINT}: neither ${ACTOR}/lora_adapter nor ${ACTOR}/huggingface exists" >&2; exit 1
+             fi ;;
 esac
 
 srun --environment=moralgym_verl \

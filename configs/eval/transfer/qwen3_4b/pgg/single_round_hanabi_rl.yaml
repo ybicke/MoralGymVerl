@@ -1,0 +1,44 @@
+# PGG transfer, Qwen3-4B — does COMMON-PAYOFF cooperation training carry
+# into a MIXED-MOTIVE game? The trained row is the Hanabi-RL model released
+# by Ramesh et al. (ICML 2026, "Sparks of Cooperative Reasoning", arXiv
+# 2601.18077): Qwen3-4B-Instruct-2507 + GRPO on HanabiRewards (reward =
+# o3's rating of the chosen move, offline single-state, self-play seats).
+# Staged under $CKPT_ROOT as
+#   qwen3_4b_grpo_hanabi_o3ratings_selfplay_ext-ramesh2026/global_step_final
+# (full merged weights; PROVENANCE.md at the run root: HF repo, revision,
+# config signature). The paper claims the training generalizes to other
+# cooperative tasks; every task it tests has cooperation as the dominant
+# strategy. Here the same weights play the 4-player binary public-goods game
+# with NO moral text in the prompt, so any shift from the base row is carried
+# by the weights into a game where defection pays.
+#
+# Reads: base vs trained, same 4B profile (harness/qwen3_4b/pgg.yaml), the
+# only contrast that means something. The qwen3_8b transfer rows
+# (transfer/qwen3_8b/pgg/single_round*) are context only — the size change
+# confounds any cross-row reading.
+#
+# Protocol byte-identical to transfer/qwen3_8b/pgg/single_round.yaml: 400
+# episodes (50 per fabricated (own_prev, k) state over 8 states),
+# decision_full, fixed presentation, GAME_DESCRIPTION off, T=0.7. 2 cells =
+# half a packed node.
+#
+#   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/eval/transfer/qwen3_4b/pgg/single_round_hanabi_rl.yaml --dry-run
+
+num_episodes: 400          # 50 decisions per fabricated (own_prev, k) state
+
+axes:
+  game: [public_goods]
+  representation: [decision_full]
+  moral_value: [none]      # NO moral text: the transfer must come from the weights
+  protocol: [single_round]
+  checkpoint:
+    - base                 # Qwen3-4B-Instruct-2507, untrained
+    - qwen3_4b_grpo_hanabi_o3ratings_selfplay_ext-ramesh2026/global_step_final
+
+env:
+  RUN_PROBES: "off"
+  RUN_PROBE_B_EPISODE: "off"
+  GAME_DESCRIPTION: "off"    # matched to the qwen3_8b transfer cells
+
+extra_args: ["--temperature", "0.7"]

@@ -17,8 +17,9 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SDPO_DIR="${HOME}/SDPO"
-SCRATCH="${SCRATCH:-/iopsstor/scratch/cscs/$USER}"
+. "${REPO_ROOT}/scripts/slurm/cluster_env.sh" "${REPO_ROOT}"
+SDPO_DIR="${SDPO_DIR:-${HOME}/SDPO}"
+SCRATCH="${SCRATCH:?SCRATCH must be set to a large scratch directory}"
 CONTAINER_DIR="${SCRATCH}/containers"
 SQSH="${CONTAINER_DIR}/moralgym-verl-gh200.sqsh"
 EDF_NAME="moralgym_verl"
@@ -61,18 +62,18 @@ cat > "${EDF_FILE}" << TOML
 # EDF config for MoralGymVerl (verl + SDPO on GH200)
 # Selector: srun --environment=${EDF_NAME} <command>
 image = "${SQSH}"
-workdir = "/users/${USER}"
+workdir = "${HOME}"
 
 mounts = [
-    "/users/${USER}:/users/${USER}",
+    "${HOME}:${HOME}",
     "${SCRATCH}:${SCRATCH}",
 ]
 
 [env]
 # moralgym_verl and SDPO are reinstalled at job start from bind-mounted source
 # (see train_verl.sh) so code changes take effect without rebuilding the image.
-PYTHONPATH = "/users/${USER}/MoralGymVerl/src:/users/${USER}/SDPO"
-HF_HOME = "${SCRATCH}/MoralGym_Storage/.cache/huggingface"
+PYTHONPATH = "${MORALGYM_DIR:-${REPO_ROOT}}/src:${SDPO_DIR}"
+HF_HOME = "${HF_HOME:-${SCRATCH}/.cache/huggingface}"
 HF_HUB_OFFLINE = "1"
 TOKENIZERS_PARALLELISM = "false"
 # Gemma-2 tanh softcapping requires FlashInfer attention backend

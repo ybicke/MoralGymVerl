@@ -1,0 +1,88 @@
+# =============================================================================
+# PGG harness — Qwen3-4B-Instruct-2507.
+#
+# Byte-identical to harness/qwen3_8b/pgg.yaml except policy.model_name and
+# the thinking switch (see below). Added 2026-09-09 as the measurement
+# profile for the external Hanabi-RL checkpoint of Ramesh et al. (ICML 2026,
+# arXiv 2601.18077), staged as run
+# qwen3_4b_grpo_hanabi_o3ratings_selfplay_ext-ramesh2026 and evaluated under
+# configs/eval/transfer/qwen3_4b/pgg/. The base row and the trained row must
+# be measured under one profile, and that profile matches the qwen3_8b PGG
+# cells so the 4B rows can be read next to them (same game, presentation,
+# decoding, budget).
+#
+# Game design: docs/pgg_design.md §9.2 — binary linear public-goods game,
+# canonical N=4 E=10 s=5 (r=2, MPCR 0.5), balanced over the 8 fabricated
+# (own_prev, k_prev) states. Headline is the k-slope within own_prev
+# (behavioral.json -> "pgg" block), never pooled P(C).
+#
+# Sweep driver: scripts/slurm/submit_sweep.py configs/eval/transfer/qwen3_4b/pgg/<experiment>_hanabi_rl.yaml
+# =============================================================================
+
+seed: 42
+
+policy:
+  model_name: Qwen/Qwen3-4B-Instruct-2507
+
+game:
+  type: public_goods
+  n_players: 4
+  endowment: 10
+  share: 5
+  # regime: dilemma            # only read when evaluation.payoffs: sample
+  num_rounds: 5                # single_round protocol overrides to 1
+
+prompt:
+  game_design: hist            # protocol preset also pins this
+  # table | prose | list | decision | decision_full — see the 8B profile for
+  # the measurements behind the choice. The transfer sweeps pin
+  # decision_full via REPRESENTATION, matching transfer/qwen3_8b/pgg/.
+  representation: list         # swept via REPRESENTATION
+  reasoning: true              # CoT + "Action: <label>" — screen regime
+  minimal_parsing: false
+  show_horizon: false
+  # Instruct-2507 is the NON-thinking Qwen3 variant: its chat template has no
+  # enable_thinking branch (0 occurrences in chat_template.jinja), so the
+  # switch stays unset and the template renders exactly as shipped
+  # (render_chat_inputs forwards the kwarg only when set). The 8B profile
+  # needs enable_thinking: false because Qwen3-8B is the hybrid model.
+  enable_thinking: null
+  # Mechanism preamble OFF, as in every PGG cell read so far
+  # (docs/pgg_design.md §9.6).
+  game_description: false
+
+evaluation:
+  # 400 = 50 eps per fabricated state (8 states; num_episodes must be
+  # divisible by 8). Same resolution as the qwen3_8b PGG cells (binomial
+  # s.e. <= 7 points per state); a 4B model runs well inside the 5 h pack wall.
+  num_episodes: 400
+  # single_round pins opponents: [random]; this list is read by MULTI-ROUND
+  # runs only. Same three co-player groups as the 8B profile:
+  #   full_contributor  k=3 forever -> P(C|k=3) over rounds = sustain
+  #   free_rider        k=0 forever -> P(C|k=0) = escape/disengagement
+  #   noisy_conditional majority-of-others rule + 0.2 flips -> repair
+  opponents: [full_contributor, free_rider, noisy_conditional]
+  temperature: 0.7
+  max_new_tokens: 2048        # same budget as the 8B profile
+  # Presentation FIXED (Tennant-exact labels action3/action4, identity
+  # layout/order), matching the 2x2 moral screens and the 8B PGG cells.
+  labels: fixed
+  label_order: fixed
+  layout: fixed
+  role: fixed
+  payoffs: fixed
+
+# Rewards don't drive anything at eval; kept for metric parity with training.
+reward:
+  intrinsic: deontological
+  lambda: 0.75
+  game_reward: normalized
+
+probe_b:
+  num_traces: 32
+
+teacher:
+  moral_value: none            # swept via --moral-value
+  wrap_position: first
+  template_source: configs/training/_base_sdpo_pd.yaml
+  feedback_template: "\nMoral value to follow:\n{feedback_raw}\n"

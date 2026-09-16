@@ -36,9 +36,9 @@ from typing import Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from figure_style import (  # noqa: E402
+    footnote,
     ACCENT, INK, INK_MUTED, RUN_COLORS, STATE_COLORS, STATE_TEX, WIDTHS,
-    apply_style, clean_axes, direct_labels, save,
-)
+    apply_style, clean_axes, direct_labels, save, REF_BASE)
 from training_trajectory import STATES, load_decisions, windows  # noqa: E402
 from eval_cells import discover_run_dirs, load_cell  # noqa: E402
 from specs.post_training import checkpoint_of, reference_rows  # noqa: E402
@@ -321,6 +321,11 @@ def fig_ladder_grid(args, out_dir: Path) -> None:
                       if r.parts[-3].split("_")[0] in ladder.parents[1].name]
         steps, curves, teacher, has_base = load_ladder(
             ladder, model_refs, args.principle)
+        # +ctx = base with the principle in context: the SDPO runs'
+        # initial teacher. For GRPO panels the principle plays no role
+        # in training, so the marker is suppressed.
+        if "_sdpo_" not in Path(ladder).name and "_sdpo_" not in str(ladder):
+            teacher = None
         xs = ([0] if has_base else []) + steps
         for st, ys in curves.items():
             ax.plot(xs, ys, color=STATE_COLORS[st], marker="o",
@@ -353,7 +358,13 @@ def fig_ladder_grid(args, out_dir: Path) -> None:
                bbox_to_anchor=(0.5, 1 + 0.16 / nrows), fontsize=8)
     for pth in save(fig, out_dir / "figures", f"ladder_grid_{args.name}"):
         print(f"wrote {pth}")
-    if args.macro_prefix and len(ladders) == 1:
+    if args.macro_prefix:
+        # Macros come from the FIRST ladder (the grid's leftmost panel).
+        steps, curves, _, _ = load_ladder(
+            Path(ladders[0][1]),
+            [r for r in refs
+             if r.parts[-3].split("_")[0] in Path(ladders[0][1]).parents[1].name],
+            args.principle)
         write_numbers(steps, curves, None, out_dir, args.macro_prefix)
 
 
@@ -445,7 +456,7 @@ def trace_language_table(args, out_dir: Path) -> None:
            r" principle, fair, reciproc, wrong, obligat, betray, honest);"
            r" the untrained base rate is payoff-sense hits, mostly"
            r" `exploit'. \emph{Recites} = the trace quotes at least 6"
-           r" consecutive words of the teacher principle verbatim --- a"
+           r" consecutive words of the teacher principle verbatim; a"
            r" hit means word-for-word quoted \emph{clauses} (median run"
            r" 8, max 21 of the principle's ${\sim}90$ words), not the"
            r" full text, and a faithful paraphrase scores 0. `final' ="
@@ -542,7 +553,7 @@ def prompt_panels(args, out_dir: Path) -> None:
         (tdir / "principle.txt").write_text(principle + NL)
         lines.append(
             BS + "lstinputlisting[title={Moral principle"
-            " `" + args.principle.replace("_", " ") + "' --- shown ONLY in"
+            " `" + args.principle.replace("_", " ") + "', shown ONLY in"
             " the SDPO teacher context, never to the trained policy or in"
             " any evaluation prompt}]{generated/panels/principle.txt}")
     out = out_dir / "generated" / f"prompt_panels{sfx}.tex"
@@ -621,7 +632,7 @@ def trace_panels(args, out_dir: Path) -> None:
             st_tex = ("state " + BS + "(" + BS + "mathrm{" + state[0]
                       + "_A " + state[1] + "_O}" + BS + ")")
         entries.append(
-            BS + "lstinputlisting[title={" + label + " --- step " + step
+            BS + "lstinputlisting[title={" + label + ", step " + step
             + ", " + st_tex + ", move " + t.move
             + "}]{generated/panels/" + slug + ".txt}")
     (out_dir / "generated" / "trace_panels.tex").write_text(
@@ -632,37 +643,59 @@ def trace_panels(args, out_dir: Path) -> None:
 
 
 def fig_dopp_compare(args, out_dir: Path) -> None:
-    """One line per trained run: the opponent-conditioning gap
-    D_opp = P(C|f_O=C) - P(C|f_O=D) over checkpoints (the reciprocity
-    signature), computed from each run's ckpt-ladder eval. --ladder
-    label=dir repeated; --reference groups supply each MODEL's base
-    cell and are searched for every ladder."""
+    """Small multiples, one panel per trained run, decomposing the
+    four-state profile into the two quantities that move: solid =
+    conditionality (the opponent-conditioning gap D_opp), dashed =
+    forgiveness (P(C | f_O=D)). The decomposition keeps the one-axis
+    comparison honest: an SDPO gap decline driven by rising forgiveness
+    is the teacher's repair/generosity component, not decay. Dotted
+    lines mark the initial teacher (+ctx) where a reference exists.
+    --ladder label=dir repeated; --reference groups supply each MODEL's
+    base cell and teacher cell."""
     ladders = parse_labeled(args.ladder)
     refs = [Path(p) for p in args.reference]
 
-    def d_opp(v):
+    def gap(v):
         return (v["CC"] + v["DC"]) / 2 - (v["CD"] + v["DD"]) / 2
 
-    fig, ax = plt.subplots(figsize=(WIDTHS["wide"], 2.6))
-    ends = []
+    def forgive(v):
+        return (v["CD"] + v["DD"]) / 2
+
+    fig, axes = plt.subplots(1, len(ladders), sharey=True, squeeze=False,
+                             figsize=(WIDTHS["wide"], 2.4),
+                             gridspec_kw={"wspace": 0.1})
     for i, (label, ladder) in enumerate(ladders):
+        ax = axes[0][i]
         model_refs = [r for r in refs
                       if r.parts[-3].split("_")[0] in ladder.parents[1].name]
-        steps, curves, _, has_base = load_ladder(
+        steps, curves, teacher, has_base = load_ladder(
             ladder, model_refs, args.principle)
         xs = ([0] if has_base else []) + steps
-        ys = [d_opp({s: curves[s][j] for s in curves})
-              for j in range(len(xs))]
+        profiles = [{s: curves[s][j] for s in curves} for j in range(len(xs))]
         color = RUN_COLORS[i % len(RUN_COLORS)]
-        ax.plot(xs, ys, color=color, marker="o", markersize=3.5)
-        ends.append((ys[-1], label, color))
-    direct_labels(ax, ends, x=max(x for _, l in ladders for x in [200]),
-                  min_gap=6, fontsize=7.5)
-    ax.legend([l for l, _ in ladders], loc="upper left", fontsize=7.5)
-    ax.set_ylabel(r"$\Delta_{\mathrm{opp}}$ (pp)")
-    ax.set_xlabel("checkpoint (training step)")
-    ax.axhline(0, color=INK_MUTED, linewidth=0.6)
-    clean_axes(ax)
+        gy = [gap(v) for v in profiles]
+        fy = [forgive(v) for v in profiles]
+        ax.plot(xs, gy, color=color, ls="-", marker="o", markersize=3)
+        ax.plot(xs, fy, color=color, ls="--", marker="s", markersize=3)
+        labels = [(gy[-1], r"$\Delta_{\mathrm{opp}}$", color),
+                  (fy[-1], "forgive", color)]
+        if teacher is not None:
+            ax.axhline(gap(teacher), ls=":", lw=1, **{"color": ACCENT})
+            ax.axhline(forgive(teacher), ls=":", lw=1, color=ACCENT)
+            labels += [(gap(teacher), "+ctx", ACCENT)]
+        direct_labels(ax, labels, x=xs[-1], min_gap=9, fontsize=7)
+        ax.set_xlim(-8, xs[-1] * 1.35)
+        ax.set_title(label, fontsize=8)
+        ax.set_xlabel("training step", fontsize=7.5)
+        ax.axhline(0, color=INK_MUTED, linewidth=0.6)
+        clean_axes(ax)
+        if i == 0:
+            ax.set_ylabel("percentage points", fontsize=7.5)
+    footnote(fig, ["solid = conditionality "
+                   r"$\Delta_{\mathrm{opp}}$",
+                   r"dashed = forgiveness $P(\mathrm{C}\mid f_O{=}D)$",
+                   "dotted = initial teacher (+ctx)"])
+    fig.subplots_adjust(left=0.07, right=0.99, top=0.88, bottom=0.28)
     for pth in save(fig, out_dir / "figures", "dopp_compare"):
         print(f"wrote {pth}")
 
@@ -672,8 +705,10 @@ def fig_dopp_compare(args, out_dir: Path) -> None:
 def fig_transfer_grid(args, out_dir: Path) -> None:
     """Cross-model transfer: --group <transfer group dir> repeated (one per
     model), --reference screen groups for the in-context rows. Columns are
-    every run across the groups, so the same figure shows replication
-    across models and the GRPO-vs-SDPO contrast within one."""
+    every run across the groups; call once per figure with the groups it
+    should show. Figure calls never write the summary table; a separate
+    --table-only call with all groups owns generated/tables/transfer_summary.tex
+    so the table always covers the full run set."""
     from transfer_figures import fig_curves, fig_final, fig_pooled, load_transfer
     runs = []
     for g in args.group:
@@ -682,20 +717,39 @@ def fig_transfer_grid(args, out_dir: Path) -> None:
                               [args.principle] if args.principle else None)
     if not runs:
         raise SystemExit("no transfer runs found under --group dirs")
+    if args.table_only:
+        from transfer_figures import transfer_summary_table
+        transfer_summary_table(runs, args.group, out_dir)
+        return
     for pth in (fig_pooled(runs, out_dir, args.name) + fig_final(runs, out_dir, args.name)
                 + fig_curves(runs, out_dir, args.name)):
         print(f"wrote {pth}")
-    from transfer_figures import transfer_summary_table
-    transfer_summary_table(runs, args.group, out_dir)
 
 
 def mirror_to_report(out_dir: Path, report_dir: Path) -> None:
-    """Copy PDFs + numbers.tex into the Overleaf clone, if it exists."""
+    """Copy PDFs + numbers.tex into the Overleaf clone, if it exists.
+
+    Figures are mirrored ONLY when the report references them
+    (\includegraphics of the basename in main.tex or generated/*.tex):
+    several commands share an analysis dir, so mirroring every sibling
+    PDF used to re-leak superseded variants into the repo on every
+    regeneration (the repo holds only what the report includes; the
+    full variant set stays in eval_results). A figure for a NEW report
+    section is therefore added to main.tex first, then generated.
+    """
     if not (report_dir / ".git").is_dir():
         print(f"note: {report_dir} not present, nothing mirrored")
         return
     import shutil
+    referenced = ""
+    for tex in ([report_dir / "main.tex"]
+                + sorted((report_dir / "generated").rglob("*.tex"))):
+        if tex.exists():
+            referenced += tex.read_text()
     for src in sorted((out_dir / "figures" / "pdf").glob("*.pdf")):
+        if src.stem not in referenced:
+            print(f"not referenced by the report, skipped: {src.name}")
+            continue
         dst = report_dir / "figures" / src.name
         dst.parent.mkdir(exist_ok=True)
         shutil.copy2(src, dst)
@@ -711,6 +765,75 @@ def mirror_to_report(out_dir: Path, report_dir: Path) -> None:
         print(f"mirrored {dst}")
 
 
+
+# ---------------------------------------------------------------------------
+
+def fig_multiround_compare(args, out_dir: Path) -> None:
+    """One combined in-play figure across eval GROUPS: --cell label=cell_dir
+    repeated; rows = games (in first-appearance order), cols = that game's
+    opponents, one line per label. Built for the Hanabi transfer check
+    (report fig:hanabi-transfer): base + Hanabi-RL + SDPO s80/s150 cells
+    live in three different groups, so the per-group multi_round spec can
+    never draw them together; this command reads the cells directly. A
+    label of 'base' gets the REF_BASE dashed style."""
+    import json
+    import matplotlib.pyplot as plt
+    cells = []          # (label, game, {opp: per_round dict})
+    games, opps = [], {}
+    for spec in args.cell:
+        label, _, path = spec.partition("=")
+        beh = json.loads((Path(path).expanduser() / "behavioral.json").read_text())
+        game = beh["metadata"]["game_type"]
+        if game not in games:
+            games.append(game)
+            opps[game] = [o["opponent"] for o in beh["opponents"]]
+        cells.append((label, game, {o["opponent"]: o["per_round"]
+                                    for o in beh["opponents"]}))
+    n_rounds = max(int(k.split("_")[1]) for _, _, bl in cells
+                   for pr in bl.values() for k in pr)
+    ncols = max(len(opps[g]) for g in games)
+    fig, axes = plt.subplots(len(games), ncols, sharey=True,
+                             figsize=(WIDTHS["wide"] + 1.6, 2.1 * len(games)),
+                             squeeze=False)
+    labels = list(dict.fromkeys(lbl for lbl, _, _ in cells))
+    colors = {lbl: RUN_COLORS[i % len(RUN_COLORS)]
+              for i, lbl in enumerate(l for l in labels if l != "base")}
+    xs = list(range(1, n_rounds + 1))
+    for r, game in enumerate(games):
+        for c, opp in enumerate(opps[game]):
+            ax = axes[r][c]
+            entries = []
+            for lbl, g, blocks in cells:
+                if g != game or opp not in blocks:
+                    continue
+                ys = [100 * blocks[opp][f"round_{k}"]["p_C"] for k in xs]
+                style = REF_BASE if lbl == "base" else {
+                    "color": colors[lbl], "lw": 1.4, "marker": "o", "ms": 3}
+                ax.plot(xs, ys, **style)
+                entries.append((ys[-1], lbl,
+                                REF_BASE["color"] if lbl == "base"
+                                else colors[lbl]))
+            if c == len(opps[game]) - 1:   # labels only where they have margin
+                direct_labels(ax, [(y, l, col) for y, l, col in entries],
+                              x=n_rounds)
+            ax.set_title(f"vs {opp}", fontsize=8.5)
+            ax.set_ylim(-4, 104)
+            ax.set_xticks(xs)
+            if r == len(games) - 1:
+                ax.set_xlabel("round")
+            if c == 0:
+                ax.set_ylabel(f"{'PD' if game == 'prisoners_dilemma' else 'PGG'}\nP(C) (%)")
+            clean_axes(ax)
+    if args.title:
+        fig.suptitle(args.title, fontsize=10, y=1.02)
+    if args.footnote:
+        footnote(fig, [args.footnote])
+        fig.subplots_adjust(bottom=0.14)
+    fig.subplots_adjust(hspace=0.55, wspace=0.12, right=0.86)
+    for pth in save(fig, out_dir / "figures", f"multi_round_compare_{args.name}"):
+        print(f"saved -> {pth}")
+
+
 FIGURES = {
     "training-curves": fig_training_curves,
     "training-grid": fig_training_grid,
@@ -721,6 +844,7 @@ FIGURES = {
     "trace-panels": trace_panels,
     "ckpt-ladder": fig_ckpt_ladder,
     "transfer-grid": lambda a, o: fig_transfer_grid(a, o),
+    "multiround-compare": fig_multiround_compare,
 }
 
 
@@ -776,6 +900,20 @@ def main() -> None:
                     help="moral_value of the optional base+principle "
                          "reference cell; drawn only if a --reference "
                          "group contains it")
+    ap.add_argument("--table-only", action="store_true",
+                    help="transfer-grid: write only "
+                         "generated/tables/transfer_summary.tex (no figures); "
+                         "pass every --group so the table covers all runs")
+    ap.add_argument("--title", default="",
+                    help="multiround-compare: figure suptitle (e.g. the "
+                         "shared base model)")
+    ap.add_argument("--footnote", default="",
+                    help="multiround-compare: one muted provenance line "
+                         "under the panels")
+    ap.add_argument("--cell", action="append", default=[],
+                    help="multiround-compare: label=cell_dir (a dir holding "
+                         "behavioral.json of a multi_round cell), repeated; "
+                         "label 'base' draws dashed")
     ap.add_argument("--macro-prefix", default="",
                     help="letters-only namespace for numbers_<prefix>.tex "
                          "macros; one per experiment")
@@ -789,7 +927,7 @@ def main() -> None:
     elif args.figure in ("training-grid", "ladder-grid", "dopp-compare",
                          "trace-table", "prompt-panels", "trace-panels"):
         out_dir = Path("eval_results/post_training/comparison/analysis")
-    elif args.figure == "transfer-grid":
+    elif args.figure in ("transfer-grid", "multiround-compare"):
         out_dir = Path("eval_results/transfer/comparison/analysis")
     else:
         raise SystemExit("training-curves needs --analysis-dir "

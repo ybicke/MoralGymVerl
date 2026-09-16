@@ -1,0 +1,35 @@
+# Iterated PD, Qwen3-4B — the external Hanabi-RL checkpoint IN PLAY on a
+# game it never saw. Trained row = Ramesh et al. (ICML 2026, arXiv
+# 2601.18077) Hanabi-RL Qwen3-4B-Instruct-2507, staged as
+#   qwen3_4b_grpo_hanabi_o3ratings_selfplay_ext-ramesh2026/global_step_final
+# (PROVENANCE.md at the run root). Hanabi training is common-payoff and
+# multi-turn; the paper's transfer battery is all common-payoff too. This
+# is the mixed-motive test: 5 live rounds, conversation accumulates
+# (multi_round preset: nohist, round 1 is the cold open), no moral text,
+# vs the classic probe set from the harness: tit_for_tat (cycle vs
+# absorption), always_defect (retaliation), always_cooperate (exploitation).
+#
+# Protocol byte-identical to post_training/qwen3_8b/classic/multi_round.yaml
+# (prose, T=0.7, 20 episodes per opponent) so the 4B rows read next to the
+# 8B ones; the contrast that means something is base vs trained under the
+# one 4B profile (harness/qwen3_4b/classic.yaml). 2 cells = half a packed
+# node. Twin: transfer/qwen3_4b/pgg/multi_round_hanabi_rl.yaml.
+#
+#   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/eval/transfer/qwen3_4b/classic/pd_multi_round_hanabi_rl.yaml --dry-run
+
+num_episodes: 20           # per opponent; x3 opponents x5 rounds = 300 decisions/cell
+
+axes:
+  game: [prisoners_dilemma]
+  representation: [prose]
+  moral_value: [none]
+  protocol: [multi_round]
+  checkpoint:
+    - base                 # Qwen3-4B-Instruct-2507, untrained
+    - qwen3_4b_grpo_hanabi_o3ratings_selfplay_ext-ramesh2026/global_step_final
+
+env:
+  RUN_PROBES: "off"
+
+extra_args: ["--temperature", "0.7"]

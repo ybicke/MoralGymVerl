@@ -55,13 +55,35 @@ from trace_measures import (  # noqa: E402
 )
 from moralgym_verl.game.moral_values import get_moral_value  # noqa: E402
 
-CKPT_RE = re.compile(r"/([^/]+)/global_step_(\d+)/")
+CKPT_RE = re.compile(r"/([^/]+)/global_step_(\d+|final)/")
+
+
+class FinalStep(int):
+    """Step of an externally released checkpoint whose training step count
+    is not published (stored as global_step_final, docs/naming.md). An int
+    so every consumer that sorts or compares steps keeps working -- it
+    orders after any numbered step -- but it prints as 'final', never as
+    the sentinel."""
+    def __new__(cls):
+        return super().__new__(cls, 10**9)
+
+    def __str__(self):
+        return "final"
+
+    def __format__(self, spec):
+        return format("final", spec.replace("d", "s")) if spec else "final"
+
+    __repr__ = __str__
 
 
 def checkpoint_of(meta: Dict) -> Tuple[str, int]:
-    """('base', 0) for an untrained cell, else (run name, step)."""
+    """('base', 0) for an untrained cell, else (run name, step); step is
+    FinalStep for a global_step_final checkpoint."""
     m = CKPT_RE.search(meta.get("checkpoint") or "base")
-    return (m.group(1), int(m.group(2))) if m else ("base", 0)
+    if not m:
+        return ("base", 0)
+    step = m.group(2)
+    return (m.group(1), FinalStep() if step == "final" else int(step))
 
 
 def prose_fixed_pd(run_dir: Path) -> Optional[Dict]:

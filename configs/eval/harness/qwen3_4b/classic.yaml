@@ -1,0 +1,74 @@
+# =============================================================================
+# Classic 2x2 harness — Qwen3-4B-Instruct-2507.
+#
+# Byte-identical to harness/qwen3_8b/classic.yaml except policy.model_name
+# and the thinking switch (see below). Added 2026-09-09 as the measurement
+# profile for the external Hanabi-RL checkpoint of Ramesh et al. (ICML 2026,
+# arXiv 2601.18077), staged as run
+# qwen3_4b_grpo_hanabi_o3ratings_selfplay_ext-ramesh2026 and evaluated under
+# configs/eval/transfer/qwen3_4b/classic/. Base row and trained row share
+# this one profile; it matches the qwen3_8b profile so the 4B rows can be
+# read next to the 8B multi-round PD cells (same game, presentation,
+# opponents, decoding, budget).
+#
+# Sweep driver: scripts/slurm/submit_sweep.py configs/eval/transfer/qwen3_4b/classic/<experiment>_hanabi_rl.yaml
+# =============================================================================
+
+seed: 42
+
+policy:
+  model_name: Qwen/Qwen3-4B-Instruct-2507
+
+game:
+  type: prisoners_dilemma        # swept via --game (chicken, stag_hunt);
+  payoffs: {T: 4, R: 3, P: 1, S: 0}   # --game switches to FIXED_PAYOFFS[game]
+  num_rounds: 5
+
+prompt:
+  game_design: nohist            # round 1 starts fresh (matches 5r-nohist base protocol)
+  reasoning: true                # CoT + "Action: <label>" — same regime as gemma
+  minimal_parsing: false
+  show_horizon: false
+  # Instruct-2507 is the NON-thinking Qwen3 variant: its chat template has no
+  # enable_thinking branch (0 occurrences in chat_template.jinja), so the
+  # switch stays unset and the template renders exactly as shipped
+  # (render_chat_inputs forwards the kwarg only when set). The 8B profile
+  # needs enable_thinking: false because Qwen3-8B is the hybrid model; the
+  # CoT regime is otherwise identical.
+  enable_thinking: null
+
+evaluation:
+  num_episodes: 25
+  # Multi-round probe set (single_round pins [random], so this list is
+  # read by multi-round runs only): tit_for_tat = cycle vs absorption,
+  # always_defect = retaliation, always_cooperate = exploitation.
+  # noisy_tft (recovery after forced slips) dropped 2026-09-05 for the
+  # minimal bot eval -- re-add it for a recovery-focused run.
+  opponents: [tit_for_tat, always_defect, always_cooperate]
+  temperature: 0.7
+  # Raised from gemma's 512: Qwen3 reasons ~2.5x longer under the same
+  # "Concisely reason" prompt (mean 1495 vs 599 chars, run 3070132+).
+  # 768 still bound the tail — 13/11600 responses ran past it and lost
+  # their Action line (all 2700+ chars, i.e. truncations not format
+  # misses), concentrated in the verbose arms. The observed max (3101
+  # chars) IS the old cap, so the true tail is censored and unknown —
+  # hence generous headroom rather than a snug fit. max_new_tokens is a
+  # bound, not a target: ~99.7% of responses stop at EOS near 380 tokens
+  # and are unaffected. Only non-terminating runaways run to the cap, so
+  # the cost is ~0.3% of samples generating longer before being stopped.
+  max_new_tokens: 2048
+
+# Rewards don't drive anything at eval; kept for metric parity with training.
+reward:
+  intrinsic: deontological
+  lambda: 0.75
+  game_reward: normalized
+
+probe_b:
+  num_traces: 32
+
+teacher:
+  moral_value: none
+  wrap_position: first
+  template_source: configs/training/_base_sdpo_pd.yaml
+  feedback_template: "\nMoral value to follow:\n{feedback_raw}\n"

@@ -46,14 +46,21 @@ try:
 except ImportError:
     sys.exit("jinja2 not available for this interpreter; use /usr/bin/python3.11")
 
-HF_HOME = os.environ.get(
-    "HF_HOME", "/iopsstor/scratch/cscs/bickery/MoralGym_Storage/.cache/huggingface"
-)
+_CLUSTER_ENV = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "..", "slurm", "cluster.env")
+if os.path.isfile(_CLUSTER_ENV):
+    for _line in open(_CLUSTER_ENV):
+        _line = _line.strip()
+        if _line and not _line.startswith("#") and "=" in _line:
+            _k, _v = _line.split("=", 1)
+            os.environ.setdefault(_k.strip(), os.path.expandvars(_v.strip().strip('"')))
+HF_HOME = os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
 
 # Models we have trained or intend to train, with the apply_chat_template kwargs the
 # configs actually pass (configs/training/*.yaml -> data.apply_chat_template_kwargs).
 KNOWN = {
     "Qwen/Qwen3-8B": {"enable_thinking": False},
+    "Qwen/Qwen3-4B-Instruct-2507": {},   # non-thinking variant: no enable_thinking branch
     "meta-llama/Llama-3.1-8B-Instruct": {},
     "google/gemma-2-9b-it": {},
     "google/gemma-3-12b-it": {},

@@ -53,7 +53,12 @@ fi
 
 # ── 2. Cluster settings ──────────────────────────────────────────────────────
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ACCOUNT="aa004"
+# Account, checkpoint and store roots, source checkouts: scripts/slurm/cluster.env.
+. "${REPO_ROOT}/scripts/slurm/cluster_env.sh" "${REPO_ROOT}"
+ACCOUNT="${SLURM_ACCOUNT:?set SLURM_ACCOUNT in scripts/slurm/cluster.env}"
+MORALGYM_DIR="${MORALGYM_DIR:-${REPO_ROOT}}"
+SDPO_DIR="${SDPO_DIR:-${HOME}/SDPO}"
+MORALGYM_CKPT_ROOT="${MORALGYM_CKPT_ROOT:-${SCRATCH}/moralgym_verl_runs}"
 PARTITION="${PARTITION:-normal}"   # e.g. PARTITION=debug for smoke runs
 TIME="${TIME:-12:00:00}"
 # Host RAM. 460 GB suits <=9B; 32B needs more (see sdpo_run2_pd_qwen3_32b.yaml).
@@ -105,7 +110,7 @@ if [ -n "${DRY_RUN:-}" ]; then
     echo "  config:  configs/training/${CONFIG_NAME}.yaml"
     echo "  run:     ${RUN_NAME}"
     echo "  dataset: configs/datasets/${DATASET_CONFIG}.yaml (seed ${DATASET_SEED})"
-    echo "  ckpts:   /iopsstor/scratch/cscs/${USER}/moralgym_verl_runs/${RUN_NAME}"
+    echo "  ckpts:   ${MORALGYM_CKPT_ROOT}/${RUN_NAME}"
     echo "Stopping before dataset generation and sbatch."
     exit 0
 fi
@@ -126,17 +131,17 @@ mkdir -p "${OUTPUT_DIR}"
 # ── 6. Container setup (runs inside the EDF container, before training) ──────
 # Editable installs make repo edits live without rebuilding the image, and
 # PYTHONPATH covers the src/ layout that --no-deps installs do not wire up.
-SETUP_CMDS="pip install -e /users/${USER}/SDPO --no-deps -q && \
-pip install -e /users/${USER}/MoralGymVerl --no-deps -q && \
-export PYTHONPATH=/users/${USER}/SDPO:/users/${USER}/MoralGymVerl/src:\$PYTHONPATH"
+SETUP_CMDS="pip install -e ${SDPO_DIR} --no-deps -q && \
+pip install -e ${MORALGYM_DIR} --no-deps -q && \
+export PYTHONPATH=${SDPO_DIR}:${MORALGYM_DIR}/src:\$PYTHONPATH"
 
 # ── 7. Commands to run on the compute node ───────────────────────────────────
 # Hydra: the PRIMARY config must resolve from --config-path — a searchpath
 # entry alone does not (verified 2026-07-04):
 #   <config_name>, _base_clariden → MoralGymVerl/configs/training/ (--config-path)
 #   ppo_trainer                   → SDPO/verl/trainer/config/     (searchpath)
-MORALGYM_CONFIG_PATH="/users/${USER}/MoralGymVerl/configs/training"
-SDPO_CONFIG_PATH="/users/${USER}/SDPO/verl/trainer/config"
+MORALGYM_CONFIG_PATH="${MORALGYM_DIR}/configs/training"
+SDPO_CONFIG_PATH="${SDPO_DIR}/verl/trainer/config"
 TRAIN_CMD="python -m verl.trainer.main_ppo \
   --config-path ${MORALGYM_CONFIG_PATH} \
   --config-name ${CONFIG_NAME} \
@@ -144,15 +149,20 @@ TRAIN_CMD="python -m verl.trainer.main_ppo \
   trainer.experiment_name=${RUN_NAME} \
   ${EXTRA_ARGS}"
 
-# Stage-out: checkpoints to $STORE (tape-backed, never purged). Must run
-# OUTSIDE the container — /capstor is not bind-mounted in the EDF, so an
-# in-container write lands in the RAM overlay and vanishes at job end (cost us
-# the first sdpo_run1 checkpoints, 2026-08-19). && gates it on success; after a
+# Stage-out: checkpoints to MORALGYM_STORE_ROOT (long-term storage). Must run
+# OUTSIDE the container: the store is not bind-mounted in the EDF, so an
+# in-container write lands in the RAM overlay and vanishes at job end. && gates it on success; after a
 # crash the checkpoints are still on SCRATCH, cp -r by hand if worth keeping.
-# CKPT_DIR must match vars.ckpt_dir in configs/training/_base_clariden.yaml.
-CKPT_DIR="/iopsstor/scratch/cscs/${USER}/moralgym_verl_runs/${RUN_NAME}"
-STORE_CKPT="/capstor/store/cscs/swissai/aa004/${USER}/checkpoints/${RUN_NAME}"
-STAGEOUT_CMD="if [ -d ${CKPT_DIR} ]; then mkdir -p ${STORE_CKPT} && cp -r ${CKPT_DIR}/. ${STORE_CKPT}/ && echo Checkpoints staged to ${STORE_CKPT}; else echo No checkpoint dir at ${CKPT_DIR} — skipping stage-out; fi"
+# CKPT_DIR matches vars.ckpt_dir in configs/training/_base_clariden.yaml
+# (both read MORALGYM_CKPT_ROOT); rollouts/ rides along with the
+# checkpoints since rollout_data_dir lives inside the run dir.
+CKPT_DIR="${MORALGYM_CKPT_ROOT}/${RUN_NAME}"
+if [ -n "${MORALGYM_STORE_ROOT:-}" ]; then
+    STORE_CKPT="${MORALGYM_STORE_ROOT}/moralgym_verl/checkpoints/${RUN_NAME}"
+    STAGEOUT_CMD="if [ -d ${CKPT_DIR} ]; then mkdir -p ${STORE_CKPT} && cp -r ${CKPT_DIR}/. ${STORE_CKPT}/ && echo Checkpoints staged to ${STORE_CKPT}; else echo No checkpoint dir at ${CKPT_DIR}, skipping stage-out; fi"
+else
+    STAGEOUT_CMD="echo MORALGYM_STORE_ROOT not set, checkpoints stay in ${CKPT_DIR}"
+fi
 
 # Host-memory sampler (scripts/slurm/mem_sampler.sh): runs outside the
 # container for the life of the job and writes a .mem trace next to the log.
@@ -190,5 +200,5 @@ sbatch \
     --cpus-per-task=288 \
     --output="${OUTPUT_DIR}/%j_${RUN_NAME}.log" \
     --error="${OUTPUT_DIR}/%j_${RUN_NAME}.err" \
-    --export="ALL,MORALGYM_RUN_NAME=${RUN_NAME},MORALGYM_GROUP=${DATASET_CONFIG},MORALGYM_DATASET_DIR=${DATASET_DIR},WANDB_API_KEY" \
+    --export="ALL,MORALGYM_RUN_NAME=${RUN_NAME},MORALGYM_GROUP=${DATASET_CONFIG},MORALGYM_DATASET_DIR=${DATASET_DIR},MORALGYM_DIR=${MORALGYM_DIR},SDPO_DIR=${SDPO_DIR},MORALGYM_CKPT_ROOT=${MORALGYM_CKPT_ROOT},WANDB_API_KEY" \
     --wrap="${WRAPPED_CMD}"

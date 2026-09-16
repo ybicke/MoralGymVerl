@@ -2,6 +2,7 @@
 name = "moralgym_verl"
 version = "0.1.0"
 description = "MoralGym fine-tuning with verl + SDPO"
+license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
 dependencies = [
     "numpy",
