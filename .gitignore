@@ -26,6 +26,7 @@ CLAUDE.md
 docs/
 scripts/debug/
 scripts/analysis/make_report.sh
+scripts/publish/
 
 # Private cluster settings (template: scripts/slurm/cluster.env.example)
 scripts/slurm/cluster.env
