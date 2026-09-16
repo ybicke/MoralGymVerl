@@ -27,27 +27,75 @@ Evaluation asks whether the moral principle became a disposition: does trained b
 
 ## Status
 
-A first exploratory study compares GRPO and SDPO on the single-step Prisoner's Dilemma with Qwen3-8B (partial replication on Gemma and Llama). Both learn reciprocity. GRPO's reasoning shows no moral language, while SDPO's does and its cooperation is more forgiving but more exploitable. In a first transfer test on a four-player Public Goods Game, SDPO's cooperation carries over and GRPO's does not. Matrix games are likely too narrow for broad transfer. Details are in [post_training_comparison.md](docs/post_training_comparison.md) and the intermediate report built by `scripts/analysis/make_report.sh`.
+A first exploratory study compares GRPO and SDPO on the single-step Prisoner's Dilemma with Qwen3-8B (partial replication on Gemma and Llama). Both learn reciprocity. GRPO's reasoning shows no moral language, while SDPO's does and its cooperation is more forgiving but more exploitable. In a first transfer test on a four-player Public Goods Game, SDPO's cooperation carries over and GRPO's does not. Matrix games are likely too narrow for broad transfer.
 
 ## How it works
 
-1. **Dataset.** `moralgym_verl.training.dataset` samples episodes and writes verl-format parquet prompts; the game state travels as the ground truth.
+1. **Dataset.** `moralgym_verl.training.dataset` samples episodes and writes verl-format parquet prompts; the game state travels as the ground truth. The launcher generates it at submit time.
 2. **Rollout and reward.** verl generates a response per prompt. `reward_fn` parses the move, returns payoff plus intrinsic reward, and for SDPO the teacher feedback: either an outcome critique or a fixed moral principle (the reported runs use the principle).
-3. **Update.** GRPO or SDPO in the vendored verl fork ([lasgroup/SDPO](https://github.com/lasgroup/SDPO)).
+3. **Update.** GRPO or SDPO in the verl fork [lasgroup/SDPO](https://github.com/lasgroup/SDPO), checked out next to this repository.
 4. **Evaluation.** A sweep spec expands to cells (game × value × presentation × opponent × checkpoint), packed four per node on SLURM. Each cell records behaviour and two teacher-forcing probes.
-5. **Analysis.** Results markdown, figures, and report panels are regenerated from the cell data on the login node.
+5. **Analysis.** Results markdown, figures, and tables are regenerated from the cell data without GPUs.
 
-## Quick start
+## Setup
 
-On Clariden (GH200). Training and evaluation run inside the container; analysis and tests do not need it.
+Developed on the CSCS Alps GH200 system: SLURM, NVIDIA GH200 (aarch64) nodes with four GPUs each, and container environments through EDF. Training and evaluation run inside the container; dataset generation, analysis and tests do not.
+
+**1. Check out both repositories side by side.**
 
 ```bash
-bash scripts/setup/setup_verl.sh                                   # build container, write EDF config
-bash scripts/slurm/train_verl.sh qwen3_8b_grpo_pd_deon_tft_200      # train (add DRY_RUN=1 to resolve only)
+git clone https://github.com/lasgroup/SDPO.git ~/SDPO             # verl fork with SDPO
+git clone <this repository> ~/MoralGymVerl
+```
+
+**2. Fill in the cluster settings.** Everything site-specific lives in one git-ignored file.
+
+```bash
+cd ~/MoralGymVerl
+cp scripts/slurm/cluster.env.example scripts/slurm/cluster.env
+$EDITOR scripts/slurm/cluster.env
+```
+
+`SLURM_ACCOUNT` is the account charged for jobs, `MORALGYM_CKPT_ROOT` a large scratch path for checkpoints and rollouts (it must be visible inside the container), `MORALGYM_STORE_ROOT` an optional long-term copy, and `MORALGYM_DIR` / `SDPO_DIR` the two checkouts. `HF_HOME` is the Hugging Face cache. If your scheduler needs an account on every submission, also `export SBATCH_ACCOUNT=<account>` in your shell profile.
+
+**3. Build the container.**
+
+```bash
+bash scripts/setup/setup_verl.sh
+```
+
+This builds `Dockerfile.gh200` with podman (NGC vLLM, verl through SDPO, Python 3.11), exports it as a squashfs image to `$SCRATCH/containers/`, and writes the EDF file `~/.edf/moralgym_verl.toml`, which bind-mounts your home and scratch and pins `PYTHONPATH`, the HF cache, and the FlashInfer attention backend that Gemma-2 needs. Rebuilding means deleting the `.sqsh` file and rerunning; the two packages are reinstalled from the bind-mounted sources at job start, so code changes need no rebuild.
+
+**4. Fetch the model.** The container runs offline, so weights must already be in the cache.
+
+```bash
+HF_HOME=<your HF_HOME> hf download Qwen/Qwen3-8B
+```
+
+Gated models need `hf auth login` first. For models above roughly 10 GB, run the download in a transfer job rather than on the login node.
+
+**5. Check that a run resolves, then train.**
+
+```bash
+DRY_RUN=1 bash scripts/slurm/train_verl.sh qwen3_8b_grpo_pd_deon_tft_200   # prints the resolved job, submits nothing
+bash scripts/slurm/train_verl.sh qwen3_8b_grpo_pd_deon_tft_200
+```
+
+For a new model, check the chat template first with `scripts/preflight/check_model_template.py`, and run a short debug job before the full one. Checkpoints, rollouts and logs land under `MORALGYM_CKPT_ROOT/<run>`; training logs go to `~/logs_verl/training`.
+
+**6. Evaluate and analyse.**
+
+```bash
 python3.11 scripts/slurm/submit_sweep.py configs/eval/post_training/qwen3_8b_grpo_pd_deon_tft_200/classic/ckpt_ladder.yaml
 python3.11 scripts/analysis/make_results.py eval_results/post_training/qwen3_8b_grpo_pd_deon_tft_200/classic/ckpt_ladder
-bash scripts/analysis/make_report.sh                               # every figure and table of the report
-python3 -m pytest tests/                                           # inside the container
+```
+
+The sweep submits one packed job per four cells and writes each cell under `eval_results/`, mirroring the spec's path. The analysis step turns those cells into markdown, figures and tables.
+
+**Tests** run without GPUs or the container:
+
+```bash
+PYTHONPATH=src:scripts/analysis python3.11 -m pytest tests/
 ```
 
 ## Naming
@@ -60,7 +108,7 @@ configs/training/<run>.yaml                                one file per run
 configs/eval/<root>/<subject>/<family>/<experiment>.yaml   mirrored by eval_results/<root>/<subject>/<family>/<experiment>/
 ```
 
-The launchers enforce the contract. Details in [docs/naming.md](docs/naming.md).
+`<root>` is `teacher_signal` (base-model screens), `post_training` (trained checkpoints), or `transfer` (held-out games); `<family>` is `classic` (2×2 games) or `pgg`. A sweep spec's path is its identity, so specs do not declare a name. The launchers and `scripts/audit_naming.py` enforce the contract.
 
 ## Layout
 
@@ -71,11 +119,11 @@ src/moralgym_verl/
   training/         dataset generation, verl reward function, SDPO feedback
   eval/             behavioural eval, teacher-forcing probes, sweep expansion
   rewards.py        game and intrinsic reward variants
-scripts/            slurm/ launchers · analysis/ results and figures · preflight/ new-model checks · debug/
-eval_results/       analysis markdown per experiment (cell data stays out of git)
-docs/               design notes and results
+scripts/            slurm/ launchers · analysis/ results and figures · preflight/ new-model checks · setup/
 tests/
 ```
+
+Evaluation writes its cell data to `eval_results/`, which is not tracked. Some comments cite design notes under `docs/`; those notes are unpolished working material and are not part of this repository.
 
 ## Games, opponents, values
 
@@ -86,24 +134,15 @@ tests/
 | Values | `deontological`, `utilitarian`, `virtue`, `universalization`, `forgiveness`, `repair`, `generosity`, `exploit_resistance`, plus wording variants |
 | Models | Qwen3 4B/8B/32B, Gemma-2 9B, Gemma-3 12B, Llama-3.1 8B |
 
-## Documentation
-
-- [naming.md](docs/naming.md): the naming contract and directory mirror
-- [sdpo_design_analysis.md](docs/sdpo_design_analysis.md): why SDPO, and the experimental design
-- [teacher_signal_eval.md](docs/teacher_signal_eval.md): pre-training screen of the teacher signal
-- [post_training_comparison.md](docs/post_training_comparison.md): SDPO vs GRPO after training
-- [pgg_design.md](docs/pgg_design.md): the Public Goods Game and transfer
-- [multi_turn.md](docs/multi_turn.md): multi-round execution and update schemes
-- [multi_turn_current_state_and_flaws.md](docs/multi_turn_current_state_and_flaws.md): where multi-turn training stands
-- [game_expansion_design.md](docs/game_expansion_design.md): richer games beyond the 2×2 dilemmas
-- [literature_multiagent_environments_benchmarks.md](docs/literature_multiagent_environments_benchmarks.md): survey of multi-agent environments and benchmarks
-- [verl_local_patches.md](docs/verl_local_patches.md): deviations from upstream verl
-
 ## Requirements
 
-- NVIDIA GH200 (aarch64) container built from `Dockerfile.gh200`: NGC vLLM 25.12, verl via SDPO, Python 3.11
-- Login-node analysis: Python 3.11 with numpy and matplotlib
+- NVIDIA GH200 (aarch64) container built from `Dockerfile.gh200`: NGC vLLM 25.12, verl through SDPO, Python 3.11
+- Analysis without GPUs: Python 3.11 with numpy and matplotlib
 - Hugging Face access for gated models; Weights & Biases optional
+
+## License
+
+Apache 2.0, see [LICENSE](LICENSE).
 
 ## Acknowledgements
 

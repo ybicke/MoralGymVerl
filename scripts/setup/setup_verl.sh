@@ -7,12 +7,11 @@
 #
 # Prerequisites:
 #   - podman available on the login node (or run inside an interactive job)
-#   - SDPO repo at ~/SDPO
-#   - MoralGymVerl repo at ~/MoralGymVerl
+#   - SDPO and MoralGymVerl checked out (see scripts/slurm/cluster.env)
 #   - $SCRATCH is set
 #
 # Usage:
-#   bash ~/MoralGymVerl/scripts/setup/setup_verl.sh
+#   bash scripts/setup/setup_verl.sh
 # =============================================================================
 set -euo pipefail
 
@@ -20,6 +19,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 . "${REPO_ROOT}/scripts/slurm/cluster_env.sh" "${REPO_ROOT}"
 SDPO_DIR="${SDPO_DIR:-${HOME}/SDPO}"
 SCRATCH="${SCRATCH:?SCRATCH must be set to a large scratch directory}"
+HF_HOME="${HF_HOME:-${SCRATCH}/.cache/huggingface}"
 CONTAINER_DIR="${SCRATCH}/containers"
 SQSH="${CONTAINER_DIR}/moralgym-verl-gh200.sqsh"
 EDF_NAME="moralgym_verl"
@@ -91,12 +91,13 @@ echo ""
 echo "=== Setup complete ==="
 echo ""
 echo "Next steps:"
-echo "  1. Download model (if not already in HF cache):"
-echo "     bash ~/MoralGym/scripts/setup/download_hf_model.sh google/gemma-2-9b-it"
+echo "  1. Download the model (the container runs offline, so the weights"
+echo "     must already be in the cache; use a transfer job above ~10 GB):"
+echo "     HF_HOME=${HF_HOME} hf download Qwen/Qwen3-8B"
 echo ""
 echo "  2. Check a run resolves (dataset is generated automatically at"
 echo "     submit time into \$SCRATCH/moralgym_verl_datasets/<run>):"
-echo "     DRY_RUN=1 bash ~/MoralGymVerl/scripts/slurm/train_verl.sh <run_name>"
+echo "     DRY_RUN=1 bash ${REPO_ROOT}/scripts/slurm/train_verl.sh <run_name>"
 echo ""
-echo "  3. Submit a training job (docs/naming.md: config name = run name):"
-echo "     bash ~/MoralGymVerl/scripts/slurm/train_verl.sh qwen3_8b_grpo_pd_util_tft_150"
+echo "  3. Submit a training job (README, Naming: config name = run name):"
+echo "     bash ${REPO_ROOT}/scripts/slurm/train_verl.sh qwen3_8b_grpo_pd_util_tft_150"
