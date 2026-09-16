@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "CoopGym: Fine-Tuning for Cooperation in Multi-Agent Systems"
+type: software
+authors:
+  - family-names: Bicker
+    given-names: Yves
+repository-code: "https://github.com/ybicke/coopGym"
+license: Apache-2.0
+date-released: "2026-09-16"
+keywords:
+  - large language models
+  - reinforcement learning
+  - self-distillation
+  - multi-agent systems
+  - cooperation
