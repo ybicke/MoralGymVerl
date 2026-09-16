@@ -151,8 +151,9 @@ TRAIN_CMD="python -m verl.trainer.main_ppo \
 
 # Stage-out: checkpoints to MORALGYM_STORE_ROOT (long-term storage). Must run
 # OUTSIDE the container: the store is not bind-mounted in the EDF, so an
-# in-container write lands in the RAM overlay and vanishes at job end. && gates it on success; after a
-# crash the checkpoints are still on SCRATCH, cp -r by hand if worth keeping.
+# in-container write lands in the RAM overlay and vanishes at job end.
+# && gates it on success; after a crash the checkpoints are still on the
+# checkpoint root, cp -r by hand if worth keeping.
 # CKPT_DIR matches vars.ckpt_dir in configs/training/_base_clariden.yaml
 # (both read MORALGYM_CKPT_ROOT); rollouts/ rides along with the
 # checkpoints since rollout_data_dir lives inside the run dir.
