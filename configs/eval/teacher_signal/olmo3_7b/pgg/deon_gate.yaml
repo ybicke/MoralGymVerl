@@ -6,7 +6,7 @@
 #
 # Reads against teacher_signal/qwen3_8b/pgg/single_turn_v3 (none and
 # deontological rows): same representation (decision_full), protocol and
-# budget. Submitted together with classic/pd_deon_gate.yaml (see there).
+# budget. Submitted together with classic/pd_reference_list.yaml.
 
 num_episodes: 400          # 50 per fabricated state (8 states)
 
