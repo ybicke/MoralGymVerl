@@ -1,0 +1,24 @@
+# In-context deon gate, Olmo-3-7B-Instruct, public-goods game. The transfer
+# half of the gate: SDPO moves into the weights what the model does with
+# the principle in context, so the deon row here bounds what an Olmo SDPO
+# run can carry into the held-out game. The Qwen3-4B SDPO run cooperated in
+# the PD and did not transfer; this row is the check that was skipped there.
+#
+# Reads against teacher_signal/qwen3_8b/pgg/single_turn_v3 (none and
+# deontological rows): same representation (decision_full), protocol and
+# budget. Submitted together with classic/pd_deon_gate.yaml (see there).
+
+num_episodes: 400          # 50 per fabricated state (8 states)
+
+axes:
+  game: [public_goods]
+  representation: [decision_full]
+  moral_value: [none, deontological]
+  protocol: [single_round]
+
+env:
+  RUN_PROBES: "off"
+  RUN_PROBE_B_EPISODE: "off"
+  GAME_DESCRIPTION: "off"
+
+extra_args: ["--temperature", "0.7"]
