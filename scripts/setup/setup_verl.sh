@@ -56,6 +56,12 @@ else
 fi
 
 # ── EDF config ───────────────────────────────────────────────────────────────
+# An existing EDF is left alone: it may carry local settings (cache
+# locations, extra mounts) that a container rebuild must not reset.
+if [ -f "${EDF_FILE}" ]; then
+    echo "[skip] EDF config already exists: ${EDF_FILE}"
+    echo "       Delete it and rerun to regenerate."
+else
 echo "[3/3] Writing EDF config: ${EDF_FILE}"
 mkdir -p "${HOME}/.edf"
 cat > "${EDF_FILE}" << TOML
@@ -74,7 +80,13 @@ mounts = [
 # (see train_verl.sh) so code changes take effect without rebuilding the image.
 PYTHONPATH = "${MORALGYM_DIR:-${REPO_ROOT}}/src:${SDPO_DIR}"
 HF_HOME = "${HF_HOME:-${SCRATCH}/.cache/huggingface}"
+# vLLM compile cache: inside the container, so it is discarded with the job.
+# A cache shared between jobs was read half-written by the next job.
+VLLM_CACHE_ROOT = "/vllm_cache"
 HF_HUB_OFFLINE = "1"
+# Do not write CUDA JIT kernel caches onto the shared filesystem: many
+# small files degrade Lustre.
+CUDA_CACHE_DISABLE = "1"
 TOKENIZERS_PARALLELISM = "false"
 # Gemma-2 tanh softcapping requires FlashInfer attention backend
 VLLM_ATTENTION_BACKEND = "FLASHINFER"
@@ -86,6 +98,7 @@ VLLM_ATTENTION_BACKEND = "FLASHINFER"
 # [annotations]
 # com.hooks.aws_ofi_nccl.enabled = "true"
 TOML
+fi
 
 echo ""
 echo "=== Setup complete ==="

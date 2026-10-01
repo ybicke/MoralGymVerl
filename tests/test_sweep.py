@@ -94,6 +94,20 @@ def test_game_axis_must_stay_in_family(tmp_path):
         load_sweep(path)
 
 
+def test_post_training_holds_a_run_to_its_training_games(tmp_path):
+    games = ["prisoners_dilemma", "stag_hunt", "chicken"]
+    for run, ok in (("qwen3_8b_sdpo_pdshch_deon_tft_200", True),
+                    ("qwen3_8b_sdpo_pd_deon_tft_200", False)):
+        axes = {**AXES, "game": games, "checkpoint": [f"{run}/global_step_200"]}
+        path = _spec_file(tmp_path, {"axes": axes}, root="post_training",
+                          subject=run)
+        if ok:
+            assert load_sweep(path)["axes"]["game"] == games
+        else:
+            with pytest.raises(ValueError, match="belong under"):
+                load_sweep(path)
+
+
 def test_expand_cells_cartesian():
     cells = expand_cells(SPEC)
     assert len(cells) == 1 * 2 * 2 * 1

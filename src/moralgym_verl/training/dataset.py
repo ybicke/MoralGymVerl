@@ -14,8 +14,8 @@ the model's response for one game round (payoffs, histories, reward config).
 
 Usage:
     python -m moralgym_verl.training.dataset \\
-        --config configs/datasets/grpo_pd_none_tft.yaml \\
-        --output-dir datasets/grpo_pd_tft \\
+        --config configs/datasets/grpo_pd_deon_tft.yaml \\
+        --output-dir datasets/grpo_pd_deon_tft \\
         --n-train 8000 --n-val 256
 """
 
@@ -56,6 +56,10 @@ def _sample_config_from_yaml(cfg: dict[str, Any]) -> tuple[EpisodeConfig, dict[s
         T, R, P, S = sample_payoffs(game_type)
     else:
         p = game_cfg["payoffs"]
+        if game_cfg.get("types"):  # one payoff block per game
+            if game_type not in p:
+                raise ValueError(f"game.payoffs has no block for {game_type!r}")
+            p = p[game_type]
         T, R, P, S = p["T"], p["R"], p["P"], p["S"]
 
     # Labels

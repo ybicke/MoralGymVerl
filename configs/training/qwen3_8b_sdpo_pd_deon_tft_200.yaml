@@ -1,0 +1,33 @@
+# =============================================================================
+# SDPO deon-only, Qwen3-8B, 200 steps. The teacher-context twin of
+# qwen3_8b_grpo_pd_deon_tft_200: both arms carry the deontological norm
+# alone, there as a reward penalty, here as the principle text the teacher
+# reads (dataset sdpo_pd_deon_tft, derived from the run name).
+#
+# The trainer is the one of qwen3_8b_sdpo_pd_deon-repair-gen_tft_200
+# (_base_sdpo_pd, lr 1e-5, Qwen3 template, thinking off); the principle
+# lives in the dataset, so the two SDPO arms differ in the teacher text
+# only. That pair is the steering comparison: deon alone against deon with
+# the repair and generosity clauses.
+#
+# Run as seed replicates:
+#   SEED=1 DRY_RUN=1 bash scripts/slurm/train_verl.sh qwen3_8b_sdpo_pd_deon_tft_200
+# =============================================================================
+defaults:
+  - _base_sdpo_pd
+  - _self_
+
+actor_rollout_ref:
+  model:
+    path: Qwen/Qwen3-8B
+    custom_chat_template: null
+  actor:
+    optim:
+      lr: 1.0e-5
+
+data:
+  apply_chat_template_kwargs:
+    enable_thinking: false
+
+trainer:
+  total_training_steps: 200

@@ -25,6 +25,10 @@
 # at step 150; util, Llama-3.1 and Gemma-3 runs all stop there), past the 8B
 # deon ladder's converged point (120); ~2 h on one node (8B: 200 steps in 3h16, job 3138544).
 #
+# The run under this name went to step 200, not 150: job 3345257 timed out
+# after 129 steps, and job 3348060 resumed from global_step_130 with
+# trainer.total_training_steps=200. Its checkpoints run to global_step_200.
+#
 # Preflight + smoke BEFORE the full run (new base model for training):
 #   /usr/bin/python3.11 scripts/preflight/check_model_template.py \
 #        --model Qwen/Qwen3-4B-Instruct-2507          # login node, pure Jinja

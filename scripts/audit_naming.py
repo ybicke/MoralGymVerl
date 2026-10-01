@@ -10,6 +10,7 @@ dirs (harness/, _debug, _archive) are outside the contract.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -70,7 +71,9 @@ def main() -> int:
 
     run_configs = {p.stem for p in TRAINING.glob("[!_]*.yaml")}
     for root, subject, family, exp in sorted(specs):
-        if (root == "post_training" and subject not in run_configs
+        # Seed replicates share their config: <config>_seed<N> (train_verl.sh).
+        config = re.sub(r"_seed\d+$", "", subject)
+        if (root == "post_training" and config not in run_configs
                 and subject not in MODEL_TOKENS):
             print(f"UNKNOWN RUN: post_training subject {subject!r} has no "
                   f"configs/training/{subject}.yaml")

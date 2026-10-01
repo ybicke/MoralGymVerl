@@ -4,11 +4,18 @@
 # Design (from the single-turn screen conclusions, 2026-08-19):
 # - PD only: the cleanest instrument; SH's deon teacher is anti-escape at
 #   D_A D_O and chicken is eval-only (see docs/single_turn_screen_comparison.md).
-# - Random opponent + hist_coop_bias 0.5: uniform over the four fabricated
-#   states, matching the screen's balanced-state design, so the D-states
-#   (repair, escape) are trained as often as the C-states.
-# - Prose representation; surface randomization on EXCEPT labels (fixed
-#   early as scaffold, randomize in a later run); payoffs fixed.
+# - hist_coop_bias 0.5: uniform over the four fabricated states, matching
+#   the screen's balanced-state design, so the D-states (repair, escape)
+#   are trained as often as the C-states.
+# - Opponent tit_for_tat, as the file name says and as in the GRPO arms.
+#   The opponent never enters the prompt or the SDPO gradient (the reward
+#   is only logged), so prompts are byte-identical to the earlier random
+#   opponent at the same seed. The runs up to 2026-09 (jobs 3135837,
+#   3138285, 3348137) were generated with types: [random].
+# - List representation (one payoff per bullet line, the format the paper
+#   shows; the runs up to 2026-09 used prose, the same sentences in one
+#   block); surface randomization on EXCEPT labels (fixed early as
+#   scaffold, randomize in a later run); payoffs fixed.
 # - intrinsic none / lambda 0: the moral signal lives ONLY in the teacher
 #   context (see teacher: below), not in the reward — attribution stays
 #   with the wording under test.
@@ -19,7 +26,7 @@ game:
   sample_payoffs: false
 
 opponent:
-  types: [random]
+  types: [tit_for_tat]
   distribution: [1.0]
 
 reward:
@@ -37,7 +44,7 @@ teacher:
 prompt:
   game_design: hist
   hist_coop_bias: 0.5
-  representation: prose
+  representation: list
   # CoT + "Answer: <label>" — the regime the screen measured (eval
   # teacher_signal configs run reasoning: true; probe B's teacher signal
   # is over reasoning traces). Without it, responses collapse to bare

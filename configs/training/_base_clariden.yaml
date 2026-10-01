@@ -93,7 +93,10 @@ actor_rollout_ref:
     # trainer-side length checks, so keep it consistent.
     max_model_len: ${max_model_len}
     val_kwargs:
-      top_p: 0.95
+      # Same sampling as the training rollouts and the eval harnesses
+      # (T 0.7, full distribution), so the in-training val curves are
+      # comparable to both.
+      top_p: 1.0
       temperature: 0.7
       n: 4
       do_sample: true

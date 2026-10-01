@@ -1,0 +1,47 @@
+# SDPO dataset, deontological principle only: the teacher-context twin of
+# grpo_pd_deon_tft. (consumed by moralgym_verl.training.dataset, NOT by
+# verl/Hydra.)
+#
+# Same game, opponent, prompt design and randomization as grpo_pd_deon_tft,
+# so at one seed both arms train on byte-identical prompts. The arms differ
+# in where the norm lives: there in the reward (intrinsic deontological,
+# lambda 0.75), here in the teacher context (teacher.moral_value
+# deontological) with intrinsic none, so no moral term reaches the reward.
+# The principle is the first paragraph of deontological+repair+generosity
+# (sdpo_pd_deon-repair-gen_tft), which adds the repair and generosity
+# clauses on top of this one.
+#
+# The opponent never enters the prompt or the SDPO gradient (the reward is
+# only logged); tit_for_tat keeps the logged reward deterministic per state
+# and comparable to the GRPO arm.
+game:
+  type: prisoners_dilemma
+  payoffs: {T: 4, R: 3, P: 1, S: 0}
+  num_rounds: 1
+  sample_payoffs: false
+
+opponent:
+  types: [tit_for_tat]
+  distribution: [1.0]
+
+reward:
+  game_reward: normalized
+  intrinsic: none
+  lambda: 0.0
+  illegal_penalty: -6
+
+teacher:
+  feedback: principle
+  moral_value: deontological
+
+prompt:
+  game_design: hist
+  hist_coop_bias: 0.5
+  # One payoff per bullet line, the format the paper shows. Same sentences
+  # as prose.
+  representation: list
+  reasoning: true
+  randomize_labels: false
+  randomize_layout: true
+  randomize_label_order: true
+  randomize_role: true

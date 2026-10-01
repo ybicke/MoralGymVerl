@@ -62,7 +62,11 @@ def wandb_id(path: Path) -> str:
 
 def row(run: str) -> str:
     job, log = find_log(run)
-    f = run.split("_")
+    # <config>_seed<N> is replicate N of <config> (train_verl.sh SEED);
+    # untagged runs trained under verl's default RNG state.
+    m = re.search(r"_seed(\d+)$", run)
+    seed = m.group(1) if m else "--"
+    f = re.sub(r"(_v\d+)?(_seed\d+)?$", "", run).split("_")
     model = f"{f[0]} ({f[1].upper()})"
     algo = ALGO_TEX.get(f[2], f[2])
     arm = f[4]
@@ -70,7 +74,7 @@ def row(run: str) -> str:
     esc_run = run.replace("_", "\\_")
     esc_arm = arm.replace("_", "\\_")
     return (f"\\texttt{{\\scriptsize {esc_run}}} & {algo} & {esc_arm} & "
-            f"{steps} & {job} & {wall_time(job)} & "
+            f"{steps} & {seed} & {job} & {wall_time(job)} & "
             f"\\texttt{{{wandb_id(log)}}} \\\\")
 
 
@@ -92,8 +96,8 @@ def main() -> None:
         "storage. Wall time is the SLURM elapsed time on one 4$\\times$GH200",
         "node.}",
         "\\label{tab:run-ledger}",
-        "{\\small\\begin{tabular}{lllrrrl}", "\\toprule",
-        "run & algo & arm & steps & job & wall & W\\&B \\\\",
+        "{\\small\\begin{tabular}{lllrrrrl}", "\\toprule",
+        "run & algo & arm & steps & seed & job & wall & W\\&B \\\\",
         "\\midrule",
     ]
     lines += [row(r) for r in args.run]

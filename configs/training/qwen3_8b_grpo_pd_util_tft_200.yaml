@@ -1,0 +1,15 @@
+# =============================================================================
+# GRPO utilitarian control, Qwen3-8B, 200 steps. The replication-grid twin
+# of qwen3_8b_grpo_pd_util_tft_150 (job 3203397): same trainer, 50 steps
+# longer so all three Qwen arms (GRPO deon, GRPO util, SDPO deon) stop at
+# step 200 and are evaluated at the same checkpoints.
+#
+# Run as seed replicates:
+#   SEED=1 DRY_RUN=1 bash scripts/slurm/train_verl.sh qwen3_8b_grpo_pd_util_tft_200
+# =============================================================================
+defaults:
+  - qwen3_8b_grpo_pd_util_tft_150
+  - _self_
+
+trainer:
+  total_training_steps: 200

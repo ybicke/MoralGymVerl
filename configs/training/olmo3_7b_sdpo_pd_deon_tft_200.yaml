@@ -1,0 +1,35 @@
+# =============================================================================
+# SDPO deon-only, Olmo-3-7B-Instruct, 200 steps. The teacher-context twin
+# of olmo3_7b_grpo_pd_deon_tft_200, and the Olmo row of
+# qwen3_8b_sdpo_pd_deon_tft_200: _base_sdpo_pd with lr 1e-5, the principle
+# in the dataset (sdpo_pd_deon_tft, derived from the run name).
+#
+# Model-specific settings as in olmo3_7b_grpo_pd_deon_tft_200 (see its
+# header): stock chat template, which _base_sdpo_pd does not null by
+# itself, no thinking kwarg, gpu_memory_utilization 0.6 for the 32 GiB KV
+# cache. The SDPO teacher is this model reading the principle, so read the
+# in-context gate (base with the principle on PD and PGG) before the run.
+#
+# Smoke BEFORE the full run:
+#   PARTITION=debug TIME=00:30:00 bash scripts/slurm/train_verl.sh \
+#        olmo3_7b_sdpo_pd_deon_tft_200 olmo3_7b_sdpo_pd_deon_tft_smoke \
+#        trainer.total_training_steps=2
+# Run as seed replicates:
+#   SEED=1 DRY_RUN=1 bash scripts/slurm/train_verl.sh olmo3_7b_sdpo_pd_deon_tft_200
+# =============================================================================
+defaults:
+  - _base_sdpo_pd
+  - _self_
+
+actor_rollout_ref:
+  model:
+    path: allenai/Olmo-3-7B-Instruct
+    custom_chat_template: null
+  actor:
+    optim:
+      lr: 1.0e-5
+  rollout:
+    gpu_memory_utilization: 0.6
+
+trainer:
+  total_training_steps: 200

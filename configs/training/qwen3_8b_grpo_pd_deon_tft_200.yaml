@@ -1,24 +1,25 @@
 # =============================================================================
 # GRPO deon-reward arm — Qwen3-8B. The reward-channel twin of
-# qwen3_8b_sdpo_pd_deon-repair-gen_tft_200: same model, data geometry, LoRA, optimizer, sampling,
-# batching, length caps, schedule, and logging; the ONLY intended
-# differences are the signal channel and the loss:
+# qwen3_8b_sdpo_pd_deon_tft_200: same model, data geometry, LoRA, sampling,
+# batching, length caps, schedule, and logging; the intended differences
+# are the signal channel, the loss and the optimizer:
 #   - loss_mode vanilla (PPO-clip over GRPO group-normalized advantages)
 #     instead of sdpo; no self_distillation block, so no teacher reprompt,
 #     no EMA teacher, no distillation loss.
 #   - moral signal = deontological intrinsic in the scalar reward
-#     (dataset grpo_deon_pd: normalized game + 0.75 * deon), instead of
-#     the principle text in the teacher context (dataset _base_sdpo_pd:
-#     intrinsic none, feedback_mode principle).
+#     (dataset grpo_pd_deon_tft: normalized game + 0.75 * deon), instead
+#     of the principle text in the teacher context (dataset
+#     sdpo_pd_deon_tft: intrinsic none, feedback principle).
 # Everything below is copied from the _base_sdpo_pd -> _qwen3 -> run2 stack
 # rather than inherited, because inheriting would drag self_distillation in.
 #
 # Deliberate comparability calls (each is a place the arms COULD differ):
-#   - lr 1e-5 / warmup 10 = SDPO run 2's optimizer, held fixed so the
-#     optimizer is not a confound. This is 2.5x below the validated
-#     NeMo-RL GRPO lr (grpo_pd_tft: 2.5e-5) — if the run barely moves in
-#     40 steps, that lr is the sanctioned fallback (log it as an axis).
-#     Watch entropy: full-lr-early collapsed entropy in NeMo-RL (i9klhxy4).
+#   - lr 2.5e-5 / warmup 50, the NeMo-RL-validated GRPO optimizer, against
+#     1e-5 / warmup 10 for SDPO. The optimizer is chosen per algorithm:
+#     run 1 of this arm used the SDPO optimizer and was cancelled (flat
+#     under the random opponent's reward noise), and the long warmup
+#     guards against the early entropy collapse seen at full lr in
+#     NeMo-RL (i9klhxy4).
 #   - KL to reference ON (use_kl_loss true, coef 0.04): the canonical
 #     GRPO loss includes beta * KL(pi || pi_ref), and 0.04 is the
 #     grpo_pd_tft / NeMo-RL-validated value — decided 2026-08-21: run
@@ -34,9 +35,8 @@
 #   - max_model_len 4096 kept although GRPO never reprompts (~2600 would
 #     do): keeps the engine/packing config identical across arms.
 #
-# Submit (same seed 42 default => byte-identical prompts to the SDPO runs):
-#   DATASET_CONFIG=grpo_deon_pd TIME=06:00:00 bash scripts/slurm/train_verl.sh \
-#       grpo_deon_pd_qwen3 <run_name>
+# Submit (one seed => byte-identical prompts to the SDPO runs):
+#   SEED=1 DRY_RUN=1 bash scripts/slurm/train_verl.sh qwen3_8b_grpo_pd_deon_tft_200
 # =============================================================================
 defaults:
   - ppo_trainer         # verl base — found in SDPO/verl/trainer/config/

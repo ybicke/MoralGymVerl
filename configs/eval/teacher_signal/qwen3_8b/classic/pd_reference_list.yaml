@@ -1,0 +1,24 @@
+# PD reference rows in the list payoff format, Qwen3-8B: the untrained model
+# and the untrained model with the deon-only principle in its prompt. The
+# replication grid trains and evaluates in list (configs/datasets/*), so
+# these are the baselines its checkpoints are read against, and the deon
+# row is the initial SDPO teacher. Same protocol and budget as the prose
+# rows measured earlier; probes off.
+#
+#   /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/eval/teacher_signal/olmo3_7b/classic/pd_reference_list.yaml \
+#       configs/eval/teacher_signal/qwen3_8b/classic/pd_reference_list.yaml --dry-run
+
+num_episodes: 400          # 100 per fabricated state
+
+axes:
+  game: [prisoners_dilemma]
+  representation: [list]
+  moral_value: [none, deontological]
+  protocol: [single_round]
+
+env:
+  RUN_PROBES: "off"
+  RUN_PROBE_B_EPISODE: "off"
+
+extra_args: ["--temperature", "0.7"]
