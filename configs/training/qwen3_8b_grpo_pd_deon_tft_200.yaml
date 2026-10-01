@@ -14,24 +14,13 @@
 # rather than inherited, because inheriting would drag self_distillation in.
 #
 # Deliberate comparability calls (each is a place the arms COULD differ):
-#   - lr 2.5e-5 / warmup 50, the NeMo-RL-validated GRPO optimizer, against
-#     1e-5 / warmup 10 for SDPO. The optimizer is chosen per algorithm:
-#     run 1 of this arm used the SDPO optimizer and was cancelled (flat
-#     under the random opponent's reward noise), and the long warmup
-#     guards against the early entropy collapse seen at full lr in
-#     NeMo-RL (i9klhxy4).
-#   - KL to reference ON (use_kl_loss true, coef 0.04): the canonical
-#     GRPO loss includes beta * KL(pi || pi_ref), and 0.04 is the
-#     grpo_pd_tft / NeMo-RL-validated value — decided 2026-08-21: run
-#     textbook GRPO rather than strip the term to match SDPO (whose
-#     anchor is the EMA teacher, not a ref-KL). Accepted asymmetry:
-#     both arms are anchored, just by different mechanisms.
-#   - Rollout IS correction stays OFF (matches both prior stacks) — but
-#     that decision was measured at ~7-token outputs; at 2048-token
-#     reasoning traces watch training/rollout_probs_diff_mean|max and
-#     training/rollout_actor_probs_pearson_corr (enabled below via
-#     rollout.calculate_log_probs) and revisit if diff_max spikes toward
-#     1 or the pearson corr sags below ~0.99.
+#   - lr 2.5e-5 against 1e-5 for SDPO, chosen per algorithm; warmup 10 in
+#     both arms, as in the SDPO paper. Job 3138544 (2026-08) ran this
+#     config with warmup 50, T 0.7 and KL coef 0.04.
+#   - No KL-to-reference term, as in the SDPO paper's GRPO baseline, so
+#     neither arm is pulled toward the base model.
+#   - Rollout IS correction on (per token, truncated at 2), as in the SDPO
+#     paper's GRPO baseline; the SDPO arm has its own is_clip 2.
 #   - max_model_len 4096 kept although GRPO never reprompts (~2600 would
 #     do): keeps the engine/packing config identical across arms.
 #
@@ -58,33 +47,21 @@ actor_rollout_ref:
     checkpoint:
       save_contents: [optimizer, extra]
     optim:
-      # Job 3138544 (the v2 run this file records) trained at 2.5e-5 /
-      # warmup 50 -- verified against the run's config dump in
-      # logs_verl/training/3138544_*.log. The naming migration had
-      # frozen the CANCELLED run-1 optimizer (1e-5 / 10) here by
-      # mistake; corrected 2026-09-09.
       lr: 2.5e-5
-      lr_warmup_steps: 50
+      lr_warmup_steps: 10
     # = train_batch_size: ONE gradient step per generation batch, fully
     # on-policy — same as the SDPO arm.
     ppo_mini_batch_size: 16
-    # Canonical GRPO KL-to-reference term in the loss (DeepSeekMath eq. 3);
-    # 0.04 ≙ NeMo-RL reference_policy_kl_penalty (grpo_pd_tft-validated).
-    # Overrides _base_clariden's use_kl_loss: false. With LoRA, pi_ref =
-    # the frozen base model, so the ref pass is cheap.
-    use_kl_loss: true
-    kl_loss_coef: 0.04
+    # No KL-to-reference term, as in the SDPO paper's GRPO baseline.
+    use_kl_loss: false
     policy_loss:
       loss_mode: vanilla
   rollout:
     n: 16
-    temperature: 0.7
+    temperature: 1.0
     top_p: 1.0
-    # Record vLLM's own logprobs of the sampled tokens so verl logs the
-    # rollout-vs-trainer mismatch (training/rollout_probs_diff_* +
-    # training/rollout_actor_probs_pearson_corr). Monitoring only — no
-    # behavior change; this is the evidence for whether IS correction is
-    # ever needed at 2048-token traces.
+    # vLLM log-probs of the sampled tokens: input to rollout_is below, and
+    # logged as training/rollout_probs_diff_*.
     calculate_log_probs: true
 
 data:
@@ -102,6 +79,10 @@ algorithm:
   adv_estimator: grpo
   norm_adv_by_std_in_grpo: true
   use_kl_in_reward: false
+  # Per-token importance weights for the sampler-vs-trainer mismatch,
+  # truncated at 2 (verl default), as in the SDPO paper's GRPO baseline.
+  rollout_correction:
+    rollout_is: token
 
 trainer:
   # Slim checkpoints -> keep the full 20-point trajectory.

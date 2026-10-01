@@ -118,7 +118,7 @@ actor_rollout_ref:
 
   rollout:
     n: 16
-    temperature: 0.7
+    temperature: 1.0
     top_p: 1.0
 
 data:

@@ -3,9 +3,7 @@
 # replication grid, next to Qwen3-8B: size-matched, and the other model of
 # the SDPO paper (Hübotter et al. 2026, Section 3).
 #
-# Everything except the model is _base_grpo_pd (optimizer 2.5e-5 / warmup
-# 50, KL 0.04, vanilla loss, n=16, T=0.7, 2048-token responses, ckpt every
-# 10). Model-specific:
+# Everything except the model is _base_grpo_pd. Model-specific:
 #   - path allenai/Olmo-3-7B-Instruct (revision 6e5971d at the time of
 #     writing). Non-thinking model, so no apply_chat_template_kwargs.
 #   - Stock chat template (_base_grpo_pd nulls the Gemma-2 one). With no

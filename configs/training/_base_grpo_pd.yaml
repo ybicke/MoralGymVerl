@@ -30,11 +30,10 @@
 # render through Gemma-2's template. Only override this back for gemma-2.
 #
 # Provenance / per-value reasoning: see grpo_deon_pd_qwen3.yaml (the frozen
-# run-1 record) — KL 0.04, vanilla loss, IS correction off, max_model_len
-# 4096, 2048-token responses. Optimizer lr 2.5e-5 / warmup 50 is the
-# NeMo-RL-validated GRPO setting (abl4); warmup 50 prevents the early
-# entropy collapse seen at full lr. Watch actor/entropy over the first ~60
-# steps on any new model.
+# run-1 record) — vanilla loss, max_model_len 4096, 2048-token responses.
+# Sampling T 1.0, rollout IS correction, warmup 10 and no KL-to-reference
+# term follow the SDPO paper; lr 2.5e-5 is the NeMo-RL-validated GRPO rate.
+# The runs up to 2026-09 used warmup 50, T 0.7 and KL coef 0.04.
 # =============================================================================
 defaults:
   - ppo_trainer         # verl base — found in SDPO/verl/trainer/config/
@@ -57,23 +56,19 @@ actor_rollout_ref:
       save_contents: [optimizer, extra]
     optim:
       lr: 2.5e-5
-      lr_warmup_steps: 50
+      lr_warmup_steps: 10
     # = train_batch_size: ONE gradient step per generation batch, fully on-policy.
     ppo_mini_batch_size: 16
-    # Canonical GRPO KL-to-reference term (DeepSeekMath eq. 3); 0.04 is the
-    # grpo_pd_tft / NeMo-RL-validated value. Overrides _base_clariden's
-    # use_kl_loss: false. With LoRA, pi_ref = the frozen base model.
-    use_kl_loss: true
-    kl_loss_coef: 0.04
+    # No KL-to-reference term, as in the SDPO paper's GRPO baseline.
+    use_kl_loss: false
     policy_loss:
       loss_mode: vanilla
   rollout:
     n: 16
-    temperature: 0.7
+    temperature: 1.0
     top_p: 1.0
-    # Log the rollout-vs-trainer mismatch (training/rollout_probs_diff_* +
-    # training/rollout_actor_probs_pearson_corr). Monitoring only — this is
-    # the evidence for whether IS correction is ever needed at 2048 tokens.
+    # vLLM log-probs of the sampled tokens: input to rollout_is below, and
+    # logged as training/rollout_probs_diff_*.
     calculate_log_probs: true
 
 data:
@@ -85,6 +80,10 @@ algorithm:
   adv_estimator: grpo
   norm_adv_by_std_in_grpo: true
   use_kl_in_reward: false
+  # Per-token importance weights for the sampler-vs-trainer mismatch,
+  # truncated at 2 (verl default), as in the SDPO paper's GRPO baseline.
+  rollout_correction:
+    rollout_is: token
 
 trainer:
   # Slim checkpoints -> keep the full 15-point trajectory.
