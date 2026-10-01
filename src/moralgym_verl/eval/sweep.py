@@ -82,10 +82,11 @@ RESULTS_ROOTS = ("teacher_signal", "post_training", "transfer")
 # Canonical model tokens (docs/naming.md). teacher_signal and transfer
 # subjects are one of these; a post_training subject is a run name
 # starting with one.
-# Game field of a run name (docs/naming.md, field 4) -> game_type, so a
-# post_training sweep can be held to its run's training game.
-GAME_TOKENS = {"pd": "prisoners_dilemma", "sh": "stag_hunt", "ch": "chicken",
-               "pgg": "public_goods"}
+# Game field of a run name (docs/naming.md, field 4) -> training game_types,
+# so a post_training sweep can be held to its run's training games.
+GAME_TOKENS = {"pd": ("prisoners_dilemma",), "sh": ("stag_hunt",),
+               "ch": ("chicken",), "pgg": ("public_goods",),
+               "pdshch": ("prisoners_dilemma", "stag_hunt", "chicken")}
 MODEL_TOKENS = ("gemma2_9b", "gemma3_12b", "llama31_8b", "olmo3_7b", "qwen3_4b",
                 "qwen3_8b", "qwen3_32b")
 # Game families, mirroring src/moralgym_verl/game/ (classic_games.py = 2x2
@@ -162,11 +163,11 @@ def subject_model(root: str, subject: str) -> str:
                      f"model token; known tokens: {MODEL_TOKENS}")
 
 
-def training_game(run_name: str) -> str:
-    """game_type a run was trained on, from field 4 of its name."""
+def training_games(run_name: str) -> tuple:
+    """game_types a run was trained on, from field 4 of its name."""
     fields = run_name.split("_")
     if len(fields) < 4 or fields[3] not in GAME_TOKENS:
-        raise ValueError(f"cannot read the training game from run name "
+        raise ValueError(f"cannot read the training games from run name "
                          f"{run_name!r} (field 4 must be one of "
                          f"{sorted(GAME_TOKENS)})")
     return GAME_TOKENS[fields[3]]
@@ -277,12 +278,12 @@ def load_sweep(path: str) -> Dict:
             if not run.startswith(model_token + "_"):
                 raise ValueError(f"checkpoint {c!r} is not from a "
                                  f"{model_token} training run")
-            game = training_game(run)
-            foreign = [g for g in spec["axes"]["game"] if g != game]
+            games = training_games(run)
+            foreign = [g for g in spec["axes"]["game"] if g not in games]
             if foreign:
                 raise ValueError(
                     f"post_training evaluates checkpoints on their training "
-                    f"game ({run} -> {game}); game(s) {foreign} belong under "
+                    f"games ({run} -> {games}); game(s) {foreign} belong under "
                     f"configs/eval/transfer/{model_token}/")
     elif root == "transfer":
         stray = [c for c in checkpoints
