@@ -80,7 +80,13 @@ mounts = [
 # (see train_verl.sh) so code changes take effect without rebuilding the image.
 PYTHONPATH = "${MORALGYM_DIR:-${REPO_ROOT}}/src:${SDPO_DIR}"
 HF_HOME = "${HF_HOME:-${SCRATCH}/.cache/huggingface}"
+# vLLM torch.compile cache: keep it off \$HOME (it grows to several GB). On
+# SCRATCH, which is mounted here and may be purged: it is only a cache.
+VLLM_CACHE_ROOT = "${SCRATCH}/.cache/vllm"
 HF_HUB_OFFLINE = "1"
+# Do not write CUDA JIT kernel caches onto the shared filesystem: many
+# small files degrade Lustre.
+CUDA_CACHE_DISABLE = "1"
 TOKENIZERS_PARALLELISM = "false"
 # Gemma-2 tanh softcapping requires FlashInfer attention backend
 VLLM_ATTENTION_BACKEND = "FLASHINFER"
