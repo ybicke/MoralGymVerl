@@ -67,7 +67,9 @@ reward:
 prompt:
   game_design: hist
   hist_coop_bias: 0.5
-  representation: prose
+  # One payoff per bullet line, the format the paper shows. Same sentences
+  # as prose, which the runs up to 2026-09 used.
+  representation: list
   reasoning: true
   randomize_labels: false
   randomize_layout: true

@@ -12,8 +12,10 @@
 #   is only logged), so prompts are byte-identical to the earlier random
 #   opponent at the same seed. The runs up to 2026-09 (jobs 3135837,
 #   3138285, 3348137) were generated with types: [random].
-# - Prose representation; surface randomization on EXCEPT labels (fixed
-#   early as scaffold, randomize in a later run); payoffs fixed.
+# - List representation (one payoff per bullet line, the format the paper
+#   shows; the runs up to 2026-09 used prose, the same sentences in one
+#   block); surface randomization on EXCEPT labels (fixed early as
+#   scaffold, randomize in a later run); payoffs fixed.
 # - intrinsic none / lambda 0: the moral signal lives ONLY in the teacher
 #   context (see teacher: below), not in the reward — attribution stays
 #   with the wording under test.
@@ -42,7 +44,7 @@ teacher:
 prompt:
   game_design: hist
   hist_coop_bias: 0.5
-  representation: prose
+  representation: list
   # CoT + "Answer: <label>" — the regime the screen measured (eval
   # teacher_signal configs run reasoning: true; probe B's teacher signal
   # is over reasoning traces). Without it, responses collapse to bare

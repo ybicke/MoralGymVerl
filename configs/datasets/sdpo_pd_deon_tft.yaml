@@ -37,7 +37,9 @@ teacher:
 prompt:
   game_design: hist
   hist_coop_bias: 0.5
-  representation: prose
+  # One payoff per bullet line, the format the paper shows. Same sentences
+  # as prose.
+  representation: list
   reasoning: true
   randomize_labels: false
   randomize_layout: true
