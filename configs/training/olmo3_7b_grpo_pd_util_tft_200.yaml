@@ -1,0 +1,12 @@
+# =============================================================================
+# GRPO utilitarian control, Olmo-3-7B-Instruct, 200 steps. Same trainer as
+# olmo3_7b_grpo_pd_deon_tft_200 (see its header for the model-specific
+# settings); the reward is the dataset's (grpo_pd_util_tft, derived from
+# the run name).
+#
+# Run as seed replicates:
+#   SEED=1 DRY_RUN=1 bash scripts/slurm/train_verl.sh olmo3_7b_grpo_pd_util_tft_200
+# =============================================================================
+defaults:
+  - olmo3_7b_grpo_pd_deon_tft_200
+  - _self_

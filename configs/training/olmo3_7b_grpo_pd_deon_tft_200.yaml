@@ -1,0 +1,45 @@
+# =============================================================================
+# GRPO deon, Olmo-3-7B-Instruct, 200 steps. Second model family of the
+# replication grid, next to Qwen3-8B: size-matched, and the other model of
+# the SDPO paper (Hübotter et al. 2026, Section 3).
+#
+# Everything except the model is _base_grpo_pd (optimizer 2.5e-5 / warmup
+# 50, KL 0.04, vanilla loss, n=16, T=0.7, 2048-token responses, ckpt every
+# 10). Model-specific:
+#   - path allenai/Olmo-3-7B-Instruct (revision 6e5971d at the time of
+#     writing). Non-thinking model, so no apply_chat_template_kwargs.
+#   - Stock chat template (_base_grpo_pd nulls the Gemma-2 one). With no
+#     system message it opens with a default system turn, "You are a
+#     helpful function-calling AI assistant. You do not currently have
+#     access to any functions. <functions></functions>", which is the
+#     model's native no-tools format. That wording needs tools=None from
+#     verl (~/SDPO 4893fd3); with tools=[] the template renders the full
+#     function-calling preamble instead.
+#   - rollout.gpu_memory_utilization 0.6: verl overwrites max_model_len
+#     with max_position_embeddings (65536), and Olmo-3 has no grouped KV
+#     heads (32 layers x 32 heads x 128 x 2 x bf16 = 512 KB per token), so
+#     one full sequence needs 32 GiB of KV cache. 0.4 leaves about 24 GiB
+#     after the weights; 0.6 leaves about 44. Same remedy as
+#     qwen3_4b_grpo_pd_deon_tft_150.
+#
+# Preflight + smoke BEFORE the full run (new base model for training):
+#   /usr/bin/python3.11 scripts/preflight/check_model_template.py \
+#        --model allenai/Olmo-3-7B-Instruct
+#   PARTITION=debug TIME=00:30:00 bash scripts/slurm/train_verl.sh \
+#        olmo3_7b_grpo_pd_deon_tft_200 olmo3_7b_grpo_pd_deon_tft_smoke \
+#        trainer.total_training_steps=2
+# Run as seed replicates:
+#   SEED=1 DRY_RUN=1 bash scripts/slurm/train_verl.sh olmo3_7b_grpo_pd_deon_tft_200
+# =============================================================================
+defaults:
+  - _base_grpo_pd
+  - _self_
+
+actor_rollout_ref:
+  model:
+    path: allenai/Olmo-3-7B-Instruct
+  rollout:
+    gpu_memory_utilization: 0.6
+
+trainer:
+  total_training_steps: 200
