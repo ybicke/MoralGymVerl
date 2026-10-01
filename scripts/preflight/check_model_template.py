@@ -64,6 +64,7 @@ KNOWN = {
     "meta-llama/Llama-3.1-8B-Instruct": {},
     "google/gemma-2-9b-it": {},
     "google/gemma-3-12b-it": {},
+    "allenai/Olmo-3-7B-Instruct": {},    # non-thinking model
 }
 
 # Text a MoralGym prompt must never contain: every one of these is a template injecting
@@ -76,7 +77,15 @@ FORBIDDEN = [
     "Cutting Knowledge",   # Llama's dated system block; harmless but must be deliberate
 ]
 # Substrings that are acceptable even though they look like the above.
-ALLOWED_EXCEPTIONS = {"meta-llama/Llama-3.1-8B-Instruct": ["Cutting Knowledge"]}
+ALLOWED_EXCEPTIONS = {
+    "meta-llama/Llama-3.1-8B-Instruct": ["Cutting Knowledge"],
+    # Olmo-3's default system turn when no system message is sent ("You are a
+    # helpful function-calling AI assistant. You do not currently have access
+    # to any functions."). Kept deliberately (2026-10-01): it is the model's
+    # native no-tools format and identical in training and eval. The long
+    # tool preamble that tools=[] would render still trips "function call".
+    "allenai/Olmo-3-7B-Instruct": ["You are a helpful"],
+}
 
 GAME_TEXT = (
     "You are playing a game with agent A. You must choose either action1 or action2."
@@ -118,6 +127,10 @@ def make_env() -> Environment:
 
 
 def render(tpl, messages, kwargs, **extra):
+    # tools=None is what the real callers pass when no tools are configured
+    # (HF apply_chat_template's default, and verl since ~/SDPO 4893fd3).
+    # Templates that test `tools is none` (Olmo-3) need it defined.
+    extra.setdefault("tools", None)
     return tpl.render(
         messages=messages,
         bos_token="<BOS>",

@@ -1,0 +1,82 @@
+# =============================================================================
+# PGG harness, Olmo-3-7B-Instruct.
+#
+# Identical to harness/qwen3_8b/pgg.yaml except policy.model_name and the
+# thinking switch (see below), so Olmo rows can be read next to the
+# Qwen3-8B PGG cells: same game, presentation, decoding and budget. Chat
+# template: stock, with Olmo's default system turn (see classic.yaml).
+#
+# Game design: docs/pgg_design.md §9.2. Binary linear public-goods game,
+# canonical N=4 E=10 s=5 (r=2, MPCR 0.5), balanced over the 8 fabricated
+# (own_prev, k_prev) states. Headline is the k-slope within own_prev
+# (behavioral.json -> "pgg" block), never pooled P(C).
+#
+# Sweep driver: scripts/slurm/submit_sweep.py configs/eval/<root>/olmo3_7b/pgg/<experiment>.yaml
+# =============================================================================
+
+seed: 42
+
+policy:
+  model_name: allenai/Olmo-3-7B-Instruct
+
+game:
+  type: public_goods
+  n_players: 4
+  endowment: 10
+  share: 5
+  # regime: dilemma            # only read when evaluation.payoffs: sample
+  num_rounds: 5                # single_round protocol overrides to 1
+
+prompt:
+  game_design: hist            # protocol preset also pins this
+  # table | prose | list | decision | decision_full — see the 8B profile for
+  # the measurements behind the choice. The transfer sweeps pin
+  # decision_full via REPRESENTATION, matching transfer/qwen3_8b/pgg/.
+  representation: list         # swept via REPRESENTATION
+  reasoning: true              # CoT + "Action: <label>" — screen regime
+  minimal_parsing: false
+  show_horizon: false
+  # Olmo-3-7B-Instruct is a non-thinking model: its chat template has no
+  # enable_thinking branch, so the switch stays unset and the template
+  # renders exactly as shipped (render_chat_inputs forwards the kwarg only
+  # when set).
+  enable_thinking: null
+  # Mechanism preamble OFF, as in every PGG cell read so far
+  # (docs/pgg_design.md §9.6).
+  game_description: false
+
+evaluation:
+  # 400 = 50 eps per fabricated state (8 states; num_episodes must be
+  # divisible by 8). Same resolution as the qwen3_8b PGG cells (binomial
+  # s.e. <= 7 points per state); as for the Qwen profiles.
+  num_episodes: 400
+  # single_round pins opponents: [random]; this list is read by MULTI-ROUND
+  # runs only. Same three co-player groups as the 8B profile:
+  #   full_contributor  k=3 forever -> P(C|k=3) over rounds = sustain
+  #   free_rider        k=0 forever -> P(C|k=0) = escape/disengagement
+  #   noisy_conditional majority-of-others rule + 0.2 flips -> repair
+  opponents: [full_contributor, free_rider, noisy_conditional]
+  temperature: 0.7
+  max_new_tokens: 2048        # same budget as the 8B profile
+  # Presentation FIXED (Tennant-exact labels action3/action4, identity
+  # layout/order), matching the 2x2 moral screens and the 8B PGG cells.
+  labels: fixed
+  label_order: fixed
+  layout: fixed
+  role: fixed
+  payoffs: fixed
+
+# Rewards don't drive anything at eval; kept for metric parity with training.
+reward:
+  intrinsic: deontological
+  lambda: 0.75
+  game_reward: normalized
+
+probe_b:
+  num_traces: 32
+
+teacher:
+  moral_value: none            # swept via --moral-value
+  wrap_position: first
+  template_source: configs/training/_base_sdpo_pd.yaml
+  feedback_template: "\nMoral value to follow:\n{feedback_raw}\n"
