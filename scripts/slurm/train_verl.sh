@@ -19,8 +19,11 @@
 #
 # Trailing args become Hydra overrides. Env: PARTITION (normal), TIME
 # (12:00:00), DATASET_CONFIG (derived, also names the W&B group),
-# DATASET_SEED (42), DRY_RUN (stop after name/phase checks; no dataset
-# generation, no sbatch).
+# DATASET_SEED (42), SEED (unset; replicate N of the config, see step 1),
+# DRY_RUN (stop after name/phase checks; no dataset generation, no sbatch).
+#
+#   SEED=1 bash train_verl.sh qwen3_8b_grpo_pd_deon_tft_200
+#   -> run qwen3_8b_grpo_pd_deon_tft_200_seed1, every RNG below seeded 1
 #
 # Three execution contexts — every path below depends on which one it is in:
 #   1-4  login node, submit time   python3.11, no GPUs
@@ -41,13 +44,37 @@ else
 fi
 EXTRA_ARGS="$@"
 
+# Seed replicates. SEED=N runs replicate N of the config: the name gets a
+# _seed<N> suffix, so the run owns its checkpoint, dataset and log dirs
+# (resume_mode auto would otherwise resume another seed's checkpoints), the
+# training data is generated from seed N, and the RNGs that verl leaves at
+# fixed defaults are set to N:
+#   data.seed                          prompt order (default null: torch's
+#                                      default generator, same order every run)
+#   actor.data_loader_seed             minibatch shuffle (default 42)
+#   rollout.engine_kwargs.vllm.seed    vLLM sampling; `rollout.seed` is not a
+#                                      config field, the engine falls back to
+#                                      0 (vllm_async_server.py:318), and
+#                                      engine_kwargs is spread last so it wins
+# LoRA init is not seeded (peft init under torch's default generator, the
+# same for every run). Sampling is not bitwise reproducible either (vLLM
+# batching), so seeds are independent replicates, not exact reruns.
+if [ -n "${SEED:-}" ]; then
+    RUN_NAME="${RUN_NAME}_seed${SEED}"
+    DATASET_SEED="${DATASET_SEED:-${SEED}}"
+    EXTRA_ARGS="data.seed=${SEED} \
+actor_rollout_ref.actor.data_loader_seed=${SEED} \
+++actor_rollout_ref.rollout.engine_kwargs.vllm.seed=${SEED} \
+${EXTRA_ARGS}"
+fi
+
 # Canonical run-name check (docs/naming.md). A canonical name also yields
 # the dataset config: fields 3-6 = <algo>_<game>_<arm>_<opponent>.
-if [[ "${RUN_NAME}" =~ ^([a-z0-9]+)_([0-9]+b)_(grpo|sdpo)_([a-z0-9]+)_([a-z0-9-]+)_([a-z0-9-]+)_([0-9]+|smoke[0-9]*)(_v[0-9]+)?$ ]]; then
+if [[ "${RUN_NAME}" =~ ^([a-z0-9]+)_([0-9]+b)_(grpo|sdpo)_([a-z0-9]+)_([a-z0-9-]+)_([a-z0-9-]+)_([0-9]+|smoke[0-9]*)(_v[0-9]+)?(_seed[0-9]+)?$ ]]; then
     DATASET_DEFAULT="${BASH_REMATCH[3]}_${BASH_REMATCH[4]}_${BASH_REMATCH[5]}_${BASH_REMATCH[6]}"
 else
     echo "WARNING: run name '${RUN_NAME}' is not canonical" >&2
-    echo "  expected <model>_<size>_<algo>_<game>_<arm>_<opponent>_<steps>[_vN] (docs/naming.md)" >&2
+    echo "  expected <model>_<size>_<algo>_<game>_<arm>_<opponent>_<steps>[_vN][_seedN] (docs/naming.md)" >&2
     DATASET_DEFAULT="${CONFIG_NAME}"
 fi
 
@@ -111,6 +138,8 @@ if [ -n "${DRY_RUN:-}" ]; then
     echo "  run:     ${RUN_NAME}"
     echo "  dataset: configs/datasets/${DATASET_CONFIG}.yaml (seed ${DATASET_SEED})"
     echo "  ckpts:   ${MORALGYM_CKPT_ROOT}/${RUN_NAME}"
+    echo "  seed:    ${SEED:-unset (verl defaults: data.seed null, data_loader_seed 42, vllm seed 0)}"
+    echo "  hydra:   ${EXTRA_ARGS:-<none>}"
     echo "Stopping before dataset generation and sbatch."
     exit 0
 fi

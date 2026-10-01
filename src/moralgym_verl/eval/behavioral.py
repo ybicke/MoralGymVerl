@@ -377,11 +377,12 @@ def _print_summary(opp: str, result: Dict) -> None:
 
 def _parse_training_seed(*candidates: Optional[str]) -> Optional[int]:
     """Training seed from checkpoint path or MORALGYM_RUN_NAME (the
-    `_seed<N>_` tag set by train.sh). None for base-model eval or
-    untagged runs (config's default grpo.seed)."""
+    `_seed<N>` suffix that `SEED=N scripts/slurm/train_verl.sh` appends to
+    the run name). None for base-model eval or untagged runs, which
+    trained under verl's default RNG state."""
     for c in candidates:
         if c:
-            m = re.search(r"_seed(\d+)(?:_|$)", str(c))
+            m = re.search(r"_seed(\d+)(?=[_/]|$)", str(c))
             if m:
                 return int(m.group(1))
     return None
