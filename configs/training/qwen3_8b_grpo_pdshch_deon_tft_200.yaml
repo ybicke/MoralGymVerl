@@ -1,0 +1,8 @@
+# =============================================================================
+# GRPO deon on mixed PD, Stag Hunt and Chicken, Qwen3-8B, 200 steps. The
+# trainer is qwen3_8b_grpo_pd_deon_tft_200 unchanged; the game mix lives in
+# the dataset (grpo_pdshch_deon_tft, derived from the run name).
+# =============================================================================
+defaults:
+  - qwen3_8b_grpo_pd_deon_tft_200
+  - _self_

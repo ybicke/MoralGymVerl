@@ -1,0 +1,37 @@
+# SDPO deon on PD, Stag Hunt and Chicken, mixed uniformly per prompt.
+# Differs from sdpo_pd_deon_tft in the game block only; each game keeps its
+# canonical payoffs (classic_games.FIXED_PAYOFFS).
+# (consumed by moralgym_verl.training.dataset, NOT by verl/Hydra.)
+game:
+  types: [prisoners_dilemma, stag_hunt, chicken]
+  distribution: [1.0, 1.0, 1.0]
+  payoffs:
+    prisoners_dilemma: {T: 4, R: 3, P: 1, S: 0}
+    stag_hunt: {T: 3, R: 4, P: 1, S: 0}
+    chicken: {T: 4, R: 2, P: 0, S: 1}
+  num_rounds: 1
+  sample_payoffs: false
+
+opponent:
+  types: [tit_for_tat]
+  distribution: [1.0]
+
+reward:
+  game_reward: normalized
+  intrinsic: none
+  lambda: 0.0
+  illegal_penalty: -6
+
+teacher:
+  feedback: principle
+  moral_value: deontological
+
+prompt:
+  game_design: hist
+  hist_coop_bias: 0.5
+  representation: list
+  reasoning: true
+  randomize_labels: false
+  randomize_layout: true
+  randomize_label_order: true
+  randomize_role: true
