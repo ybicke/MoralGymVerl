@@ -80,9 +80,9 @@ mounts = [
 # (see train_verl.sh) so code changes take effect without rebuilding the image.
 PYTHONPATH = "${MORALGYM_DIR:-${REPO_ROOT}}/src:${SDPO_DIR}"
 HF_HOME = "${HF_HOME:-${SCRATCH}/.cache/huggingface}"
-# vLLM torch.compile cache: keep it off \$HOME (it grows to several GB). On
-# SCRATCH, which is mounted here and may be purged: it is only a cache.
-VLLM_CACHE_ROOT = "${SCRATCH}/.cache/vllm"
+# vLLM compile cache: inside the container, so it is discarded with the job.
+# A cache shared between jobs was read half-written by the next job.
+VLLM_CACHE_ROOT = "/vllm_cache"
 HF_HUB_OFFLINE = "1"
 # Do not write CUDA JIT kernel caches onto the shared filesystem: many
 # small files degrade Lustre.
