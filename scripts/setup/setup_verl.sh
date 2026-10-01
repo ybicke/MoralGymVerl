@@ -56,6 +56,12 @@ else
 fi
 
 # ── EDF config ───────────────────────────────────────────────────────────────
+# An existing EDF is left alone: it may carry local settings (cache
+# locations, extra mounts) that a container rebuild must not reset.
+if [ -f "${EDF_FILE}" ]; then
+    echo "[skip] EDF config already exists: ${EDF_FILE}"
+    echo "       Delete it and rerun to regenerate."
+else
 echo "[3/3] Writing EDF config: ${EDF_FILE}"
 mkdir -p "${HOME}/.edf"
 cat > "${EDF_FILE}" << TOML
@@ -86,6 +92,7 @@ VLLM_ATTENTION_BACKEND = "FLASHINFER"
 # [annotations]
 # com.hooks.aws_ofi_nccl.enabled = "true"
 TOML
+fi
 
 echo ""
 echo "=== Setup complete ==="
