@@ -56,6 +56,10 @@ def _sample_config_from_yaml(cfg: dict[str, Any]) -> tuple[EpisodeConfig, dict[s
         T, R, P, S = sample_payoffs(game_type)
     else:
         p = game_cfg["payoffs"]
+        if game_cfg.get("types"):  # one payoff block per game
+            if game_type not in p:
+                raise ValueError(f"game.payoffs has no block for {game_type!r}")
+            p = p[game_type]
         T, R, P, S = p["T"], p["R"], p["P"], p["S"]
 
     # Labels

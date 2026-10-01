@@ -127,3 +127,33 @@ def test_dataset_state_carries_representation():
     config, state = _sample_config_from_yaml(cfg)
     assert config.representation == "list"
     assert state["representation"] == "list"
+
+
+def test_dataset_mixed_games_take_their_own_payoffs():
+    payoffs = {
+        "prisoners_dilemma": {"T": 4, "R": 3, "P": 1, "S": 0},
+        "stag_hunt": {"T": 3, "R": 4, "P": 1, "S": 0},
+        "chicken": {"T": 4, "R": 2, "P": 0, "S": 1},
+    }
+    cfg = {
+        "game": {"types": list(payoffs), "num_rounds": 1, "payoffs": payoffs},
+        "opponent": {"types": ["tit_for_tat"]},
+    }
+    seen = set()
+    for _ in range(60):
+        config, state = _sample_config_from_yaml(cfg)
+        seen.add(config.game_type)
+        assert (config.T, config.R, config.P, config.S) == tuple(
+            payoffs[config.game_type][k] for k in "TRPS")
+        assert state["game_type"] == config.game_type
+    assert seen == set(payoffs)
+
+
+def test_dataset_mixed_games_refuse_one_shared_payoff_block():
+    cfg = {
+        "game": {"types": ["prisoners_dilemma", "stag_hunt"], "num_rounds": 1,
+                 "payoffs": {"T": 4, "R": 3, "P": 1, "S": 0}},
+        "opponent": {"types": ["tit_for_tat"]},
+    }
+    with pytest.raises(ValueError, match="no block for"):
+        _sample_config_from_yaml(cfg)
