@@ -202,10 +202,13 @@ fi
 MEM_LOG="${OUTPUT_DIR}/\${SLURM_JOB_ID}_${RUN_NAME}.mem"
 MEM_CMD="bash ${REPO_ROOT}/scripts/slurm/mem_sampler.sh 10 > ${MEM_LOG} 2>&1 & MEM_PID=\$!"
 
+# Commits the job runs on: one line in the log and next to the checkpoints.
+VERSION_CMD="mkdir -p ${CKPT_DIR}; echo \"job=\${SLURM_JOB_ID} \$(bash ${REPO_ROOT}/scripts/slurm/code_version.sh ${MORALGYM_DIR} ${SDPO_DIR})\" | tee -a ${CKPT_DIR}/code_version.txt"
+
 # --environment belongs on srun, not sbatch (sbatch --environment is experimental)
 # Stage-out is gated on the training exit code; the sampler is always reaped
 # and its peak echoed into the main log so the number is in one place.
-WRAPPED_CMD="${MEM_CMD}; srun --environment=${EDF_NAME} bash -c '${SETUP_CMDS}; ${TRAIN_CMD}'; RC=\$?; kill \${MEM_PID} 2>/dev/null; echo \"[mem] peak: \$(tail -1 ${MEM_LOG})\"; if [ \${RC} -eq 0 ]; then ${STAGEOUT_CMD}; fi; exit \${RC}"
+WRAPPED_CMD="${VERSION_CMD}; ${MEM_CMD}; srun --environment=${EDF_NAME} bash -c '${SETUP_CMDS}; ${TRAIN_CMD}'; RC=\$?; kill \${MEM_PID} 2>/dev/null; echo \"[mem] peak: \$(tail -1 ${MEM_LOG})\"; if [ \${RC} -eq 0 ]; then ${STAGEOUT_CMD}; fi; exit \${RC}"
 
 # ── 8. Submit ────────────────────────────────────────────────────────────────
 echo "Submitting: ${RUN_NAME}"
