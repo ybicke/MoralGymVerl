@@ -1,0 +1,14 @@
+# GRPO deon, Qwen3-8B, variant 3: qwen3_8b_grpo_pd_deon_tft_200 with the
+# KL-to-reference term back (coef 0.04) and the optimizer of the 2026-08
+# run (lr 2.5e-5, warmup 50).
+defaults:
+  - qwen3_8b_grpo_pd_deon_tft_200
+  - _self_
+
+actor_rollout_ref:
+  actor:
+    optim:
+      lr: 2.5e-5
+      lr_warmup_steps: 50
+    use_kl_loss: true
+    kl_loss_coef: 0.04

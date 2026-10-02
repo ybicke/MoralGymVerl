@@ -1,0 +1,14 @@
+# GRPO deon, Qwen3-8B, variant 2: qwen3_8b_grpo_pd_deon_tft_200 with the
+# KL-to-reference term back (coef 0.04) and the SDPO arm's optimizer
+# (lr 1e-5, warmup 10), so both arms share one optimizer.
+defaults:
+  - qwen3_8b_grpo_pd_deon_tft_200
+  - _self_
+
+actor_rollout_ref:
+  actor:
+    optim:
+      lr: 1.0e-5
+      lr_warmup_steps: 10
+    use_kl_loss: true
+    kl_loss_coef: 0.04
