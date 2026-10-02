@@ -1,0 +1,25 @@
+# Checkpoint eval of qwen3_8b_sdpo_pd_deon_tft_200_seed1 (SDPO, deontological
+# principle only) on its training game: single-round PD in the list format,
+# no moral text in the prompt. Reference rows:
+# teacher_signal/qwen3_8b/classic/pd_reference_list.
+#
+#   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/eval/post_training/qwen3_8b_sdpo_pd_deon_tft_200_seed1/classic/ckpt_ladder.yaml --dry-run
+
+num_episodes: 400          # 100 per fabricated state
+
+axes:
+  game: [prisoners_dilemma]
+  representation: [list]
+  moral_value: [none]
+  protocol: [single_round]
+  checkpoint:
+    - qwen3_8b_sdpo_pd_deon_tft_200_seed1/global_step_50
+    - qwen3_8b_sdpo_pd_deon_tft_200_seed1/global_step_100
+    - qwen3_8b_sdpo_pd_deon_tft_200_seed1/global_step_150
+    - qwen3_8b_sdpo_pd_deon_tft_200_seed1/global_step_200
+
+env:
+  RUN_PROBES: "off"
+
+extra_args: ["--temperature", "0.7"]
