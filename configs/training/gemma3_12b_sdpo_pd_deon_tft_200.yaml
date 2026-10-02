@@ -1,0 +1,32 @@
+# SDPO deon-only, Gemma-3-12B, 200 steps: _base_sdpo_pd with lr 1e-5; the
+# principle is in the dataset (sdpo_pd_deon_tft). Model-specific settings
+# as in gemma3_12b_grpo_pd_deon_tft_150 (see its header): stock chat
+# template, frozen vision tower, FSDP wrap classes pinned on actor and ref
+# (the ref worker holds the EMA teacher), micro-batch 2, vLLM share 0.5.
+defaults:
+  - _base_sdpo_pd
+  - _self_
+
+actor_rollout_ref:
+  model:
+    path: google/gemma-3-12b-it
+    custom_chat_template: null
+  actor:
+    optim:
+      lr: 1.0e-5
+    freeze_vision_tower: true
+    ppo_micro_batch_size_per_gpu: 2
+    fsdp_config:
+      wrap_policy:
+        transformer_layer_cls_to_wrap: [Gemma3DecoderLayer, SiglipEncoderLayer]
+  ref:
+    log_prob_micro_batch_size_per_gpu: 2
+    fsdp_config:
+      wrap_policy:
+        transformer_layer_cls_to_wrap: [Gemma3DecoderLayer, SiglipEncoderLayer]
+  rollout:
+    log_prob_micro_batch_size_per_gpu: 2
+    gpu_memory_utilization: 0.5
+
+trainer:
+  total_training_steps: 200
