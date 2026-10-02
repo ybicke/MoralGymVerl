@@ -137,7 +137,7 @@ def fig_training_curves(args, out_dir: Path) -> None:
 def load_ladder(ladder: Path, reference: List[Path], principle: str):
     """(steps, per-state curves incl. base at 0, teacher P(C|state)).
     With no reference group, curves start at the first checkpoint."""
-    trained = {}
+    trained, rep = {}, "prose"
     for run_dir in discover_run_dirs([ladder]):
         cell = load_cell(run_dir)
         if cell is None:
@@ -145,9 +145,10 @@ def load_ladder(ladder: Path, reference: List[Path], principle: str):
         run, step = checkpoint_of(cell.meta)
         if run != "base" and cell.arm == "none":
             trained[step] = cell_p_c(cell)
+            rep = cell.meta["representation"]
     if not trained:
         raise SystemExit(f"{ladder}: no trained cells")
-    refs = reference_rows(reference, principle) if reference else {}
+    refs = reference_rows(reference, principle, rep) if reference else {}
     if reference and "base" not in refs:
         raise SystemExit(f"no base cell found under {reference}")
     base = cell_p_c(load_cell(refs["base"])) if refs else None
@@ -435,11 +436,12 @@ def trace_language_table(args, out_dir: Path) -> None:
         model_refs = [Path(r) for r in args.reference
                       if Path(r).parts[-3].split("_")[0]
                       in ladder.parents[1].name]
-        refs = (reference_rows(model_refs, args.principle)
+        final = max(cells)
+        refs = (reference_rows(model_refs, args.principle,
+                               cells[final].meta["representation"])
                 if model_refs else {})
         if "base" in refs:
             base_cell = load_cell(refs["base"])
-        final = max(cells)
         row = [label]
         for want_norm in (True, False):
             for c in cols:

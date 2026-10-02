@@ -2,8 +2,8 @@
 """Results document for a trained run's checkpoint eval.
 
 Table P1 puts the trained checkpoints (none arm: no moral text in the
-prompt) in the screen's own Table-1 frame -- fixed prose presentation,
-same protocol, seed and episode count -- between the two reference rows
+prompt) in the screen's own Table-1 frame -- fixed presentation, same
+payoff format, protocol, seed and episode count -- between the two reference rows
 taken from the screen groups:
 
     base, no context          the pre-training policy
@@ -86,23 +86,31 @@ def checkpoint_of(meta: Dict) -> Tuple[str, int]:
     return (m.group(1), FinalStep() if step == "final" else int(step))
 
 
-def prose_fixed_pd(run_dir: Path) -> Optional[Dict]:
+TEXT_FORMATS = ("prose", "list")
+
+
+def fixed_pd(run_dir: Path, representation: Optional[str] = None) -> Optional[Dict]:
+    """Metadata of a fixed-presentation PD cell in a text payoff format;
+    `representation` restricts it to that one format."""
     meta = (load_json(run_dir, "behavioral.json") or {}).get("metadata")
     if not meta:
         return None
     pres = meta.get("eval_presentation") or {}
     if (meta["game_type"] != "prisoners_dilemma"
-            or meta["representation"] != "prose"
+            or meta["representation"] not in TEXT_FORMATS
+            or (representation and meta["representation"] != representation)
             or any(v != "fixed" for v in pres.values())):
         return None
     return meta
 
 
-def reference_rows(groups: List[Path], principle: str) -> Dict[str, Path]:
-    """base-none and base+principle cells, first occurrence wins."""
+def reference_rows(groups: List[Path], principle: str,
+                   representation: str = "prose") -> Dict[str, Path]:
+    """base-none and base+principle cells in the trained cells' payoff
+    format, first occurrence wins."""
     found: Dict[str, Path] = {}
     for run_dir in discover_run_dirs(groups):
-        meta = prose_fixed_pd(run_dir)
+        meta = fixed_pd(run_dir, representation)
         if meta is None or checkpoint_of(meta)[0] != "base":
             continue
         if meta["moral_value"] == "none":
@@ -115,7 +123,7 @@ def reference_rows(groups: List[Path], principle: str) -> Dict[str, Path]:
 def trained_rows(group: Path) -> List[Tuple[int, Path]]:
     rows = []
     for run_dir in discover_run_dirs([group]):
-        meta = prose_fixed_pd(run_dir)
+        meta = fixed_pd(run_dir)
         if meta is None:
             continue
         run, step = checkpoint_of(meta)
@@ -289,7 +297,7 @@ def header(run: str, group: Path, trained, refs: Dict[str, Path]) -> str:
 def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--reference", action="append", type=Path, default=[],
                         help="screen group(s) holding the base-none and "
-                             "base+principle prose cells (repeatable)")
+                             "base+principle cells (repeatable)")
     parser.add_argument("--principle", default="deontological+repair+generosity")
     parser.add_argument("--rollouts", type=Path, default=None,
                         help="run dir with rollouts/ -> trajectory + trace "
@@ -314,9 +322,11 @@ def build(args: argparse.Namespace) -> Path:
                          "setting (see WARNINGs). --allow-mixed to proceed.")
     trained = trained_rows(args.group)
     if not trained:
-        raise SystemExit(f"{args.group}: no trained prose/fixed PD cells")
-    run = checkpoint_of(load_json(trained[0][1], "behavioral.json")["metadata"])[0]
-    refs = reference_rows(args.reference, args.principle)
+        raise SystemExit(f"{args.group}: no trained fixed-presentation PD cells")
+    trained_meta = load_json(trained[0][1], "behavioral.json")["metadata"]
+    run = checkpoint_of(trained_meta)[0]
+    refs = reference_rows(args.reference, args.principle,
+                          trained_meta["representation"])
     for k in ("base", "teacher"):
         if k not in refs:
             print(f"WARNING: no {k} reference cell found in --reference groups")
