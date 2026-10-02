@@ -4,7 +4,7 @@
 # (consumed by moralgym_verl.training.dataset, NOT by verl/Hydra.)
 game:
   types: [prisoners_dilemma, stag_hunt, chicken]
-  distribution: [1.0, 1.0, 1.0]
+  per_batch: [12, 12, 12]   # prompts per game; sum = data.train_batch_size
   payoffs:
     prisoners_dilemma: {T: 4, R: 3, P: 1, S: 0}
     stag_hunt: {T: 3, R: 4, P: 1, S: 0}
