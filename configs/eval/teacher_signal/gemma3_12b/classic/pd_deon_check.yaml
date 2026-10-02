@@ -1,0 +1,21 @@
+# Short in-context check, Gemma-3-12B, PD in the list format: the untrained
+# model with the deon-only principle in its prompt, 80 episodes. Read for
+# how much it quotes the principle before deciding on an SDPO run.
+#
+#   SBATCH_PARTITION=debug SBATCH_TIMELIMIT=01:00:00 /usr/bin/python3.11 \
+#       scripts/slurm/submit_sweep.py \
+#       configs/eval/teacher_signal/gemma3_12b/classic/pd_deon_check.yaml --dry-run
+
+num_episodes: 80           # 20 per fabricated state
+
+axes:
+  game: [prisoners_dilemma]
+  representation: [list]
+  moral_value: [deontological]
+  protocol: [single_round]
+
+env:
+  RUN_PROBES: "off"
+  RUN_PROBE_B_EPISODE: "off"
+
+extra_args: ["--temperature", "0.7"]
