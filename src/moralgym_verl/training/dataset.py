@@ -32,8 +32,24 @@ from moralgym_verl.game.environment import EpisodeConfig, sample_labels
 from moralgym_verl.game.prompts import build_prompt, sample_prompt_randomization
 
 
-def _sample_config_from_yaml(cfg: dict[str, Any]) -> tuple[EpisodeConfig, dict[str, Any]]:
-    """Sample one EpisodeConfig + extra state dict from experiment YAML."""
+def _batch_games(game_cfg: dict[str, Any]) -> list[str]:
+    """Game type of each prompt in one training batch under game.per_batch
+    (counts aligned with game.types), interleaved; empty if not set."""
+    left = dict(zip(game_cfg.get("types", []), game_cfg.get("per_batch", [])))
+    games = []
+    while any(left.values()):
+        for game_type in left:
+            if left[game_type]:
+                games.append(game_type)
+                left[game_type] -= 1
+    return games
+
+
+def _sample_config_from_yaml(
+    cfg: dict[str, Any], game_type: str | None = None
+) -> tuple[EpisodeConfig, dict[str, Any]]:
+    """Sample one EpisodeConfig + extra state dict from experiment YAML.
+    game_type is drawn here unless the caller fixes it."""
     game_cfg = cfg["game"]
     opp_cfg = cfg["opponent"]
     prompt_cfg = cfg.get("prompt", {})
@@ -45,10 +61,10 @@ def _sample_config_from_yaml(cfg: dict[str, Any]) -> tuple[EpisodeConfig, dict[s
     opponent = random.choices(opp_types, weights=opp_dist, k=1)[0] if opp_dist else random.choice(opp_types)
 
     # Game type
-    if game_cfg.get("types"):
+    if game_type is None and game_cfg.get("types"):
         game_dist = game_cfg.get("distribution")
         game_type = random.choices(game_cfg["types"], weights=game_dist, k=1)[0] if game_dist else random.choice(game_cfg["types"])
-    else:
+    elif game_type is None:
         game_type = game_cfg["type"]
 
     # Payoffs
@@ -132,7 +148,7 @@ def _sample_config_from_yaml(cfg: dict[str, Any]) -> tuple[EpisodeConfig, dict[s
     return config, state
 
 
-def make_sample(cfg: dict[str, Any]) -> dict[str, Any]:
+def make_sample(cfg: dict[str, Any], game_type: str | None = None) -> dict[str, Any]:
     """Generate one verl training sample from an experiment config YAML dict.
 
     Uses the 'hist' game design: seeds a fabricated round-1 history so the
@@ -144,7 +160,7 @@ def make_sample(cfg: dict[str, Any]) -> dict[str, Any]:
     in that case this sample's ground_truth carries the full game config
     including the fabricated seed.
     """
-    config, state = _sample_config_from_yaml(cfg)
+    config, state = _sample_config_from_yaml(cfg, game_type)
     prompt_cfg = cfg.get("prompt", {})
     game_design = prompt_cfg.get("game_design", "hist")
 
@@ -205,7 +221,10 @@ def generate_parquet(
         raise ImportError("pip install datasets") from e
 
     random.seed(seed)
-    samples = [make_sample(cfg) for _ in range(n)]
+    games = _batch_games(cfg["game"])
+    samples = [
+        make_sample(cfg, games[i % len(games)] if games else None) for i in range(n)
+    ]
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     ds = hf_datasets.Dataset.from_list(samples)
     ds.to_parquet(str(output_path))

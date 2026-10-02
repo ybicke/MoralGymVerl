@@ -11,7 +11,7 @@ import pytest
 from moralgym_verl.eval.config import build_eval_config
 from moralgym_verl.game.environment import EpisodeConfig
 from moralgym_verl.game.prompts import build_prompt
-from moralgym_verl.training.dataset import _sample_config_from_yaml
+from moralgym_verl.training.dataset import _batch_games, _sample_config_from_yaml
 
 
 def _config(**overrides) -> EpisodeConfig:
@@ -147,6 +147,15 @@ def test_dataset_mixed_games_take_their_own_payoffs():
             payoffs[config.game_type][k] for k in "TRPS")
         assert state["game_type"] == config.game_type
     assert seen == set(payoffs)
+
+
+def test_dataset_per_batch_fixes_the_game_counts():
+    games = _batch_games({"types": ["prisoners_dilemma", "stag_hunt", "chicken"],
+                          "per_batch": [2, 1, 3]})
+    assert len(games) == 6
+    assert [games.count(g) for g in ("prisoners_dilemma", "stag_hunt", "chicken")] == [2, 1, 3]
+    assert games[:3] == ["prisoners_dilemma", "stag_hunt", "chicken"]  # interleaved
+    assert _batch_games({"type": "prisoners_dilemma"}) == []
 
 
 def test_dataset_mixed_games_refuse_one_shared_payoff_block():

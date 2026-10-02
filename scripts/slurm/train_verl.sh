@@ -130,6 +130,16 @@ if (rounds > 1) != bool(mt):
         f"(+ MoralGymRewardManager)"
     )
 print(f"Phase check OK: num_rounds={rounds}, multi_turn.enable={bool(mt)}")
+# game.per_batch holds only if the trainer reads one dataset block per batch.
+per_batch = ds["game"].get("per_batch")
+data = tr.get("data", {})
+if per_batch and (data.get("train_batch_size") != sum(per_batch)
+                  or data.get("shuffle") is not False):
+    sys.exit(
+        f"ERROR: dataset {ds_name}.yaml has game.per_batch={per_batch}; trainer "
+        f"{tr_name}.yaml must set data.train_batch_size={sum(per_batch)} and "
+        f"data.shuffle=false."
+    )
 PYEOF
 
 if [ -n "${DRY_RUN:-}" ]; then
