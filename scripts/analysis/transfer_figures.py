@@ -247,26 +247,22 @@ def fig_final(runs: List[Run], out_dir: Path, name: str) -> List[Path]:
                     ys = curve(block, own); ks = list(range(len(ys)))
                     ax.plot(ks, ys, color=ACCENT, lw=0.9, ms=2.0,
                             **OWN_STYLE[own])
+                    labels.append((ys[-1], f"+ctx {own}$_A$", ACCENT))
             ys = curve(run.points[last], own); ks = list(range(len(ys)))
             ax.plot(ks, ys, color=color, lw=1.2, ms=2.6, **OWN_STYLE[own])
             labels.append((ys[-1], f"s{last} {own}$_A$", color))
         if run.base is not None:
-            labels.append((curve(run.base, "C")[-1], "base", INK_MUTED))
-        if sdpo and run.context:
-            labels.append((curve(next(iter(run.context.values())), "C")[-1],
-                           "+ctx", ACCENT))
-        _labels(ax, labels, ks[-1], min_gap=7.0)
+            ends = [curve(run.base, own)[-1] for own in OWN]
+            labels.append((sum(ends) / len(ends), "base", INK_MUTED))
+        _labels(ax, labels, ks[-1], min_gap=8.0, fontsize=7)
         _k_axes(ax, ks, xlabel=(j // ncols == nrows - 1))
         ax.set_title(title(run), fontsize=8)
         if j % ncols == 0:
             ax.set_ylabel("P(C) (%)", fontsize=7.5)
     for j in range(len(runs), nrows * ncols):
         axes[j // ncols][j % ncols].axis("off")
-    _footnote(fig, runs, "grey",
-              "violet, SDPO panels: the initial teacher",
-              "solid = own previous move C, dashed = D")
     fig.subplots_adjust(left=0.07, right=0.99, top=0.9,
-                        bottom=0.3 / nrows)
+                        bottom=0.2 / nrows)
     return save(fig, out_dir / "figures", f"transfer_final_{name}")
 
 

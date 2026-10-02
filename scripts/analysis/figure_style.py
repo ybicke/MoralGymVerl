@@ -106,15 +106,17 @@ def clean_axes(ax) -> None:
 def direct_labels(ax, entries, x, min_gap=6.0, fontsize=7.5, clip=True):
     """Labels right of anchor x, nudged apart so they never overprint; a
     label sits at its line's height when there is room, else it is pushed
-    up in order, and the stack slides down if it overflows the axes.
+    up in order; labels that overflow the top are pushed back down, which
+    leaves the lower ones in place.
     entries: [(y, text, color)] in data coords."""
     entries = sorted(entries, key=lambda e: e[0])
     ys = [e[0] for e in entries]
     for i in range(1, len(ys)):
         ys[i] = max(ys[i], ys[i - 1] + min_gap)
-    over = ys[-1] - 100 if ys else 0
-    if over > 0:
-        ys = [y - over for y in ys]
+    if ys and ys[-1] > 100:
+        ys[-1] = 100
+        for i in range(len(ys) - 2, -1, -1):
+            ys[i] = min(ys[i], ys[i + 1] - min_gap)
     for (y0, text, color), y in zip(entries, ys):
         ax.annotate(text, (x, y), xytext=(3, 0), textcoords="offset points",
                     va="center", ha="left", fontsize=fontsize, color=color,
