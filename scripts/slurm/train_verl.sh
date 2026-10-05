@@ -106,6 +106,21 @@ DATASET_SEED="${DATASET_SEED:-42}"
 DATASET_CONFIG="${DATASET_CONFIG:-${DATASET_DEFAULT}}"
 DATASET_DIR="${SCRATCH}/moralgym_verl_datasets/${RUN_NAME}"
 
+# ── 3b. Resume ───────────────────────────────────────────────────────────────
+# A run folder with checkpoints is resumed from its latest one. verl restores
+# optimizer, step and data position; the LoRA adapters come back only through
+# lora_adapter_path (the EMA teacher's is read from next to the student's).
+LATEST="${MORALGYM_CKPT_ROOT}/${RUN_NAME}/latest_checkpointed_iteration.txt"
+if [ -f "${LATEST}" ]; then
+    RESUME_DIR="${MORALGYM_CKPT_ROOT}/${RUN_NAME}/global_step_$(cat "${LATEST}")/actor"
+    if [[ "${RUN_NAME}" == *_sdpo_* ]] && [ ! -d "${RESUME_DIR}/teacher_lora_adapter" ]; then
+        echo "ERROR: ${RESUME_DIR} has no teacher_lora_adapter, so this SDPO run cannot be resumed." >&2
+        exit 1
+    fi
+    EXTRA_ARGS="actor_rollout_ref.model.lora_adapter_path=${RESUME_DIR}/lora_adapter ${EXTRA_ARGS}"
+    echo "Resuming ${RUN_NAME} from step $(cat "${LATEST}")"
+fi
+
 # ── 4. Per-run dataset: phase guard, then generate ───────────────────────────
 # Turn structure lives in TWO files that must agree — dataset game.num_rounds
 # and trainer multi_turn.enable — and a mismatch fails SILENTLY: multi-round
