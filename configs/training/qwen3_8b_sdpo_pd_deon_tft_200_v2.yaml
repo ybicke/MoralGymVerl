@@ -1,0 +1,11 @@
+# SDPO deon, Qwen3-8B, variant 2: qwen3_8b_sdpo_pd_deon_tft_200 with a
+# faster EMA teacher (update rate 0.05 instead of 0.01), the value the SDPO
+# paper uses with this optimizer.
+defaults:
+  - qwen3_8b_sdpo_pd_deon_tft_200
+  - _self_
+
+actor_rollout_ref:
+  actor:
+    self_distillation:
+      teacher_update_rate: 0.05
