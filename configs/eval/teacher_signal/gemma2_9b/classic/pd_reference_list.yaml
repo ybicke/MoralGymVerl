@@ -1,0 +1,21 @@
+# PD reference rows in the list payoff format, gemma-2-9b-it: the untrained
+# model and the untrained model with the deon-only principle in its prompt.
+# Same protocol and budget as the Qwen3-8B and Olmo-3-7B reference rows
+# (qwen3_8b/classic/pd_reference_list.yaml); probes off.
+#
+#   /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/eval/teacher_signal/gemma2_9b/classic/pd_reference_list.yaml --dry-run
+
+num_episodes: 400          # 100 per fabricated state
+
+axes:
+  game: [prisoners_dilemma]
+  representation: [list]
+  moral_value: [none, deontological]
+  protocol: [single_round]
+
+env:
+  RUN_PROBES: "off"
+  RUN_PROBE_B_EPISODE: "off"
+
+extra_args: ["--temperature", "0.7"]
