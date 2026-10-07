@@ -240,6 +240,9 @@ if __name__ == "__main__":
     parser.add_argument("--n-train", type=int, default=8000)
     parser.add_argument("--n-val", type=int, default=256)
     parser.add_argument("--seed", type=int, default=42)
+    # Fixed, so every run validates on the same prompts (43 = the value the
+    # unseeded runs got as seed + 1).
+    parser.add_argument("--val-seed", type=int, default=43)
     args = parser.parse_args()
 
     with open(args.config) as f:
@@ -247,4 +250,4 @@ if __name__ == "__main__":
 
     out = Path(args.output_dir)
     generate_parquet(cfg, args.n_train, out / "train.parquet", seed=args.seed)
-    generate_parquet(cfg, args.n_val, out / "val.parquet", seed=args.seed + 1)
+    generate_parquet(cfg, args.n_val, out / "val.parquet", seed=args.val_seed)
