@@ -8,6 +8,7 @@ sweep manifest (falling back to the first cell's metadata):
     checkpoint axis + public_goods    -> specs/post_training_pgg  results_<experiment>.md (transfer/ groups)
     checkpoint axis present           -> specs/post_training   results_<experiment>.md
                                           + traces_checkpoints_*.md (+ traces_training_*.md with --rollouts)
+    benchmarks root (checkpoints key) -> specs/benchmarks      results_<experiment>.md (external benchmarks)
     game == public_goods              -> specs/screen_pgg      results_pgg_<model>.md
     otherwise (2x2 games)             -> specs/screen_2x2      results_<model>.md + traces_<model>.md
 
@@ -37,7 +38,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from eval_cells import discover_run_dirs, load_json  # noqa: E402
 
-KINDS = ("post_training", "post_training_pgg", "multi_round", "screen_pgg", "screen_2x2")
+KINDS = ("post_training", "post_training_pgg", "multi_round", "screen_pgg", "screen_2x2",
+         "benchmarks")
 
 
 def detect_kind(paths) -> str:
@@ -46,7 +48,10 @@ def detect_kind(paths) -> str:
     group = first if (first / "sweep_manifest.json").exists() else first.parent.parent
     manifest = group / "sweep_manifest.json"
     if manifest.exists():
-        axes = json.loads(manifest.read_text()).get("sweep", {}).get("axes", {})
+        sweep = json.loads(manifest.read_text()).get("sweep", {})
+        if sweep.get("results_dir") == "benchmarks":
+            return "benchmarks"
+        axes = sweep.get("axes", {})
         if axes.get("protocol") == ["multi_round"]:
             return "multi_round"
         if "checkpoint" in axes:
