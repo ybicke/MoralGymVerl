@@ -1,0 +1,34 @@
+# =============================================================================
+# SDPO deon-only, gemma-2-9b-it, 200 steps. The Gemma-2 row of
+# qwen3_8b_sdpo_pd_deon_tft_200: _base_sdpo_pd with lr 1e-5, the principle
+# in the dataset (sdpo_pd_deon_tft, derived from the run name). Gemma-2 is
+# the low-recitation model: its in-context teacher quotes the principle
+# 0% of the time against Qwen3-8B's 92%.
+#
+# Model block: _base_sdpo_pd keeps _base_clariden's Gemma-2 path and
+# patched chat template, restated here so the model is visible. Saves on
+# `normal` nodes need RAY_memory_usage_threshold=0.99 (see
+# gemma2_9b_grpo_pd_deon_tft_150).
+#
+# Smoke first:
+#   PARTITION=debug TIME=00:30:00 RAY_memory_usage_threshold=0.99 \
+#       bash scripts/slurm/train_verl.sh gemma2_9b_sdpo_pd_deon_tft_200 \
+#       gemma2_9b_sdpo_pd_deon_tft_smoke trainer.total_training_steps=2
+# Run as seed replicates:
+#   SEED=1 TIME=06:00:00 RAY_memory_usage_threshold=0.99 DRY_RUN=1 \
+#       bash scripts/slurm/train_verl.sh gemma2_9b_sdpo_pd_deon_tft_200
+# =============================================================================
+defaults:
+  - _base_sdpo_pd
+  - _self_
+
+actor_rollout_ref:
+  model:
+    path: google/gemma-2-9b-it
+    custom_chat_template: ${vars.gemma2_chat_template}
+  actor:
+    optim:
+      lr: 1.0e-5
+
+trainer:
+  total_training_steps: 200
