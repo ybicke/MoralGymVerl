@@ -51,9 +51,9 @@ bash scripts/setup/setup_verl.sh
 # 4. Model weights (the container runs offline)
 HF_HOME=<your HF_HOME> hf download Qwen/Qwen3-8B
 
-# 5. Train: resolve first, then submit
-DRY_RUN=1 bash scripts/slurm/train_verl.sh qwen3_8b_grpo_pd_deon_tft_200
-bash scripts/slurm/train_verl.sh qwen3_8b_grpo_pd_deon_tft_200
+# 5. Train: resolve first, then submit (SEED=N marks replicate N)
+SEED=1 DRY_RUN=1 bash scripts/slurm/train_verl.sh qwen3_8b_grpo_pd_deon_tft_200
+SEED=1 bash scripts/slurm/train_verl.sh qwen3_8b_grpo_pd_deon_tft_200
 
 # 6. Evaluate and analyse
 python3.11 scripts/slurm/submit_sweep.py configs/eval/post_training/qwen3_8b_grpo_pd_deon_tft_200/classic/ckpt_ladder.yaml
@@ -79,6 +79,14 @@ configs/eval/<root>/<subject>/<family>/<experiment>.yaml   mirrored by eval_resu
 ```
 
 `<root>` is `teacher_signal` (base-model screens), `post_training` (trained checkpoints), or `transfer` (held-out games); `<family>` is `classic` (2×2 games) or `pgg`. A sweep spec's path is its identity. The launchers and `scripts/audit_naming.py` enforce the contract.
+
+## Reproducibility
+
+Every paper run is a seeded replicate: `SEED=N bash scripts/slurm/train_verl.sh <run>` names the run `<run>_seedN` and seeds the training prompts, their order, the minibatch shuffle and the response sampling. The launcher refuses a run without `SEED`; smoke runs (`*_smoke`) are exempt. At one seed, GRPO and SDPO runs of the same game see identical prompts in identical order, so the arms compare pairwise.
+
+Held fixed across runs: the validation prompts (`--val-seed`, default 43), the evaluation seed (42 in every harness) and the LoRA initialisation, which is unseeded and the same in every run, as in the SDPO reference implementation. Each checkpoint folder records the commits it ran on (`code_version.txt`).
+
+GPU sampling is not bitwise reproducible, so the same seed gives a statistically equivalent run, not an identical one; results are reported as mean and standard error over seeds. A run continues from its latest checkpoint when the same command is resubmitted with a higher `trainer.total_training_steps`; the launcher restores the LoRA adapter and, for SDPO, the saved teacher adapter.
 
 ## Layout
 
