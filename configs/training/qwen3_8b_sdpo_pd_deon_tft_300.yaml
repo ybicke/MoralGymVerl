@@ -1,0 +1,9 @@
+# SDPO deon, Qwen3-8B, 300 steps: qwen3_8b_sdpo_pd_deon_tft_200 run 100
+# steps longer. The learning rate is constant after warmup, so the first 200
+# steps are a replicate of the 200-step run.
+defaults:
+  - qwen3_8b_sdpo_pd_deon_tft_200
+  - _self_
+
+trainer:
+  total_training_steps: 300
