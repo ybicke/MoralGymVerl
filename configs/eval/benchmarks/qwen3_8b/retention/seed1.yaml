@@ -1,0 +1,13 @@
+# Capability retention of the paper's Qwen3-8B seed-1 runs at step 200
+# against the untrained base: SDPO deon, its matched-optimizer GRPO twin
+# (v2, KL 0.04, lr 1e-5), and the multi-game SDPO run. GSM8K + MMLU per
+# cell; four cells = one node.
+#
+#   /usr/bin/python3.11 scripts/slurm/submit_benchmarks.py \
+#       configs/eval/benchmarks/qwen3_8b/retention/seed1.yaml --dry-run
+
+checkpoints:
+  - base
+  - qwen3_8b_sdpo_pd_deon_tft_200_seed1/global_step_200
+  - qwen3_8b_grpo_pd_deon_tft_200_v2_seed1/global_step_200
+  - qwen3_8b_sdpo_pdshch_deon_tft_200_seed1/global_step_200

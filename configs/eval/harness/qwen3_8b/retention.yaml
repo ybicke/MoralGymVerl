@@ -1,0 +1,26 @@
+# Capability-retention profile, Qwen3-8B: lm-eval 0.4.13 stock tasks in
+# their standard reported form (docs/external_benchmarks.md). Greedy,
+# thinking off, adapter applied in-process by vLLM. Spec driver:
+# configs/eval/benchmarks/qwen3_8b/retention/<experiment>.yaml
+
+model_name: Qwen/Qwen3-8B
+
+vllm:                           # lm-eval --model_args, every benchmark
+  dtype: bfloat16
+  gpu_memory_utilization: 0.8
+  max_model_len: 4096
+  enable_thinking: false        # Qwen3 hybrid thinking off, as in training
+
+max_lora_rank: 32               # the adapters' rank (adapter_config.json)
+
+benchmarks:
+  gsm8k:                        # 1319 problems, exact match on the number
+    tasks: gsm8k_cot_llama      # 8-shot CoT as chat turns, "The final answer is N"
+    num_fewshot: 8
+    apply_chat_template: true
+    fewshot_as_multiturn: true
+    gen_kwargs: max_gen_toks=1024   # default 256 truncates the CoT
+  mmlu:                         # 14042 questions, 57 subjects, accuracy
+    tasks: mmlu                 # 5-shot log-likelihood over A-D, raw prompt
+    num_fewshot: 5
+    apply_chat_template: false  # chat template breaks letter scoring
