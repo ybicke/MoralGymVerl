@@ -78,6 +78,13 @@ else
     DATASET_DEFAULT="${CONFIG_NAME}"
 fi
 
+# Every run that is not a smoke is a seeded replicate; unseeded, verl falls
+# back to one fixed prompt order and sampling seed for all such runs.
+if [ -z "${SEED:-}" ] && [[ "${BASH_REMATCH[7]:-}" != smoke* ]]; then
+    echo "ERROR: ${RUN_NAME} has no seed. Set SEED=N; only *_smoke runs may be unseeded." >&2
+    exit 1
+fi
+
 # ── 2. Cluster settings ──────────────────────────────────────────────────────
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # Account, checkpoint and store roots, source checkouts: scripts/slurm/cluster.env.
