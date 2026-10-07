@@ -8,14 +8,15 @@
 # Model block: _base_sdpo_pd keeps _base_clariden's Gemma-2 path and
 # patched chat template, restated here so the model is visible. Saves on
 # `normal` nodes need RAY_memory_usage_threshold=0.99 (see
-# gemma2_9b_grpo_pd_deon_tft_150).
+# gemma2_9b_grpo_pd_deon_tft_150). The 2-step smoke peaked at 437 GB of
+# node memory against the 460000 MB default, hence MEM=800000.
 #
 # Smoke first:
-#   PARTITION=debug TIME=00:30:00 RAY_memory_usage_threshold=0.99 \
+#   PARTITION=debug TIME=00:20:00 RAY_memory_usage_threshold=0.99 \
 #       bash scripts/slurm/train_verl.sh gemma2_9b_sdpo_pd_deon_tft_200 \
 #       gemma2_9b_sdpo_pd_deon_tft_smoke trainer.total_training_steps=2
 # Run as seed replicates:
-#   SEED=1 TIME=06:00:00 RAY_memory_usage_threshold=0.99 DRY_RUN=1 \
+#   SEED=1 TIME=06:00:00 MEM=800000 RAY_memory_usage_threshold=0.99 \
 #       bash scripts/slurm/train_verl.sh gemma2_9b_sdpo_pd_deon_tft_200
 # =============================================================================
 defaults:
