@@ -1,0 +1,28 @@
+# PGG transfer of qwen3_8b_sdpo_pd_deon_tft_300_seed2 (SDPO, deontological
+# principle only), steps 150 to 300: does the student keep moving past the
+# prompted model after step 200, and in which states? Protocol as in
+# single_round_sdpo_seed1.yaml; reference rows: teacher_signal/qwen3_8b/pgg/
+# single_turn_v3 (none, deontological).
+#
+#   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/eval/transfer/qwen3_8b/pgg/single_round_sdpo_seed2.yaml --dry-run
+
+num_episodes: 400          # 50 per fabricated (own_prev, k) state
+
+axes:
+  game: [public_goods]
+  representation: [decision_full]
+  moral_value: [none]
+  protocol: [single_round]
+  checkpoint:
+    - qwen3_8b_sdpo_pd_deon_tft_300_seed2/global_step_150
+    - qwen3_8b_sdpo_pd_deon_tft_300_seed2/global_step_200
+    - qwen3_8b_sdpo_pd_deon_tft_300_seed2/global_step_250
+    - qwen3_8b_sdpo_pd_deon_tft_300_seed2/global_step_300
+
+env:
+  RUN_PROBES: "off"
+  RUN_PROBE_B_EPISODE: "off"
+  GAME_DESCRIPTION: "off"
+
+extra_args: ["--temperature", "0.7"]
