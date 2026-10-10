@@ -1,0 +1,25 @@
+# Capability retention for the paper's Qwen3-8B grid: did game training
+# cost general ability? GSM8K (gsm8k_cot_llama, 8-shot CoT) and MMLU
+# (5-shot log-likelihood) per cell, protocol fixed in
+# configs/eval/harness/qwen3_8b/retention.yaml.
+#
+# Rows = the untrained base plus the final checkpoint (step 200) of every
+# seed of the two paper arms, the same checkpoints the behaviour tables
+# report:
+#   GRPO deon v2  reward channel, KL 0.04, lr 1e-5 (matched optimizer)
+#   SDPO deon     teacher channel, plain deontological principle
+# SDPO seed 2 is the 300-step run; its step 200 is the matched checkpoint.
+# Seven cells = two nodes, about an hour. Report per seed and as mean
+# with seed spread.
+#
+#   /usr/bin/python3.11 scripts/slurm/submit_benchmarks.py \
+#       configs/eval/benchmarks/qwen3_8b/retention/paper_seeds.yaml --dry-run
+
+checkpoints:
+  - base
+  - qwen3_8b_grpo_pd_deon_tft_200_v2_seed1/global_step_200
+  - qwen3_8b_grpo_pd_deon_tft_200_v2_seed2/global_step_200
+  - qwen3_8b_grpo_pd_deon_tft_200_v2_seed3/global_step_200
+  - qwen3_8b_sdpo_pd_deon_tft_200_seed1/global_step_200
+  - qwen3_8b_sdpo_pd_deon_tft_300_seed2/global_step_200
+  - qwen3_8b_sdpo_pd_deon_tft_200_seed3/global_step_200
