@@ -1,0 +1,24 @@
+# Multi-round PGG, step 200, the seeded Qwen3-8B grid: the cells not
+# covered by multi_round_sdpo_seed2 (SDPO seeds 1 and 2). Protocol as in
+# multi_round.yaml (5 live rounds, three co-player groups, no moral text).
+#
+#   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/eval/transfer/qwen3_8b/pgg/multi_round_grid.yaml --dry-run
+
+num_episodes: 20           # per co-player group; x3 x5 rounds = 300 decisions/cell
+
+axes:
+  game: [public_goods]
+  representation: [decision_full]
+  moral_value: [none]
+  protocol: [multi_round]
+  checkpoint:
+    - qwen3_8b_sdpo_pd_deon_tft_200_seed3/global_step_200
+    - qwen3_8b_grpo_pd_deon_tft_200_v2_seed1/global_step_200
+    - qwen3_8b_grpo_pd_deon_tft_200_v2_seed2/global_step_200
+    - qwen3_8b_grpo_pd_deon_tft_200_v2_seed3/global_step_200
+
+env:
+  RUN_PROBES: "off"
+  GAME_DESCRIPTION: "off"
+extra_args: ["--temperature", "0.7"]
