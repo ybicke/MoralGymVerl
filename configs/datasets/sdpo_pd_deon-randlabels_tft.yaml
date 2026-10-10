@@ -1,0 +1,36 @@
+# SDPO deon on PD with random action labels: sdpo_pd_deon_tft with
+# randomize_labels on, so each prompt draws two letters (action<B-Z>) and
+# assigns cooperate to one at random. The label name then never identifies
+# the cooperative option; only the payoff lines do.
+# (consumed by moralgym_verl.training.dataset, NOT by verl/Hydra.)
+game:
+  type: prisoners_dilemma
+  payoffs: {T: 4, R: 3, P: 1, S: 0}
+  num_rounds: 1
+  sample_payoffs: false
+
+opponent:
+  types: [tit_for_tat]
+  distribution: [1.0]
+
+reward:
+  game_reward: normalized
+  intrinsic: none
+  lambda: 0.0
+  illegal_penalty: -6
+
+teacher:
+  feedback: principle
+  moral_value: deontological
+
+prompt:
+  game_design: hist
+  hist_coop_bias: 0.5
+  # One payoff per bullet line, the format the paper shows. Same sentences
+  # as prose.
+  representation: list
+  reasoning: true
+  randomize_labels: true
+  randomize_layout: true
+  randomize_label_order: true
+  randomize_role: true
