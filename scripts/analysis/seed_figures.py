@@ -73,7 +73,7 @@ def load_cells(groups: List[Path], protocol: str, model: Optional[str] = None,
         c = Cell(beh["metadata"], beh["opponents"])
         if model and c.model != model:
             continue
-        if seed is not None and c.seed not in (None, seed):
+        if seed is not None and c.channel != "base" and c.seed != seed:
             continue
         cells.append(c)
     if not cells:
