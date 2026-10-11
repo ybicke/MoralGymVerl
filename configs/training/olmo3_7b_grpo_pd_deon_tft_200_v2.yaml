@@ -1,0 +1,20 @@
+# =============================================================================
+# GRPO deon, Olmo-3-7B-Instruct, 200 steps, variant 2: the Olmo row of
+# qwen3_8b_grpo_pd_deon_tft_200_v2 (KL-to-reference 0.04, lr 1e-5, warmup
+# 10). Model block and memory notes as olmo3_7b_grpo_pd_deon_tft_200.
+#
+# Run as seed replicates:
+#   SEED=1 TIME=06:00:00 bash scripts/slurm/train_verl.sh \
+#       olmo3_7b_grpo_pd_deon_tft_200_v2
+# =============================================================================
+defaults:
+  - olmo3_7b_grpo_pd_deon_tft_200
+  - _self_
+
+actor_rollout_ref:
+  actor:
+    optim:
+      lr: 1.0e-5
+      lr_warmup_steps: 10
+    use_kl_loss: true
+    kl_loss_coef: 0.04
