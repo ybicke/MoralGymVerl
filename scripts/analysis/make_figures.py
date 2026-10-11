@@ -420,7 +420,7 @@ def trace_language_table(args, out_dir: Path) -> None:
 
     # --- PD table -------------------------------------------------------
     cols = [None if c == "final" else int(c)
-            for c in args.steps.split(",")]
+            for c in (args.steps or "0,60,120,final").split(",")]
     hdr = ["base" if c == 0 else "final" if c is None else str(c)
            for c in cols]
     rows = []
@@ -719,6 +719,10 @@ def fig_transfer_grid(args, out_dir: Path) -> None:
                               [args.principle] if args.principle else None)
     if not runs:
         raise SystemExit("no transfer runs found under --group dirs")
+    if args.steps:
+        keep = {int(x) for x in args.steps.split(",")}
+        for run in runs:
+            run.points = {s: b for s, b in run.points.items() if s in keep}
     if args.table_only:
         from transfer_figures import transfer_summary_table
         transfer_summary_table(runs, args.group, out_dir)
@@ -847,7 +851,21 @@ FIGURES = {
     "ckpt-ladder": fig_ckpt_ladder,
     "transfer-grid": lambda a, o: fig_transfer_grid(a, o),
     "multiround-compare": fig_multiround_compare,
+    "seed-grid": lambda a, o: fig_seed_figures(a, o, "single_round"),
+    "seed-multi": lambda a, o: fig_seed_figures(a, o, "multi_round"),
 }
+
+
+def fig_seed_figures(args, out_dir: Path, protocol: str) -> None:
+    """Seed replicates pooled by channel: --group dirs (checkpoint cells of
+    every seed plus the model's base / in-context cells), --step, --model."""
+    from seed_figures import fig_seed_grid, fig_seed_multi, load_cells
+    cells = load_cells([Path(g).expanduser() for g in args.group], protocol,
+                       args.model, args.seed)
+    draw = fig_seed_grid if protocol == "single_round" else fig_seed_multi
+    steps = [int(x) for x in args.step.split(",")]
+    for pth in draw(cells, steps, args.principle, out_dir, args.name):
+        print(f"wrote {pth}")
 
 
 def main() -> None:
@@ -871,8 +889,10 @@ def main() -> None:
     ap.add_argument("--group", action="append", default=[],
                     help="transfer-grid: eval_results/transfer/<model>/"
                          "<family>/<experiment> dir, repeated")
-    ap.add_argument("--steps", default="0,60,120,final",
-                    help="trace-table PD columns (0=base, 'final'=last)")
+    ap.add_argument("--steps",
+                    help="trace-table: PD columns (0=base, 'final'=last; "
+                         "default 0,60,120,final); transfer-grid: keep only "
+                         "these checkpoint steps (default: all evaluated)")
     ap.add_argument("--pgg-reference", action="append", default=[],
                     help="trace-table: PGG screen group(s) supplying a "
                          "model's base cell when the transfer group has "
@@ -902,6 +922,13 @@ def main() -> None:
                     help="moral_value of the optional base+principle "
                          "reference cell; drawn only if a --reference "
                          "group contains it")
+    ap.add_argument("--step", default="200",
+                    help="seed-grid/seed-multi: checkpoint step(s) pooled over "
+                         "seeds, comma-separated")
+    ap.add_argument("--seed", type=int,
+                    help="seed-grid/seed-multi: keep one training seed only")
+    ap.add_argument("--model", help="seed-grid/seed-multi: base-model name "
+                    "to keep (e.g. Qwen3-8B) when --group dirs mix models")
     ap.add_argument("--table-only", action="store_true",
                     help="transfer-grid: write only "
                          "generated/tables/transfer_summary.tex (no figures); "
@@ -929,7 +956,8 @@ def main() -> None:
     elif args.figure in ("training-grid", "ladder-grid", "dopp-compare",
                          "trace-table", "prompt-panels", "trace-panels"):
         out_dir = Path("eval_results/post_training/comparison/analysis")
-    elif args.figure in ("transfer-grid", "multiround-compare"):
+    elif args.figure in ("transfer-grid", "multiround-compare",
+                         "seed-grid", "seed-multi"):
         out_dir = Path("eval_results/transfer/comparison/analysis")
     else:
         raise SystemExit("training-curves needs --analysis-dir "
