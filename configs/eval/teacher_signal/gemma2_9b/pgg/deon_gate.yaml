@@ -1,0 +1,22 @@
+# In-context deon row, Gemma-2-9B, public-goods game: the base model with the
+# deontological principle in its prompt, the reference the SDPO transfer rows
+# are read against. The none row is transfer/gemma2_9b/pgg/single_round
+# (checkpoint: base). Same protocol as olmo3_7b/pgg/deon_gate.
+#
+#   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/eval/teacher_signal/gemma2_9b/pgg/deon_gate.yaml --dry-run
+
+num_episodes: 400          # 50 per fabricated state (8 states)
+
+axes:
+  game: [public_goods]
+  representation: [decision_full]
+  moral_value: [deontological]
+  protocol: [single_round]
+
+env:
+  RUN_PROBES: "off"
+  RUN_PROBE_B_EPISODE: "off"
+  GAME_DESCRIPTION: "off"
+
+extra_args: ["--temperature", "0.7"]
