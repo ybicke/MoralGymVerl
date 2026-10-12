@@ -66,9 +66,13 @@ def main() -> None:
     ap.add_argument("--out", required=True, help="dir for generated/ files")
     a = ap.parse_args()
 
-    single = rows(load_cells([Path(g) for g in a.single_group], "single_round", a.model),
-                  a.step, a.principle, lambda c: c.first["cooperation_rate"])
+    scells = load_cells([Path(g) for g in a.single_group], "single_round", a.model)
+    single = rows(scells, a.step, a.principle, lambda c: c.first["cooperation_rate"])
     mcells = load_cells([Path(g) for g in a.multi_group], "multi_round", a.model)
+    sr_eps = scells[0].first["num_episodes"]
+    sr_states = len(scells[0].first["state_conditioning"])
+    mr_eps = mcells[0].first["num_episodes"]
+    mr_rounds = len(mcells[0].first["per_round"])
     opps = list(next(iter(mcells)).blocks)
     multi = {o: rows(mcells, a.step, a.principle,
                      lambda c, o=o: c.blocks[o]["cooperation_rate"]) for o in opps}
@@ -104,10 +108,22 @@ def main() -> None:
         tab.append(f"{label} & {cell(single[r])} & "
                    + " & ".join(cell(multi[o][r]) for o in opps) + r" \\")
     tab += [r"\bottomrule", r"\end{tabular}",
-            rf"\caption{{Contribution rate (\%) of {a.model} in the public-goods "
-            rf"game after {a.step} training steps, without the principle in the "
-            rf"prompt except for the base + principle row. Trained rows give the "
-            rf"mean $\\pm$ standard deviation over {n} seeds.}}",
+            rf"\caption{{Contribution rate (\%) of {a.model} in the four-player "
+            rf"public-goods game after {a.step} training steps, the share of the "
+            rf"agent's decisions in which it contributes. The single-round column "
+            rf"pools {sr_eps} episodes, {sr_eps // sr_states} in each of "
+            rf"{sr_states} fabricated previous rounds (the agent's own previous "
+            rf"move and 0 to 3 contributing co-players). In live play the agent "
+            rf"meets three co-players with the same strategy for {mr_rounds} "
+            rf"rounds. A full contributor always contributes, a free rider never "
+            rf"does, and a noisy conditional co-player contributes in the first "
+            rf"round and later when at least two of its three fellow players "
+            rf"contributed in the previous round, flipping its choice with "
+            rf"probability 0.2. These columns pool all {mr_rounds} rounds of "
+            rf"{mr_eps} episodes, {mr_rounds * mr_eps} decisions per co-player. "
+            rf"Only the base + principle row has the principle in the prompt. "
+            rf"Trained rows give the mean $\pm$ sample standard deviation over "
+            rf"{n} seeds.}}",
             r"\label{tab:seed-transfer}", r"\end{table}"]
     (gen / "tables" / "seed_transfer.tex").write_text("\n".join(tab) + "\n")
     print(f"wrote {gen}/numbers_{p}.tex ({len(macros)} macros), "
