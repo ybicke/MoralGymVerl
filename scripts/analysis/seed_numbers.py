@@ -7,6 +7,7 @@ single cells.
 
   numbers_<prefix>.tex   \\<prefix>SR<Row>{Mean,Std,Min,Max}    single round
                          \\<prefix>MR<Row><Opp>{Mean,Std,Min,Max} multi round
+                         \\<prefix>MR<Row>RoundOne{...}      round 1, pooled
   tables/seed_transfer.tex
 
   /usr/bin/python3.11 scripts/analysis/seed_numbers.py --model Qwen3-8B \\
@@ -76,13 +77,18 @@ def main() -> None:
     opps = list(next(iter(mcells)).blocks)
     multi = {o: rows(mcells, a.step, a.principle,
                      lambda c, o=o: c.blocks[o]["cooperation_rate"]) for o in opps}
+    # round 1 has no previous round (absent from training); co-players
+    # cannot differ yet, so pool it over them
+    first = rows(mcells, a.step, a.principle, lambda c: sum(
+        c.blocks[o]["per_round"]["round_1"]["p_C"] for o in opps) / len(opps))
 
     p = a.prefix
     macros = {f"{p}Step": str(a.step),
               f"{p}N": str(len(single["Sdpo"]))}
     for r, _ in ROWS:
         for name, vals in [(f"SR{r}", single[r])] + [
-                (f"MR{r}{camel(o)}", multi[o][r]) for o in opps]:
+                (f"MR{r}{camel(o)}", multi[o][r]) for o in opps] + [
+                (f"MR{r}RoundOne", first[r])]:
             for k, v in zip(("Mean", "Std", "Min", "Max"), stats(vals)):
                 macros[f"{p}{name}{k}"] = str(v)
     for r in ("Grpo", "Sdpo"):     # highest single-seed value over co-players
