@@ -53,7 +53,7 @@ def stats(vals):
 
 def cell(vals) -> str:
     mean, std, _, _ = stats(vals)
-    return f"{mean}" if len(vals) == 1 else f"{mean}{{\\scriptsize\\,$\\pm$\\,{std}}}"
+    return f"{mean}" if len(vals) == 1 else f"{mean}{{ $\\pm$\\,{std}}}"
 
 
 def main() -> None:
