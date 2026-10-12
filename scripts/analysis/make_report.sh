@@ -152,6 +152,20 @@ cp $PT/qwen3_8b/classic/multi_round/analysis/generated/numbers_MRPD.tex \
    eval_results/transfer/qwen3_8b/pgg/multi_round/analysis/generated/numbers_MRPGG.tex \
    ~/moralgym-report/generated/ && echo "mirrored in-play number macros"
 
+# Paper seed grid (Qwen3-8B, step 200, 3 seeds): PGG transfer macros
+# (\Seeds...) + table, the same cells as the seed-grid / seed-multi figures.
+T=eval_results/transfer/qwen3_8b/pgg
+$PY scripts/analysis/seed_numbers.py --model Qwen3-8B --step 200 \
+    --single-group $T/single_round_sdpo_seed1 --single-group $T/single_round_sdpo_seed2 \
+    --single-group $T/single_round_grid --single-group $T/single_round_grpo_v2_seed1 \
+    --single-group eval_results/teacher_signal/qwen3_8b/pgg/single_turn_v3 \
+    --multi-group $T/multi_round --multi-group $T/multi_round_grid \
+    --multi-group $T/multi_round_incontext --multi-group $T/multi_round_sdpo_seed2 \
+    --out $T/analysis
+cp $T/analysis/generated/numbers_Seeds.tex ~/moralgym-report/generated/
+cp $T/analysis/generated/tables/seed_transfer.tex ~/moralgym-report/generated/tables/
+echo "mirrored seed-grid macros + table"
+
 # Hanabi-RL transfer check (external checkpoint of Ramesh et al., ICML 2026,
 # staged as qwen3_4b_grpo_hanabi_o3ratings_selfplay_ext-ramesh2026): the
 # same in-play protocol on Qwen3-4B-Instruct-2507, base vs the released
