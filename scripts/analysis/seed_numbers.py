@@ -2,11 +2,11 @@
 
 Same cells and pooling as seed_figures.py (seed-grid / seed-multi):
 one value per seed = pooled contribution rate of that cell, reported as
-mean and min-max over seeds. Base and in-context (prompted) rows are
+mean, sample standard deviation and min-max over seeds. Base and in-context (prompted) rows are
 single cells.
 
-  numbers_<prefix>.tex   \\<prefix>SR<Row>{Mean,Min,Max}   single round
-                         \\<prefix>MR<Row><Opp>{Mean,Min,Max} multi round
+  numbers_<prefix>.tex   \\<prefix>SR<Row>{Mean,Std,Min,Max}    single round
+                         \\<prefix>MR<Row><Opp>{Mean,Std,Min,Max} multi round
   tables/seed_transfer.tex
 
   /usr/bin/python3.11 scripts/analysis/seed_numbers.py --model Qwen3-8B \\
@@ -18,6 +18,7 @@ import argparse
 import sys
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
+from statistics import stdev
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from seed_figures import load_cells, split  # noqa: E402
@@ -45,12 +46,13 @@ def rows(cells, step, principle, rate):
 
 
 def stats(vals):
-    return pct(sum(vals) / len(vals)), pct(min(vals)), pct(max(vals))
+    std = stdev(vals) if len(vals) > 1 else 0.0
+    return pct(sum(vals) / len(vals)), pct(std), pct(min(vals)), pct(max(vals))
 
 
 def cell(vals) -> str:
-    mean, lo, hi = stats(vals)
-    return f"{mean}" if len(vals) == 1 else f"{mean} {{\\scriptsize ({lo}--{hi})}}"
+    mean, std, _, _ = stats(vals)
+    return f"{mean}" if len(vals) == 1 else f"{mean} $\\pm$ {std}"
 
 
 def main() -> None:
@@ -77,10 +79,10 @@ def main() -> None:
     for r, _ in ROWS:
         for name, vals in [(f"SR{r}", single[r])] + [
                 (f"MR{r}{camel(o)}", multi[o][r]) for o in opps]:
-            for k, v in zip(("Mean", "Min", "Max"), stats(vals)):
+            for k, v in zip(("Mean", "Std", "Min", "Max"), stats(vals)):
                 macros[f"{p}{name}{k}"] = str(v)
     for r in ("Grpo", "Sdpo"):     # highest single-seed value over co-players
-        macros[f"{p}MR{r}Max"] = str(max(stats(multi[o][r])[2] for o in opps))
+        macros[f"{p}MR{r}Max"] = str(max(stats(multi[o][r])[3] for o in opps))
 
     gen = Path(a.out) / "generated"
     (gen / "tables").mkdir(parents=True, exist_ok=True)
@@ -105,7 +107,7 @@ def main() -> None:
             rf"\caption{{Contribution rate (\%) of {a.model} in the public-goods "
             rf"game after {a.step} training steps, without the principle in the "
             rf"prompt except for the base + principle row. Trained rows give the "
-            rf"mean and, in brackets, the range over {n} seeds.}}",
+            rf"mean $\\pm$ standard deviation over {n} seeds.}}",
             r"\label{tab:seed-transfer}", r"\end{table}"]
     (gen / "tables" / "seed_transfer.tex").write_text("\n".join(tab) + "\n")
     print(f"wrote {gen}/numbers_{p}.tex ({len(macros)} macros), "
