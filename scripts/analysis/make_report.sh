@@ -199,7 +199,6 @@ CELLS_SDPO_PD=eval_results/post_training/qwen3_4b/classic/multi_round/cells
 CELLS_SDPO_PGG=eval_results/transfer/qwen3_4b/pgg/multi_round/cells
 $PY $MF multiround-compare --name qwen3_4b_hanabi \
     --title "Qwen3-4B-Instruct-2507" \
-    --footnote "Hanabi-RL = released checkpoint of Ramesh et al. (ICML 2026), GRPO on Hanabi with o3 move ratings; SDPO s80/s150 = this work, PD-trained; base = untrained" \
     --cell "base=$CELLS_HANABI_PD/prisoners_dilemma__none__prose__multi_round__base_3338250" \
     --cell "Hanabi-RL=$CELLS_HANABI_PD/prisoners_dilemma__none__prose__multi_round__qwen3_4b_grpo_hanabi_o3ratings_selfplay_ext-ramesh2026-global_step_final_3338250" \
     --cell "SDPO s80=$CELLS_SDPO_PD/prisoners_dilemma__none__prose__multi_round__qwen3_4b_sdpo_pd_deon-repair-gen_tft_150-global_step_80_3357453" \

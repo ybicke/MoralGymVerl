@@ -13,8 +13,8 @@ and is publication-ready without per-figure tuning:
 - REFERENCES: the untrained base is ALWAYS REF_BASE (dashed grey), a
   principle-in-context cell ALWAYS REF_CONTEXT (dotted violet).
 - LABELS: direct labels via direct_labels() in a reserved margin;
-  a legend only where direct labels cannot carry identity. Conventions
-  that need naming go into one footnote() line, never a second legend.
+  a legend only where direct labels cannot carry identity. Drawing
+  conventions belong in the LaTeX caption, never in the figure.
 
 Categorical colors are slots of the validated reference palette (light
 mode, white surface; adjacent-pair CVD dE >= 9.1, normal-vision dE >=
@@ -121,12 +121,6 @@ def direct_labels(ax, entries, x, min_gap=6.0, fontsize=7.5, clip=True):
         ax.annotate(text, (x, y), xytext=(3, 0), textcoords="offset points",
                     va="center", ha="left", fontsize=fontsize, color=color,
                     annotation_clip=clip)
-
-
-def footnote(fig, parts: list) -> None:
-    """One muted line naming the figure's drawing conventions."""
-    fig.text(0.5, 0.01, "; ".join(parts), ha="center", fontsize=7,
-             color=INK_MUTED)
 
 
 def save(fig, out_dir, name: str) -> list:

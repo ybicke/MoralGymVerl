@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 from eval_cells import discover_run_dirs, load_json  # noqa: E402
 from figure_style import (  # noqa: E402
     ACCENT, INK_MUTED, REF_BASE, REF_CONTEXT, RUN_COLORS, WIDTHS,
-    clean_axes, direct_labels, footnote, save,
+    clean_axes, direct_labels, save,
 )
 from transfer_figures import OWN, OWN_STYLE, _k_axes, curve  # noqa: E402
 
@@ -157,11 +157,8 @@ def fig_seed_grid(cells: List[Cell], steps: List[int], principle: str,
     direct_labels(ax, labels, ks[-1], min_gap=8.0, fontsize=7)
     _k_axes(ax, ks, xlabel=True)
     ax.set_ylabel("P(C) (%)", fontsize=7.5)
-    n = max(len(v) for v in runs.values())
     ax.set_title(f"{next(iter(cells)).model}, step {'/'.join(map(str, steps))}", fontsize=8)
-    footnote(fig, ([f"band = min-max over {n} seeds"] if n > 1 else [])
-             + ["solid C$_A$, dashed D$_A$"])
-    fig.subplots_adjust(left=0.13, right=0.99, top=0.9, bottom=0.32)
+    fig.subplots_adjust(left=0.13, right=0.99, top=0.9, bottom=0.2)
     return save(fig, out_dir / "figures", f"transfer_final_{name}")
 
 
@@ -197,9 +194,5 @@ def fig_seed_multi(cells: List[Cell], steps: List[int], principle: str,
         if j == 0:
             ax.set_ylabel("P(C) (%)", fontsize=7.5)
         clean_axes(ax)
-    n = max(len(v) for v in runs.values())
-    footnote(fig, [f"step {'/'.join(map(str, steps))}"]
-             + ([f"band = min-max over {n} seeds"] if n > 1 else [])
-             + ["base dashed grey", "base + principle in context dotted violet"])
-    fig.subplots_adjust(left=0.07, right=0.99, top=0.88, bottom=0.3)
+    fig.subplots_adjust(left=0.07, right=0.99, top=0.88, bottom=0.2)
     return save(fig, out_dir / "figures", f"multi_round_{name}")

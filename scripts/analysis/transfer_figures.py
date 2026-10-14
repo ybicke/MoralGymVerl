@@ -28,7 +28,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 from eval_cells import discover_run_dirs, load_json  # noqa: E402
 from figure_style import (  # noqa: E402
     ACCENT, INK, INK_MUTED, REF_BASE, REF_CONTEXT, RUN_COLORS, WIDTHS,
-    clean_axes, direct_labels as _labels, footnote, save,
+    clean_axes, direct_labels as _labels, save,
 )
 
 CKPT_RE = re.compile(r"/([^/]+)/global_step_(\d+)/")
@@ -99,7 +99,7 @@ def load_transfer(group: Path, references: List[Path],
 # panels share the run colour (RUN_COLORS by run order, identical in all
 # three), base is dashed grey, in-context rows dotted violet (ACCENT),
 # labels are direct (inside a blank right margin of each panel), and the
-# only legend is a one-line footnote naming the two conventions.
+# conventions are named in the LaTeX caption.
 #
 #   pooled   P(C) vs training step, one axes           height 2.1 in
 #   final    last checkpoint per run, own C solid /
@@ -155,18 +155,6 @@ def _k_axes(ax, ks, xlabel: bool) -> None:
     clean_axes(ax)
     if xlabel:
         ax.set_xlabel("$k_O$ (others contributing)", fontsize=7.5)
-
-
-def _footnote(fig, runs: List[Run], base_style="dashed grey",
-              ctx_style="dotted violet", extra: str = "") -> None:
-    ctx = sorted({v for r in runs for v in r.context})
-    parts = [f"base = untrained ({base_style})"]
-    if ctx:
-        parts.append("+ctx = base with " + " / ".join(f"`{v}`" for v in ctx)
-                     + f" in context ({ctx_style})")
-    if extra:
-        parts.append(extra)
-    footnote(fig, parts)
 
 
 def _references(ax, run: Run, own: str, labels: list, ks_out: list) -> None:
@@ -290,7 +278,6 @@ def fig_curves(runs: List[Run], out_dir: Path, name: str) -> List[Path]:
                 ax.set_title(title(run), fontsize=8)
             if j == 0:
                 ax.set_ylabel(f"own prev {own}\nP(C) (%)", fontsize=7.5)
-    _footnote(fig, runs)
     fig.subplots_adjust(left=0.08, right=0.99, top=0.9, bottom=0.15)
     return save(fig, out_dir / "figures", f"transfer_curves_{name}")
 

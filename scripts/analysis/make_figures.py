@@ -36,7 +36,6 @@ from typing import Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from figure_style import (  # noqa: E402
-    footnote,
     ACCENT, INK, INK_MUTED, RUN_COLORS, STATE_COLORS, STATE_TEX, WIDTHS,
     apply_style, clean_axes, direct_labels, save, REF_BASE)
 from training_trajectory import STATES, load_decisions, windows  # noqa: E402
@@ -743,10 +742,6 @@ def fig_dopp_compare(args, out_dir: Path) -> None:
         clean_axes(ax)
         if i == 0:
             ax.set_ylabel("percentage points", fontsize=7.5)
-    footnote(fig, ["solid = conditionality "
-                   r"$\Delta_{\mathrm{opp}}$",
-                   r"dashed = forgiveness $P(\mathrm{C}\mid f_O{=}D)$",
-                   "dotted = initial teacher (+ctx)"])
     fig.subplots_adjust(left=0.07, right=0.99, top=0.88, bottom=0.28)
     for pth in save(fig, out_dir / "figures", "dopp_compare"):
         print(f"wrote {pth}")
@@ -882,9 +877,6 @@ def fig_multiround_compare(args, out_dir: Path) -> None:
             clean_axes(ax)
     if args.title:
         fig.suptitle(args.title, fontsize=10, y=1.02)
-    if args.footnote:
-        footnote(fig, [args.footnote])
-        fig.subplots_adjust(bottom=0.14)
     fig.subplots_adjust(hspace=0.55, wspace=0.12, right=0.86)
     for pth in save(fig, out_dir / "figures", f"multi_round_compare_{args.name}"):
         print(f"saved -> {pth}")
@@ -987,9 +979,6 @@ def main() -> None:
     ap.add_argument("--title", default="",
                     help="multiround-compare: figure suptitle (e.g. the "
                          "shared base model)")
-    ap.add_argument("--footnote", default="",
-                    help="multiround-compare: one muted provenance line "
-                         "under the panels")
     ap.add_argument("--cell", action="append", default=[],
                     help="multiround-compare: label=cell_dir (a dir holding "
                          "behavioral.json of a multi_round cell), repeated; "
