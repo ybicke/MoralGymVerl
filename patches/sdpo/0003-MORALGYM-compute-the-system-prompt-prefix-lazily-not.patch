@@ -1,0 +1,67 @@
+From 76134be4734cfda90712994d949e3bb087f56459 Mon Sep 17 00:00:00 2001
+From: Yves Bicker <yves_bicker@icloud.com>
+Date: Fri, 28 Aug 2026 12:01:35 +0200
+Subject: [PATCH 3/4] [MORALGYM] compute the system-prompt prefix lazily, not
+ in __init__
+
+At start-up verl renders a test conversation with two user turns in a
+row to measure the system-prompt prefix. Gemma-2/3 templates reject that
+conversation and the job crashes. The prefix is only needed for
+multi-turn tool use, so it is now computed on first use instead.
+---
+ verl/experimental/agent_loop/agent_loop.py | 37 +++++++++++++++++++++-
+ 1 file changed, 36 insertions(+), 1 deletion(-)
+
+diff --git a/verl/experimental/agent_loop/agent_loop.py b/verl/experimental/agent_loop/agent_loop.py
+index 157b1e2..60c2f5c 100644
+--- a/verl/experimental/agent_loop/agent_loop.py
++++ b/verl/experimental/agent_loop/agent_loop.py
+@@ -219,9 +219,44 @@ class AgentLoopBase(ABC):
+         self.dataset_cls = dataset_cls
+         self.dataset_config = dataset_config
+         self.apply_chat_template_kwargs = dataset_config.get("apply_chat_template_kwargs", {})
+-        self.system_prompt = initialize_system_prompt(self.tokenizer, **self.apply_chat_template_kwargs)
++        # [MORALGYM] Computed lazily -- see the system_prompt property below.
++        self._system_prompt = None
+         self.loop = get_event_loop()
+ 
++    @property
++    def system_prompt(self) -> list[int]:
++        """Token ids of the conversation-level preamble, measured on first use.
++
++        [MORALGYM] This is only consumed by apply_chat_template(remove_system_prompt=True),
++        which only ToolAgentLoop passes. Computing it eagerly in __init__ made every agent
++        loop -- SingleTurnAgentLoop included -- depend on the tokenizer tolerating a probe
++        that renders TWO CONSECUTIVE USER MESSAGES (verl/utils/chat_template.py). Templates
++        that validate the chat contract reject that outright: Gemma-2 and Gemma-3 both
++        raise "Conversation roles must alternate user/assistant/...", killing single-turn
++        runs at construction over a value they never read (observed: gemma3_deon_150,
++        job 3204247 -- 0 checkpoints).
++
++        Deferring the probe to first use means single-turn training works on any template,
++        and a model whose template cannot answer the probe fails where the answer is
++        actually needed, with a message that says what to do about it.
++        """
++        if self._system_prompt is None:
++            try:
++                self._system_prompt = initialize_system_prompt(
++                    self.tokenizer, **self.apply_chat_template_kwargs
++                )
++            except Exception as e:
++                raise RuntimeError(
++                    "Could not measure the chat template's system-prompt prefix: this "
++                    "tokenizer rejects the two-consecutive-user-messages probe in "
++                    "verl.utils.chat_template.initialize_system_prompt. Set "
++                    "actor_rollout_ref.model.custom_chat_template to the model's stock "
++                    "template with only its role-alternation raise removed. Note this is "
++                    "reachable only from the multi-turn tool path "
++                    "(remove_system_prompt=True); single-turn training does not need it."
++                ) from e
++        return self._system_prompt
++
+     async def process_vision_info(self, messages: list[dict]) -> dict:
+         """Extract images and videos from messages.
+ 
+-- 
+2.43.0
+

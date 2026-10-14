@@ -1,0 +1,41 @@
+From 4893fd33cb98f48be32da4f16bbd77a7b13fae3f Mon Sep 17 00:00:00 2001
+From: Yves Bicker <yves_bicker@icloud.com>
+Date: Thu, 27 Aug 2026 22:59:23 +0200
+Subject: [PATCH 2/4] [MORALGYM] pass tools=None, not [], when no tools are
+ configured
+
+Without tools configured, verl passed an empty tool list to the chat
+template. Some templates (Llama-3.1) treat an empty list as "tools
+present" and add a tool-calling instruction to every prompt, so the
+model answers with function calls. Passing None leaves the prompt
+unchanged.
+---
+ verl/experimental/agent_loop/single_turn_agent_loop.py | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/verl/experimental/agent_loop/single_turn_agent_loop.py b/verl/experimental/agent_loop/single_turn_agent_loop.py
+index b3e97a8..7bc47d9 100644
+--- a/verl/experimental/agent_loop/single_turn_agent_loop.py
++++ b/verl/experimental/agent_loop/single_turn_agent_loop.py
+@@ -46,9 +46,17 @@ class SingleTurnAgentLoop(AgentLoopBase):
+         videos = multi_modal_data.get("videos")
+ 
+         # 2. apply chat template and tokenize
++        # [MORALGYM] Pass None rather than an empty list when no tools are configured.
++        # tool_schemas is [] whenever data.tool_config_path is unset, and chat templates
++        # disagree on how to guard it: Qwen3 uses `{%- if tools %}` (empty list is falsy,
++        # skipped) but Llama-3.1 uses `{%- if tools is not none %}`, so [] renders the full
++        # tool preamble -- an "Environment: ipython" system block plus "respond with a JSON
++        # for a function call" -- listing zero functions. That silently rewrites the prompt
++        # and makes the model emit tool-call JSON instead of reasoning (llama31_deon_150,
++        # job 3203600: 99.3% parse-fail at step 10, 100% tool-call-shaped traces at 150).
+         prompt_ids = await self.apply_chat_template(
+             messages,
+-            tools=self.tool_schemas,
++            tools=self.tool_schemas or None,
+             images=images,
+             videos=videos,
+         )
+-- 
+2.43.0
+

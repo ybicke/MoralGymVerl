@@ -1,0 +1,53 @@
+From 1fbd4e34fdf24d557808697e4f816b1a15f913b9 Mon Sep 17 00:00:00 2001
+From: Yves Bicker <yves_bicker@icloud.com>
+Date: Mon, 5 Oct 2026 17:34:19 +0200
+Subject: [PATCH 4/4] [MORALGYM] save and restore the EMA teacher's LoRA
+ adapter
+
+SDPO trains against a teacher that is a moving average of the model.
+With LoRA, checkpoints saved only the model's adapter, so a resumed run
+restarted the teacher from scratch. Checkpoints now also save the
+teacher's adapter (teacher_lora_adapter/) and resuming loads it.
+---
+ verl/workers/fsdp_workers.py | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/verl/workers/fsdp_workers.py b/verl/workers/fsdp_workers.py
+index 17e69ce..dcae3fc 100644
+--- a/verl/workers/fsdp_workers.py
++++ b/verl/workers/fsdp_workers.py
+@@ -438,6 +438,11 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
+             actor_module.enable_input_require_grads()
+ 
+             lora_adapter_path = self.config.model.get("lora_adapter_path")
++            if lora_adapter_path is not None and role == "ref":
++                # A checkpoint keeps the EMA teacher's adapter next to the student's.
++                teacher_path = os.path.join(os.path.dirname(lora_adapter_path.rstrip("/")), "teacher_lora_adapter")
++                if os.path.isdir(teacher_path):
++                    lora_adapter_path = teacher_path
+             if lora_adapter_path is not None:
+                 from peft import PeftModel
+ 
+@@ -1155,6 +1160,19 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
+                 log_only_rank_0=True,
+             )
+ 
++            # The EMA teacher is no part of the checkpoint; without its adapter a
++            # resumed SDPO run would start from a reset teacher.
++            teacher = getattr(self.actor, "teacher_module", None)
++            if teacher is not None and teacher is getattr(self, "ref_module_fsdp", None):
++                teacher_params = layered_summon_lora_params(teacher)
++                if dist.get_rank() == 0:
++                    teacher_save_path = os.path.join(local_path, "teacher_lora_adapter")
++                    os.makedirs(teacher_save_path, exist_ok=True)
++                    save_file(teacher_params, os.path.join(teacher_save_path, "adapter_model.safetensors"))
++                    with open(os.path.join(teacher_save_path, "adapter_config.json"), "w", encoding="utf-8") as f:
++                        json.dump(peft_config, f, ensure_ascii=False, indent=4)
++                dist.barrier()
++
+         if self._is_offload_param:
+             offload_fsdp_model_to_cpu(self.actor_module_fsdp)
+ 
+-- 
+2.43.0
+
