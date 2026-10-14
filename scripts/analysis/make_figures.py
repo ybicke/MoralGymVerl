@@ -245,6 +245,56 @@ def parse_labeled(entries: List[str]) -> List[tuple]:
     return out
 
 
+def fig_training_seeds(args, out_dir: Path) -> None:
+    """Per-state training curves pooled over seeds: one panel per label
+    (--run label=run-dir, repeat a label once per seed). Line = mean over
+    seeds of each run's window mean, band = min-max over seeds, the same
+    convention as the seed transfer figures."""
+    by_label: Dict[str, list] = defaultdict(list)
+    for label, run_dir in parse_labeled(args.run):
+        by_label[label].append(load_group_props(run_dir, args.window))
+    labels = list(by_label)
+    ncols = min(args.ncols, len(labels))
+    nrows = -(-len(labels) // ncols)
+    width = WIDTHS["wide"] if ncols > 1 else WIDTHS["column"]
+    fig, axes = plt.subplots(
+        nrows, ncols, sharey=True, sharex=True, squeeze=False,
+        figsize=(width, (2.1 if ncols > 1 else 1.45) * nrows),
+        gridspec_kw={"wspace": 0.08, "hspace": 0.35})
+    for i, label in enumerate(labels):
+        ax, runs = axes[i // ncols][i % ncols], by_label[label]
+        n_win = min(len(r) for r in runs)
+        mid = [(runs[0][w]["first"] + runs[0][w]["last"]) / 2
+               for w in range(n_win)]
+        for st in STATES:
+            xs, mean, lo, hi = [], [], [], []
+            for w in range(n_win):
+                vals = [100 * sum(r[w]["props"][st]) / len(r[w]["props"][st])
+                        for r in runs if r[w]["props"][st]]
+                if len(vals) < len(runs):
+                    continue
+                xs.append(mid[w]); mean.append(sum(vals) / len(vals))
+                lo.append(min(vals)); hi.append(max(vals))
+            ax.plot(xs, mean, color=STATE_COLORS[st], linewidth=1.2)
+            ax.fill_between(xs, lo, hi, color=STATE_COLORS[st], alpha=0.18,
+                            linewidth=0)
+        ax.set_title(label, fontsize=8)
+        ax.set_ylim(-3, 103)
+        if i // ncols == nrows - 1:
+            ax.set_xlabel("training step", fontsize=7.5)
+        if i % ncols == 0:
+            ax.set_ylabel(r"$P(\mathrm{C}\mid\mathrm{state})$ (%)",
+                          fontsize=7.5)
+        clean_axes(ax)
+    fig.legend([plt.Line2D([], [], color=STATE_COLORS[st]) for st in STATES],
+               [STATE_TEX[st] for st in STATES], loc="upper center",
+               ncols=4, frameon=False, fontsize=7.5,
+               bbox_to_anchor=(0.5, 1 + 0.12 / nrows), handlelength=1.4,
+               columnspacing=1.0)
+    for pth in save(fig, out_dir / "figures", f"training_seeds_{args.name}"):
+        print(f"wrote {pth}")
+
+
 def fig_training_grid(args, out_dir: Path) -> None:
     """Small multiples of the per-state training curves: one panel per
     run (--run label=rollout-dir, repeated), shared axes and state
@@ -843,6 +893,7 @@ def fig_multiround_compare(args, out_dir: Path) -> None:
 FIGURES = {
     "training-curves": fig_training_curves,
     "training-grid": fig_training_grid,
+    "training-seeds": fig_training_seeds,
     "ladder-grid": fig_ladder_grid,
     "dopp-compare": fig_dopp_compare,
     "trace-table": trace_language_table,
