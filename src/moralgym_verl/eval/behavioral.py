@@ -35,10 +35,13 @@ from moralgym_verl.eval.config import (
     apply_presentation, apply_protocol, build_eval_config, git_provenance,
     load_config,
 )
-from moralgym_verl.eval.generation import make_chat_policy_fn, make_policy_fn
+from moralgym_verl.eval.generation import (
+    generate_vllm, make_chat_policy_fn, make_policy_fn,
+    make_recording_policy_fn, make_replay_policy_fn,
+)
 from moralgym_verl.eval.metrics import aggregate_rollout_metrics, per_round_breakdown
 from moralgym_verl.eval.scoring import iter_decisions
-from moralgym_verl.eval.model_loading import load_model_for_eval
+from moralgym_verl.eval.model_loading import load_model_for_eval, load_vllm_for_eval
 from moralgym_verl.eval.teacher_context import load_reprompt_template, wrap_prompt
 from moralgym_verl.game.moral_values import MORAL_VALUE_REGISTRY, get_moral_value
 from moralgym_verl.game.classic_games import FIXED_PAYOFFS
@@ -61,6 +64,7 @@ CFG_OVERRIDES = [
     ("restate_rules", "prompt", "restate_rules_per_round"),
     ("game_description", "prompt", "game_description"),
     ("enable_thinking", "prompt", "enable_thinking"),
+    ("backend", "evaluation", "backend"),
     ("temperature", "evaluation", "temperature"),
     ("max_new_tokens", "evaluation", "max_new_tokens"),
     ("eval_labels", "evaluation", "labels"),
@@ -116,18 +120,11 @@ def seed_streams(cfg: Dict) -> random.Random:
     return random.Random(seed + 1_000_003)
 
 
-def build_policy(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = None):
-    """Load the model and build the policy function run_episode consumes.
-
-    moral_value != 'none' wraps every game prompt in the SDPO reprompt
+def build_prompt_wrapper(cfg: Dict):
+    """moral_value != 'none' wraps every game prompt in the SDPO reprompt
     template with the value in the {feedback} slot (teacher-signal eval);
-    'none' -> plain student baseline.
+    'none' -> None, the plain student baseline.
     """
-    eval_cfg = cfg.get("evaluation", {})
-    temperature = eval_cfg.get("temperature", 1.0)
-    max_new_tokens = eval_cfg.get("max_new_tokens", 10)
-    enable_thinking = cfg.get("prompt", {}).get("enable_thinking")
-
     teacher_cfg = cfg.get("teacher") or {}
     moral_value_name = teacher_cfg.get("moral_value", "none")
     moral_value_text = get_moral_value(moral_value_name)
@@ -159,6 +156,17 @@ def build_policy(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] =
         )
         logger.info("Teacher context: moral_value=%s, template from %s",
                     moral_value_name, template_source)
+    return prompt_wrapper
+
+
+def build_policy(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = None):
+    """Load the model and build the policy function run_episode consumes."""
+    eval_cfg = cfg.get("evaluation", {})
+    temperature = eval_cfg.get("temperature", 1.0)
+    max_new_tokens = eval_cfg.get("max_new_tokens", 10)
+    enable_thinking = cfg.get("prompt", {}).get("enable_thinking")
+    teacher_cfg = cfg.get("teacher") or {}
+    prompt_wrapper = build_prompt_wrapper(cfg)
 
     base_model = cfg["policy"]["model_name"]
     logger.info("Loading model from %s (base: %s)", checkpoint or "base", base_model)
@@ -326,6 +334,8 @@ def _presentation(c: EpisodeConfig) -> Dict:
 
 def evaluate(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = None):
     """Run multi-turn rollout evaluation against each configured opponent."""
+    if cfg.get("evaluation", {}).get("backend", "hf") == "vllm":
+        return evaluate_batched(cfg, checkpoint, raw_log)
     presentation_rng = seed_streams(cfg)
     policy_fn = build_policy(cfg, checkpoint, raw_log)
     opponents = cfg.get("evaluation", {}).get(
@@ -336,6 +346,58 @@ def evaluate(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = Non
         result = run_opponent(cfg, opp, policy_fn, presentation_rng, raw_log=raw_log)
         all_results.append(result)
         _print_summary(opp, result)
+    return all_results
+
+
+def evaluate_batched(cfg: Dict, checkpoint: Optional[str],
+                     raw_log: Optional[list] = None):
+    """evaluate() for single-round episodes with one vLLM batch.
+
+    A recording pass renders every prompt, vLLM generates them together,
+    and a replay pass plays the episodes with those answers. The RNG
+    streams are restored between the passes, so both build identical
+    episodes, and the replay checks every prompt against its recording.
+    """
+    if cfg["game"]["num_rounds"] != 1:
+        raise ValueError("backend 'vllm' supports single-round episodes only: "
+                         "in multi-round play each answer shapes the next prompt")
+    eval_cfg = cfg.get("evaluation", {})
+    max_new_tokens = eval_cfg.get("max_new_tokens", 10)
+    enable_thinking = cfg.get("prompt", {}).get("enable_thinking")
+    opponents = eval_cfg.get("opponents", ["tit_for_tat", "always_defect"])
+    prompt_wrapper = build_prompt_wrapper(cfg)
+    llm, tokenizer, lora_request = load_vllm_for_eval(
+        checkpoint, cfg["policy"]["model_name"], max_new_tokens,
+        cfg.get("seed", 42))
+
+    presentation_rng = seed_streams(cfg)
+    rng_states = (random.getstate(), np.random.get_state(),
+                  torch.get_rng_state(), presentation_rng.getstate())
+    records: list = []
+    recorder = make_recording_policy_fn(tokenizer, records, prompt_wrapper,
+                                        enable_thinking)
+    for opp in opponents:
+        run_opponent(cfg, opp, recorder, presentation_rng)
+
+    random.setstate(rng_states[0])
+    np.random.set_state(rng_states[1])
+    torch.set_rng_state(rng_states[2])
+    presentation_rng.setstate(rng_states[3])
+    logger.info("vLLM batch: %d prompts, max_new_tokens=%d",
+                len(records), max_new_tokens)
+    responses = generate_vllm(llm, tokenizer, [r["text"] for r in records],
+                              max_new_tokens, eval_cfg.get("temperature", 1.0),
+                              lora_request)
+
+    replay = make_replay_policy_fn(records, responses, raw_log, prompt_wrapper)
+    all_results = []
+    for opp in opponents:
+        result = run_opponent(cfg, opp, replay, presentation_rng, raw_log=raw_log)
+        all_results.append(result)
+        _print_summary(opp, result)
+    if replay.consumed() != len(records):
+        raise RuntimeError(f"replay used {replay.consumed()} of "
+                           f"{len(records)} recorded prompts")
     return all_results
 
 
@@ -471,6 +533,9 @@ def build_parser() -> argparse.ArgumentParser:
                         help="public_goods only: prepend the mechanism "
                              "preamble to the table/prose payoff block "
                              "(docs/pgg_design.md §9.4). on|off.")
+    parser.add_argument("--backend", choices=["hf", "vllm"], default=None,
+                        help="Generation backend (default hf). 'vllm' batches "
+                             "all decisions of a single-round eval.")
     parser.add_argument("--enable-thinking", type=_bool_arg, default=None,
                         metavar="true|false",
                         help="Override prompt.enable_thinking (chat-template "
@@ -629,6 +694,7 @@ def build_metadata(
         "game_reward": cfg["reward"].get("game_reward", "raw"),
         "eval_temperature": eval_block.get("temperature", 1.0),
         "eval_max_new_tokens": eval_block.get("max_new_tokens", 10),
+        "eval_backend": eval_block.get("backend", "hf"),
         "minimal_parsing": cfg.get("prompt", {}).get("minimal_parsing", False),
         "reasoning": cfg.get("prompt", {}).get("reasoning", False),
         # Hybrid-thinking switch (Qwen3) and the PGG mechanism preamble:
