@@ -1,0 +1,23 @@
+# Check of the batched vLLM eval path through a LoRA adapter, thinking off:
+# SDPO seed 1 at step 200 against the sequential single_round_sdpo_seed1
+# cell (58%).
+#
+#   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/eval/transfer/qwen3_8b/pgg/single_round_vllm_check_sdpo.yaml --dry-run
+
+num_episodes: 200          # 25 per fabricated (own_prev, k) state
+
+axes:
+  game: [public_goods]
+  representation: [decision_full]
+  moral_value: [none]
+  protocol: [single_round]
+  checkpoint:
+    - qwen3_8b_sdpo_pd_deon_tft_200_seed1/global_step_200
+
+env:
+  RUN_PROBES: "off"
+  RUN_PROBE_B_EPISODE: "off"
+  GAME_DESCRIPTION: "off"
+
+extra_args: ["--temperature", "0.7", "--backend", "vllm"]
