@@ -20,4 +20,5 @@ env:
   RUN_PROBE_B_EPISODE: "off"
   GAME_DESCRIPTION: "off"
 
-extra_args: ["--temperature", "0.7", "--backend", "vllm"]
+extra_args: ["--temperature", "0.7", "--backend", "vllm",
+             "--max-new-tokens", "30000"]
