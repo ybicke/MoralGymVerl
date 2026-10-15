@@ -60,6 +60,7 @@ CFG_OVERRIDES = [
     ("representation", "prompt", "representation"),
     ("restate_rules", "prompt", "restate_rules_per_round"),
     ("game_description", "prompt", "game_description"),
+    ("enable_thinking", "prompt", "enable_thinking"),
     ("temperature", "evaluation", "temperature"),
     ("max_new_tokens", "evaluation", "max_new_tokens"),
     ("eval_labels", "evaluation", "labels"),
@@ -470,6 +471,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="public_goods only: prepend the mechanism "
                              "preamble to the table/prose payoff block "
                              "(docs/pgg_design.md §9.4). on|off.")
+    parser.add_argument("--enable-thinking", type=_bool_arg, default=None,
+                        metavar="true|false",
+                        help="Override prompt.enable_thinking (chat-template "
+                             "thinking switch, e.g. Qwen3).")
     parser.add_argument("--restate-rules", type=_bool_arg, default=None,
                         metavar="true|false",
                         help="Override prompt.restate_rules_per_round "
