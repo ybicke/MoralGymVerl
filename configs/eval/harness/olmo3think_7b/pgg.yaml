@@ -1,0 +1,60 @@
+# =============================================================================
+# PGG harness, Olmo-3-7B-Think.
+#
+# harness/olmo3_7b/pgg.yaml with the model swapped and the generation budget
+# raised for thinking (see harness/olmo3think_7b/classic.yaml). Prefer
+# --backend vllm for single-round cells.
+#
+# Game design: docs/pgg_design.md §9.2. Binary linear public-goods game,
+# canonical N=4 E=10 s=5 (r=2, MPCR 0.5), balanced over the 8 fabricated
+# (own_prev, k_prev) states. Headline is the k-slope within own_prev.
+#
+# Sweep driver: scripts/slurm/submit_sweep.py configs/eval/<root>/olmo3think_7b/pgg/<experiment>.yaml
+# =============================================================================
+
+seed: 42
+
+policy:
+  model_name: allenai/Olmo-3-7B-Think
+
+game:
+  type: public_goods
+  n_players: 4
+  endowment: 10
+  share: 5
+  num_rounds: 5                # single_round protocol overrides to 1
+
+prompt:
+  game_design: hist            # protocol preset also pins this
+  representation: list         # swept via REPRESENTATION
+  reasoning: true
+  minimal_parsing: false
+  show_horizon: false
+  enable_thinking: null        # template has no switch; always thinks
+  game_description: false      # mechanism preamble OFF, as in every PGG cell so far
+
+evaluation:
+  num_episodes: 400            # 50 per fabricated state (must divide by 8)
+  opponents: [full_contributor, free_rider, noisy_conditional]   # multi-round only
+  temperature: 0.7
+  max_new_tokens: 16384        # thinking budget, see classic.yaml
+  labels: fixed
+  label_order: fixed
+  layout: fixed
+  role: fixed
+  payoffs: fixed
+
+# Rewards don't drive anything at eval; kept for metric parity with training.
+reward:
+  intrinsic: deontological
+  lambda: 0.75
+  game_reward: normalized
+
+probe_b:
+  num_traces: 32
+
+teacher:
+  moral_value: none            # swept via --moral-value
+  wrap_position: first
+  template_source: configs/training/_base_sdpo_pd.yaml
+  feedback_template: "\nMoral value to follow:\n{feedback_raw}\n"

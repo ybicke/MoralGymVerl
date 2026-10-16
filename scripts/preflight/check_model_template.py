@@ -65,6 +65,7 @@ KNOWN = {
     "google/gemma-2-9b-it": {},
     "google/gemma-3-12b-it": {},
     "allenai/Olmo-3-7B-Instruct": {},    # non-thinking model
+    "allenai/Olmo-3-7B-Think": {},       # always thinks: the generation prompt prefills <think>
 }
 
 # Text a MoralGym prompt must never contain: every one of these is a template injecting

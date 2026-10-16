@@ -1,0 +1,50 @@
+# =============================================================================
+# Classic 2x2 harness, Olmo-3-7B-Think.
+#
+# harness/olmo3_7b/classic.yaml with the model swapped and the generation
+# budget raised for thinking: the stock template prefills <think> in the
+# generation prompt, there is no thinking switch, and the answer parser reads
+# the action after the last </think>. Probe 2026-10-16 (T 1.0): mean 6.7k
+# tokens, p99 13.7k, 1/128 past 16k. Prefer --backend vllm (single-round);
+# the sequential HF path is slow at these lengths.
+#
+# Sweep driver: scripts/slurm/submit_sweep.py configs/eval/<root>/olmo3think_7b/classic/<experiment>.yaml
+# =============================================================================
+
+seed: 42
+
+policy:
+  model_name: allenai/Olmo-3-7B-Think
+
+game:
+  type: prisoners_dilemma        # swept via --game (chicken, stag_hunt);
+  payoffs: {T: 4, R: 3, P: 1, S: 0}   # --game switches to FIXED_PAYOFFS[game]
+  num_rounds: 5
+
+prompt:
+  game_design: nohist            # round 1 starts fresh (matches 5r-nohist base protocol)
+  reasoning: true                # CoT + "Action: <label>" — same regime as the other models
+  minimal_parsing: false
+  show_horizon: false
+  enable_thinking: null          # template has no switch; always thinks
+
+evaluation:
+  num_episodes: 25
+  opponents: [tit_for_tat, always_defect, always_cooperate]
+  temperature: 0.7
+  max_new_tokens: 16384          # thinking budget, see header
+
+# Rewards don't drive anything at eval; kept for metric parity with training.
+reward:
+  intrinsic: deontological
+  lambda: 0.75
+  game_reward: normalized
+
+probe_b:
+  num_traces: 32
+
+teacher:
+  moral_value: none
+  wrap_position: first
+  template_source: configs/training/_base_sdpo_pd.yaml
+  feedback_template: "\nMoral value to follow:\n{feedback_raw}\n"
