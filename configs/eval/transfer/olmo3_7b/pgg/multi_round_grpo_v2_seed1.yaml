@@ -1,0 +1,20 @@
+# Multi-round PGG of olmo3_7b_grpo_pd_deon_tft_200_v2_seed1 at step 200, the Olmo-3 GRPO twin of
+# multi_round_sdpo_seed1 (base row there, base+ctx in multi_round_incontext).
+#
+#   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/eval/transfer/olmo3_7b/pgg/multi_round_grpo_v2_seed1.yaml --dry-run
+
+num_episodes: 20           # per co-player group; x3 x5 rounds = 300 decisions/cell
+
+axes:
+  game: [public_goods]
+  representation: [decision_full]
+  moral_value: [none]
+  protocol: [multi_round]
+  checkpoint:
+    - olmo3_7b_grpo_pd_deon_tft_200_v2_seed1/global_step_200
+
+env:
+  RUN_PROBES: "off"
+  GAME_DESCRIPTION: "off"
+extra_args: ["--temperature", "0.7"]

@@ -1,0 +1,22 @@
+# PGG transfer of gemma2_9b_grpo_pd_deon_tft_200_v2_seed1 (GRPO, deontological reward) at step 200: the
+# Gemma-2 GRPO twin of single_round_sdpo_seed1. Reference rows: transfer/gemma2_9b/pgg/single_round.
+#
+#   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/eval/transfer/gemma2_9b/pgg/single_round_grpo_v2_seed1.yaml --dry-run
+
+num_episodes: 400          # 50 per fabricated (own_prev, k) state
+
+axes:
+  game: [public_goods]
+  representation: [decision_full]
+  moral_value: [none]
+  protocol: [single_round]
+  checkpoint:
+    - gemma2_9b_grpo_pd_deon_tft_200_v2_seed1/global_step_200
+
+env:
+  RUN_PROBES: "off"
+  RUN_PROBE_B_EPISODE: "off"
+  GAME_DESCRIPTION: "off"
+
+extra_args: ["--temperature", "0.7"]
