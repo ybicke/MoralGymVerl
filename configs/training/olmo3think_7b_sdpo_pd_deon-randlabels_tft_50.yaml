@@ -1,5 +1,5 @@
 # =============================================================================
-# SDPO deon with random action labels, Olmo-3-7B-Think, 100 steps. The Think
+# SDPO deon with random action labels, Olmo-3-7B-Think, 50 steps. The Think
 # row of olmo3_7b_sdpo_pd_deon-randlabels_tft_200: same recipe (_base_sdpo_pd,
 # lr 1e-5, dataset sdpo_pd_deon-randlabels_tft from the run name), with the
 # loss restricted to the tokens after </think> (self_distillation.distill_after,
@@ -12,19 +12,19 @@
 #   - Length at T 1.0: mean 6.7k tokens, p90 11k, p99 13.7k, answer after
 #     </think> ~250. 12288 keeps ~95% of samples; an unclosed sample has an
 #     all-zero mask. max_model_len 16384 leaves prompt + principle headroom.
-#   - rollout.n 8 and validation only at the end: ~11x the Instruct run's
-#     tokens per step, sized for one 12 h job. Set total_training_steps from
-#     the smoke's step time; keep test_freq equal to it.
+#   - rollout.n 8, no in-training validation (one pass at thinking lengths
+#     costs ~45 min), 50 steps: ~10 min per step measured in the smokes
+#     (jobs 3676695, 3682815), sized for one ~10 h job.
 #   - gpu_memory_utilization 0.75: Olmo-3 has no grouped KV heads (512 KB per
 #     token), so the KV cache bounds how many 12k sequences decode at once.
-#   - Micro-batches of 1 sequence: up to 16k tokens each.
+#   - Micro-batches of 1 sequence (up to 16k tokens); 4 was no faster.
 #
 # Smoke BEFORE the full run:
 #   PARTITION=debug TIME=01:00:00 bash scripts/slurm/train_verl.sh \
-#        olmo3think_7b_sdpo_pd_deon-randlabels_tft_100 \
+#        olmo3think_7b_sdpo_pd_deon-randlabels_tft_50 \
 #        olmo3think_7b_sdpo_pd_deon-randlabels_tft_smoke trainer.total_training_steps=2
 # Full run:
-#   SEED=1 DRY_RUN=1 bash scripts/slurm/train_verl.sh olmo3think_7b_sdpo_pd_deon-randlabels_tft_100
+#   SEED=1 DRY_RUN=1 bash scripts/slurm/train_verl.sh olmo3think_7b_sdpo_pd_deon-randlabels_tft_50
 # =============================================================================
 defaults:
   - _base_sdpo_pd
@@ -53,5 +53,5 @@ data:
   max_response_length: 12288
 
 trainer:
-  total_training_steps: 100
-  test_freq: 100
+  total_training_steps: 50
+  test_freq: -1
