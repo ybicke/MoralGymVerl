@@ -37,7 +37,8 @@ from typing import Dict, List, Optional
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from figure_style import (  # noqa: E402
     ACCENT, INK, INK_MUTED, RUN_COLORS, STATE_COLORS, STATE_TEX, WIDTHS,
-    apply_style, clean_axes, direct_labels, save, REF_BASE, REF_CONTEXT)
+    apply_style, clean_axes, direct_labels, save, CHANNEL_COLORS, REF_BASE,
+    REF_CONTEXT)
 from training_trajectory import STATES, load_decisions, windows  # noqa: E402
 from eval_cells import discover_run_dirs, load_cell  # noqa: E402
 from specs.post_training import checkpoint_of, reference_rows  # noqa: E402
@@ -848,10 +849,17 @@ def fig_multiround_compare(args, out_dir: Path) -> None:
                              squeeze=False)
     labels = list(dict.fromkeys(lbl for lbl, _, _ in cells))
     # base dashed grey, "+ctx" labels dotted violet (dash-dot for a second
-    # one), every other label a run colour.
+    # one), labels opening with a channel name in its colour (several
+    # shaded light-to-full in order), any other label a run colour.
+    from transfer_figures import shade
     ctx = [l for l in labels if "+ctx" in l]
-    colors = {lbl: RUN_COLORS[i % len(RUN_COLORS)] for i, lbl in enumerate(
-        l for l in labels if l != "base" and l not in ctx)}
+    rest = [l for l in labels if l != "base" and l not in ctx]
+    by_channel = {ch: [l for l in rest if l.split()[0] == ch] for ch in CHANNEL_COLORS}
+    colors = {l: RUN_COLORS[i % len(RUN_COLORS)] for i, l in enumerate(
+        l for l in rest if l.split()[0] not in CHANNEL_COLORS)}
+    for ch, group in by_channel.items():
+        for i, l in enumerate(group):
+            colors[l] = shade(CHANNEL_COLORS[ch], i, len(group))
     styles = {lbl: dict(REF_CONTEXT, ls=":" if i == 0 else "-.")
               for i, lbl in enumerate(ctx)}
     styles["base"] = REF_BASE

@@ -26,13 +26,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import matplotlib.pyplot as plt  # noqa: E402
 from eval_cells import discover_run_dirs, load_json  # noqa: E402
 from figure_style import (  # noqa: E402
-    ACCENT, INK_MUTED, REF_BASE, REF_CONTEXT, RUN_COLORS, WIDTHS,
+    ACCENT, CHANNEL_COLORS, INK_MUTED, REF_BASE, REF_CONTEXT, RUN_COLORS, WIDTHS,
     clean_axes, direct_labels, save,
 )
 from transfer_figures import OWN, OWN_STYLE, _k_axes, curve  # noqa: E402
 
 CKPT_RE = re.compile(r"/([^/]+?)(?:_seed(\d+))?/global_step_(\d+)/")
-CHANNEL_COLORS = {"GRPO": RUN_COLORS[0], "SDPO": RUN_COLORS[2]}
 
 
 class Cell:
