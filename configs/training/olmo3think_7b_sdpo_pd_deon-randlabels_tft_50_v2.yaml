@@ -1,0 +1,31 @@
+# =============================================================================
+# v2 of olmo3think_7b_sdpo_pd_deon-randlabels_tft_50: the teacher no longer
+# reads the student's thinking. v1 appended the whole response to the teacher
+# prompt, so the teacher judged the ~250 answer tokens after 7k tokens of the
+# student's own reasoning and agreed with it (loss 0.006 vs 0.036 on Instruct,
+# cooperation flat 1-5% over 50 steps, job 3683029).
+#
+# Here the teacher sequence is prompt + principle + "<think></think>\n" +
+# the student's answer tokens (distill_after_hide_thinking, ~/SDPO), the
+# structure of the Instruct runs. Loss still only on the answer tokens; the
+# thinking is never under the gradient and never shown to the teacher.
+# Everything else as v1.
+#
+# Smoke BEFORE the full run:
+#   PARTITION=debug TIME=00:20:00 bash scripts/slurm/train_verl.sh \
+#        olmo3think_7b_sdpo_pd_deon-randlabels_tft_50_v2 \
+#        olmo3think_7b_sdpo_pd_deon-randlabels_tft_smoke3 trainer.total_training_steps=1 \
+#        trainer.test_freq=-1 data.train_batch_size=4 actor_rollout_ref.rollout.n=4 \
+#        actor_rollout_ref.actor.ppo_mini_batch_size=4
+# Full run:
+#   SEED=1 DRY_RUN=1 bash scripts/slurm/train_verl.sh olmo3think_7b_sdpo_pd_deon-randlabels_tft_50_v2
+# =============================================================================
+defaults:
+  - olmo3think_7b_sdpo_pd_deon-randlabels_tft_50
+  - _self_
+
+actor_rollout_ref:
+  actor:
+    self_distillation:
+      distill_after_hide_thinking: true
+      distill_after_teacher_prefix: "</think>\n"
