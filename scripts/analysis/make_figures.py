@@ -37,7 +37,7 @@ from typing import Dict, List, Optional
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from figure_style import (  # noqa: E402
     ACCENT, INK, INK_MUTED, RUN_COLORS, STATE_COLORS, STATE_TEX, WIDTHS,
-    apply_style, clean_axes, direct_labels, save, REF_BASE)
+    apply_style, clean_axes, direct_labels, save, REF_BASE, REF_CONTEXT)
 from training_trajectory import STATES, load_decisions, windows  # noqa: E402
 from eval_cells import discover_run_dirs, load_cell  # noqa: E402
 from specs.post_training import checkpoint_of, reference_rows  # noqa: E402
@@ -847,8 +847,16 @@ def fig_multiround_compare(args, out_dir: Path) -> None:
                              figsize=(WIDTHS["wide"] + 1.6, 2.1 * len(games)),
                              squeeze=False)
     labels = list(dict.fromkeys(lbl for lbl, _, _ in cells))
-    colors = {lbl: RUN_COLORS[i % len(RUN_COLORS)]
-              for i, lbl in enumerate(l for l in labels if l != "base")}
+    # base dashed grey, "+ctx" labels dotted violet (dash-dot for a second
+    # one), every other label a run colour.
+    ctx = [l for l in labels if "+ctx" in l]
+    colors = {lbl: RUN_COLORS[i % len(RUN_COLORS)] for i, lbl in enumerate(
+        l for l in labels if l != "base" and l not in ctx)}
+    styles = {lbl: dict(REF_CONTEXT, ls=":" if i == 0 else "-.")
+              for i, lbl in enumerate(ctx)}
+    styles["base"] = REF_BASE
+    for lbl, col in colors.items():
+        styles[lbl] = {"color": col, "lw": 1.4, "marker": "o", "ms": 3}
     xs = list(range(1, n_rounds + 1))
     for r, game in enumerate(games):
         for c, opp in enumerate(opps[game]):
@@ -858,22 +866,20 @@ def fig_multiround_compare(args, out_dir: Path) -> None:
                 if g != game or opp not in blocks:
                     continue
                 ys = [100 * blocks[opp][f"round_{k}"]["p_C"] for k in xs]
-                style = REF_BASE if lbl == "base" else {
-                    "color": colors[lbl], "lw": 1.4, "marker": "o", "ms": 3}
-                ax.plot(xs, ys, **style)
-                entries.append((ys[-1], lbl,
-                                REF_BASE["color"] if lbl == "base"
-                                else colors[lbl]))
+                ax.plot(xs, ys, **styles[lbl])
+                entries.append((ys[-1], lbl, styles[lbl]["color"]))
             if c == len(opps[game]) - 1:   # labels only where they have margin
                 direct_labels(ax, [(y, l, col) for y, l, col in entries],
                               x=n_rounds)
-            ax.set_title(f"vs {opp}", fontsize=8.5)
+            ax.set_title(f"vs {opp.replace('_', ' ')}", fontsize=8.5)
             ax.set_ylim(-4, 104)
             ax.set_xticks(xs)
             if r == len(games) - 1:
                 ax.set_xlabel("round")
             if c == 0:
-                ax.set_ylabel(f"{'PD' if game == 'prisoners_dilemma' else 'PGG'}\nP(C) (%)")
+                prefix = ("PD\n" if game == "prisoners_dilemma" else "PGG\n") \
+                    if len(games) > 1 else ""
+                ax.set_ylabel(f"{prefix}P(C) (%)")
             clean_axes(ax)
     if args.title:
         fig.suptitle(args.title, fontsize=10, y=1.02)
