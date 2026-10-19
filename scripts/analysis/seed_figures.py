@@ -130,6 +130,12 @@ def _style(key, runs) -> tuple:
     return color, label
 
 
+def _end(ys: List[float]) -> float:
+    """Label height: the last point, ties broken by the curve's mean so
+    lines that meet at the right edge keep their vertical order."""
+    return ys[-1] + 1e-3 * sum(ys) / len(ys)
+
+
 def fig_seed_grid(cells: List[Cell], steps: List[int], principle: str,
                   out_dir: Path, name: str) -> List[Path]:
     """The transfer_final form, pooled over seeds: one panel per model,
@@ -144,13 +150,13 @@ def fig_seed_grid(cells: List[Cell], steps: List[int], principle: str,
         for c in ctx.values():
             ys = curve(c.first, own); ks = list(range(len(ys)))
             ax.plot(ks, ys, color=ACCENT, lw=0.9, ms=2.0, **OWN_STYLE[own])
-            labels.append((ys[-1], f"+ctx {own}$_A$", ACCENT))
+            labels.append((_end(ys), f"+ctx {own}$_A$", ACCENT))
         for key in _channels(runs):
             color, label = _style(key, runs)
             series = [curve(c.first, own) for c in runs[key]]
             ks = list(range(len(series[0])))
             mean = band(ax, ks, series, color, lw=1.2, ms=2.6, **OWN_STYLE[own])
-            labels.append((mean[-1], f"{label} {own}$_A$", color))
+            labels.append((_end(mean), f"{label} {own}$_A$", color))
     if base:
         ends = [curve(base.first, own)[-1] for own in OWN]
         labels.append((sum(ends) / len(ends), "base", INK_MUTED))
