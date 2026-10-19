@@ -27,7 +27,7 @@ BASE_CFG = {
                "minimal_parsing": False, "show_horizon": False},
     "evaluation": {"opponents": ["tit_for_tat"], "num_episodes": 8,
                    "temperature": 1.0, "max_new_tokens": 10,
-                   "state_design": "balanced"},
+                   "state_design": "balanced", "backend": "hf"},
     "reward": {"lambda": 0.0, "intrinsic": "deontological",
                "game_reward": "raw"},
     "teacher": {"moral_value": "none",

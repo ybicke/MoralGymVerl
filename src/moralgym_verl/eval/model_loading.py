@@ -95,7 +95,7 @@ def load_model_for_eval(
 
 
 def load_vllm_for_eval(checkpoint: Optional[str], base_model: str,
-                       max_new_tokens: int, seed: int):
+                       max_model_len: int, seed: int):
     """vLLM engine for batched evaluation, dispatching like
     load_model_for_eval. A LoRA adapter is served through vLLM's LoRA
     support rather than merged. Returns (llm, tokenizer, lora_request)."""
@@ -113,7 +113,7 @@ def load_vllm_for_eval(checkpoint: Optional[str], base_model: str,
             model_path = checkpoint
     llm = LLM(
         model=model_path, dtype="bfloat16", seed=seed,
-        max_model_len=max_new_tokens + 4096,   # prompt headroom
+        max_model_len=max_model_len,
         gpu_memory_utilization=0.85,
         enable_lora=lora_request is not None,
         **({"max_lora_rank": lora_rank} if lora_rank else {}),

@@ -14,7 +14,7 @@ games, k_others ints for public_goods).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Tuple
+from typing import Callable, Dict, Generator, List, Tuple
 
 # Re-exported from classic_games.py (its home) — eval code imports
 # FAB_STATES from here.
@@ -103,18 +103,50 @@ def run_episode(
 ) -> TrajectoryResult:
     """Play a full K-round episode and return trajectory + rewards.
 
+    Drives episode_steps with policy_fn: callable(prompt) -> raw response.
+    For num_rounds > 1 the policy MUST accumulate the episode conversation
+    (make_chat_policy_fn): multi-round episodes are conversations (verl
+    multi-turn parity), and rounds >= 2 receive only the build_env_message
+    outcome message — the rules and history live in the accumulated
+    dialogue. Single-round episodes work with any policy_fn.
+    """
+    steps = episode_steps(
+        config, lambda_val=lambda_val, intrinsic_type=intrinsic_type,
+        verbose=verbose, fabricate_history=fabricate_history,
+        fab_state=fab_state, game_reward_type=game_reward_type,
+        shaping=shaping,
+    )
+    try:
+        prompt = next(steps)
+        while True:
+            prompt = steps.send(policy_fn(prompt))
+    except StopIteration as done:
+        return done.value
+
+
+def episode_steps(
+    config: EpisodeConfig,
+    lambda_val: float = 0.0,
+    intrinsic_type: str = "deontological",
+    verbose: bool = False,
+    fabricate_history: bool = False,
+    fab_state: Tuple | None = None,
+    game_reward_type: str = "raw",
+    shaping: dict | None = None,
+) -> Generator[str, str, TrajectoryResult]:
+    """One episode as a generator: yields each round's prompt, receives the
+    raw response, returns the TrajectoryResult.
+
+    Every round yields exactly once, illegal rounds included (the counter
+    advances, the state freezes), so a batched driver can step many
+    episodes in lockstep: round r of all episodes forms one generation
+    batch. run_episode is the sequential driver.
+
     Args:
         config: Fully specified episode (game, opponent, presentation). All
             per-episode randomization (labels, matrix_layout, opener/closer
             prose, agent_is_row) is already baked in — drawn by the caller
             at EpisodeConfig construction time.
-        policy_fn: callable(prompt) -> raw_response string. For
-            num_rounds > 1 it MUST accumulate the episode conversation
-            (make_chat_policy_fn): multi-round episodes are conversations
-            (verl multi-turn parity), and rounds >= 2 receive only the
-            build_env_message outcome message — the rules and history live
-            in the accumulated dialogue. Single-round episodes work with
-            any policy_fn.
         lambda_val: Weight for intrinsic reward.
         intrinsic_type: Which intrinsic reward variant to use.
         verbose: Print round-by-round results.
@@ -174,7 +206,7 @@ def run_episode(
             prompt = pending_feedback + "\n\n" + prompt
             pending_feedback = None
 
-        raw = policy_fn(prompt)
+        raw = yield prompt
         agent_move = parse_action(raw, config)
 
         if agent_move is None:

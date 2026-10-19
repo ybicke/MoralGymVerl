@@ -8,10 +8,13 @@ Usage:
 Plays the model against each configured opponent and reports cooperation
 metrics. Accepts any HF-compatible checkpoint (full model or LoRA adapter).
 
-Structure: evaluate() = seed_streams -> build_policy -> run_opponent per
-opponent; main() = build_parser -> apply_overrides -> evaluate ->
-build_metadata -> JSON out. Shared machinery lives in the sibling modules
-(config, model_loading, generation, metrics).
+Structure: evaluate() = seed_streams -> plan_opponent per opponent ->
+episodes -> summarize_opponent; main() = build_parser -> apply_overrides
+-> evaluate -> build_metadata -> JSON out. Two drivers play the episodes:
+evaluate_batched (vLLM, the default) advances every episode of every
+opponent in lockstep, one generation batch per round; the hf backend
+decodes one episode at a time through run_opponent. Shared machinery
+lives in the sibling modules (config, model_loading, generation, metrics).
 """
 
 from __future__ import annotations
@@ -22,6 +25,7 @@ import logging
 import os
 import random
 import re
+from contextlib import contextmanager
 from datetime import datetime
 from functools import partial
 from pathlib import Path
@@ -36,8 +40,7 @@ from moralgym_verl.eval.config import (
     load_config,
 )
 from moralgym_verl.eval.generation import (
-    generate_vllm, make_chat_policy_fn, make_policy_fn,
-    make_recording_policy_fn, make_replay_policy_fn,
+    Conversation, generate_vllm, make_chat_policy_fn, make_policy_fn,
 )
 from moralgym_verl.eval.metrics import aggregate_rollout_metrics, per_round_breakdown
 from moralgym_verl.eval.scoring import iter_decisions
@@ -46,11 +49,14 @@ from moralgym_verl.eval.teacher_context import load_reprompt_template, wrap_prom
 from moralgym_verl.game.moral_values import MORAL_VALUE_REGISTRY, get_moral_value
 from moralgym_verl.game.classic_games import FIXED_PAYOFFS
 from moralgym_verl.game.environment import EpisodeConfig
-from moralgym_verl.game.episode import TrajectoryResult, run_episode
+from moralgym_verl.game.episode import TrajectoryResult, episode_steps, run_episode
 from moralgym_verl.game.pgg_game import PGG_PARAMS
 from moralgym_verl.game.registry import get_game
 
 logger = logging.getLogger(__name__)
+
+# Generation backend when neither the config nor --backend names one.
+DEFAULT_BACKEND = "vllm"
 
 # Simple CLI -> config overrides: (arg attribute, config section, key).
 # Applied uniformly in apply_overrides(); flags with multi-key effects
@@ -199,64 +205,95 @@ def build_policy(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] =
     return policy_fn
 
 
-def run_opponent(
-    cfg: Dict, opponent: str, policy_fn, presentation_rng: random.Random,
-    raw_log: Optional[list] = None,
-) -> Dict:
-    """Run all episodes against one opponent; return its result block.
+def episode_kwargs(cfg: Dict) -> Dict:
+    """run_episode / episode_steps arguments shared by every episode."""
+    reward = cfg["reward"]
+    return {
+        "lambda_val": reward["lambda"],
+        "intrinsic_type": reward["intrinsic"],
+        "fabricate_history": cfg.get("prompt", {}).get("game_design", "hist") == "hist",
+        "game_reward_type": reward.get("game_reward", "raw"),
+        "shaping": reward.get("shaping") or {},
+    }
+
+
+def plan_opponent(cfg: Dict, opponent: str, presentation_rng: random.Random,
+                  ) -> List[Tuple[EpisodeConfig, Optional[Tuple], int]]:
+    """(episode config, fabricated state, bot seed) per episode, in order.
 
     The presentation stream is consumed continuously across the opponents
     loop, so runs are paired only if their opponent lists match — don't
     compare a multi-opponent run against single-opponent (--opponent)
     sweeps of the same cells.
+
+    The opponent bots draw from module `random`. Each episode gets its own
+    stream, seeded here from the shared one, so the sequential and the
+    lockstep driver build identical episodes from identical answers.
     """
     eval_cfg = cfg.get("evaluation", {})
     num_episodes = eval_cfg.get("num_episodes", 20)
-    prompt_cfg = cfg.get("prompt", {})
-    game_design = prompt_cfg.get("game_design", "hist")
-    lambda_val = cfg["reward"]["lambda"]
-    intrinsic_type = cfg["reward"]["intrinsic"]
-    game_reward_type = cfg["reward"].get("game_reward", "raw")
-    shaping = cfg["reward"].get("shaping") or {}
-
+    fabricate = episode_kwargs(cfg)["fabricate_history"]
     # 'balanced' (default) cycles the game's fabricated-state grid
     # deterministically (n/len per state, identical every run — 4 states
     # for 2x2 games, 2N for PGG); 'random' = legacy uniform draw in
     # run_episode.
-    state_design = eval_cfg.get("state_design", "balanced")
-    fabricate = game_design == "hist"
+    balanced = fabricate and eval_cfg.get("state_design", "balanced") == "balanced"
 
-    logger.info("Evaluating vs %s (%d episodes)", opponent, num_episodes)
-    trajectories: List[TrajectoryResult] = []
-    episode_configs: List[EpisodeConfig] = []
+    plan = []
     for ep_idx in range(num_episodes):
-        if hasattr(policy_fn, "reset"):
-            policy_fn.reset()   # fresh conversation per episode
         config = build_eval_config(cfg, opponent, rng=presentation_rng)
-        episode_configs.append(config)
         states = get_game(config.game_type).fab_states(config)
-        if ep_idx == 0 and fabricate and state_design == "balanced" \
-                and num_episodes % len(states):
+        if ep_idx == 0 and balanced and num_episodes % len(states):
             logger.warning(
                 "num_episodes=%d not divisible by %d fabricated states — "
                 "the balanced design is uneven", num_episodes, len(states))
-        fab_state = (states[ep_idx % len(states)]
-                     if fabricate and state_design == "balanced" else None)
+        fab_state = states[ep_idx % len(states)] if balanced else None
+        plan.append((config, fab_state, random.getrandbits(64)))
+    return plan
+
+
+@contextmanager
+def bot_rng(rng: random.Random):
+    """Run the block with module `random` (the bots' stream) set to rng's
+    state; store the advanced state back in rng afterwards."""
+    saved = random.getstate()
+    random.setstate(rng.getstate())
+    try:
+        yield
+    finally:
+        rng.setstate(random.getstate())
+        random.setstate(saved)
+
+
+def run_opponent(
+    cfg: Dict, opponent: str, policy_fn, presentation_rng: random.Random,
+    raw_log: Optional[list] = None,
+) -> Dict:
+    """Play all episodes against one opponent sequentially (hf backend);
+    return its result block."""
+    plan = plan_opponent(cfg, opponent, presentation_rng)
+    kwargs = episode_kwargs(cfg)
+    logger.info("Evaluating vs %s (%d episodes)", opponent, len(plan))
+    trajectories: List[TrajectoryResult] = []
+    for ep_idx, (config, fab_state, seed) in enumerate(plan):
+        if hasattr(policy_fn, "reset"):
+            policy_fn.reset()   # fresh conversation per episode
         n_before = len(raw_log) if raw_log is not None else 0
-        traj = run_episode(
-            config, policy_fn,
-            lambda_val=lambda_val,
-            intrinsic_type=intrinsic_type,
-            fabricate_history=fabricate,
-            fab_state=fab_state,
-            game_reward_type=game_reward_type,
-            shaping=shaping,
-        )
+        with bot_rng(random.Random(seed)):
+            traj = run_episode(config, policy_fn, fab_state=fab_state, **kwargs)
         trajectories.append(traj)
         if raw_log is not None:
             _tag_raw_records(raw_log[n_before:], traj, ep_idx, opponent)
+    return summarize_opponent(cfg, opponent, trajectories,
+                              [c for c, _, _ in plan])
 
-    result = aggregate_rollout_metrics(trajectories, opponent, num_episodes)
+
+def summarize_opponent(cfg: Dict, opponent: str,
+                       trajectories: List[TrajectoryResult],
+                       episode_configs: List[EpisodeConfig]) -> Dict:
+    """Aggregate one opponent's trajectories into its result block."""
+    eval_cfg = cfg.get("evaluation", {})
+    result = aggregate_rollout_metrics(trajectories, opponent, len(trajectories))
     breakdown = per_round_breakdown(trajectories)
     result["per_round"] = breakdown["per_round"]
     result["top_sequences"] = breakdown["top_sequences"]
@@ -332,14 +369,18 @@ def _presentation(c: EpisodeConfig) -> Dict:
     return out
 
 
+def resolve_backend(cfg: Dict) -> str:
+    return cfg.get("evaluation", {}).get("backend") or DEFAULT_BACKEND
+
+
 def evaluate(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = None):
-    """Run multi-turn rollout evaluation against each configured opponent."""
-    if cfg.get("evaluation", {}).get("backend", "hf") == "vllm":
+    """Run the rollout evaluation against each configured opponent."""
+    if resolve_backend(cfg) == "vllm":
         return evaluate_batched(cfg, checkpoint, raw_log)
     presentation_rng = seed_streams(cfg)
     policy_fn = build_policy(cfg, checkpoint, raw_log)
     opponents = cfg.get("evaluation", {}).get(
-        "opponents", ["tit_for_tat", "always_defect"]) #TODO why was always defect not evaluated?
+        "opponents", ["tit_for_tat", "always_defect"])
 
     all_results = []
     for opp in opponents:
@@ -349,55 +390,98 @@ def evaluate(cfg: Dict, checkpoint: Optional[str], raw_log: Optional[list] = Non
     return all_results
 
 
+class _LockstepEpisode:
+    """One episode in the batched driver: its step generator, conversation,
+    bot RNG stream and generation records."""
+
+    def __init__(self, opponent: str, ep_idx: int, config: EpisodeConfig,
+                 steps, rng: random.Random, conv: Conversation):
+        self.opponent, self.ep_idx, self.config = opponent, ep_idx, config
+        self.steps, self.rng, self.conv = steps, rng, conv
+        self.records: List[Dict] = []
+        self.prompt: Optional[str] = None
+        self.traj: Optional[TrajectoryResult] = None
+
+    def _advance(self, fn) -> bool:
+        """Move the generator to its next prompt; False once it returned."""
+        try:
+            with bot_rng(self.rng):
+                self.prompt = fn()
+        except StopIteration as done:
+            self.traj = done.value
+            return False
+        return True
+
+    def start(self) -> bool:
+        return self._advance(lambda: next(self.steps))
+
+    def step(self, rendered: str, raw: str) -> bool:
+        self.conv.record(raw)
+        self.records.append({"prompt": self.conv.log_prompt(rendered),
+                             "raw": raw})
+        return self._advance(lambda: self.steps.send(raw))
+
+
 def evaluate_batched(cfg: Dict, checkpoint: Optional[str],
                      raw_log: Optional[list] = None):
-    """evaluate() for single-round episodes with one vLLM batch.
+    """evaluate() on vLLM: every episode of every opponent advances in
+    lockstep, so round r of all episodes is one generation batch.
 
-    A recording pass renders every prompt, vLLM generates them together,
-    and a replay pass plays the episodes with those answers. The RNG
-    streams are restored between the passes, so both build identical
-    episodes, and the replay checks every prompt against its recording.
+    Episode plans are built up front in the sequential driver's order, so
+    the presentation stream is consumed identically; each episode keeps
+    its own conversation (Conversation) and bot stream (bot_rng). Raw
+    records are appended per episode in episode order once play is over,
+    the same layout run_opponent writes.
     """
-    if cfg["game"]["num_rounds"] != 1:
-        raise ValueError("backend 'vllm' supports single-round episodes only: "
-                         "in multi-round play each answer shapes the next prompt")
     eval_cfg = cfg.get("evaluation", {})
+    num_rounds = cfg["game"]["num_rounds"]
     max_new_tokens = eval_cfg.get("max_new_tokens", 10)
+    temperature = eval_cfg.get("temperature", 1.0)
     enable_thinking = cfg.get("prompt", {}).get("enable_thinking")
     opponents = eval_cfg.get("opponents", ["tit_for_tat", "always_defect"])
+    wrap_position = (cfg.get("teacher") or {}).get("wrap_position", "first")
     prompt_wrapper = build_prompt_wrapper(cfg)
     llm, tokenizer, lora_request = load_vllm_for_eval(
-        checkpoint, cfg["policy"]["model_name"], max_new_tokens,
-        cfg.get("seed", 42))
+        checkpoint, cfg["policy"]["model_name"],
+        # Round r's context holds r-1 earlier answers plus the prompt.
+        max_model_len=num_rounds * max_new_tokens + 4096,
+        seed=cfg.get("seed", 42))
 
     presentation_rng = seed_streams(cfg)
-    rng_states = (random.getstate(), np.random.get_state(),
-                  torch.get_rng_state(), presentation_rng.getstate())
-    records: list = []
-    recorder = make_recording_policy_fn(tokenizer, records, prompt_wrapper,
-                                        enable_thinking)
-    for opp in opponents:
-        run_opponent(cfg, opp, recorder, presentation_rng)
+    kwargs = episode_kwargs(cfg)
+    plans = [(opp, plan_opponent(cfg, opp, presentation_rng)) for opp in opponents]
+    episodes = [
+        _LockstepEpisode(
+            opp, ep_idx, config,
+            episode_steps(config, fab_state=fab_state, **kwargs),
+            random.Random(seed),
+            Conversation(tokenizer, prompt_wrapper, wrap_position, enable_thinking))
+        for opp, plan in plans
+        for ep_idx, (config, fab_state, seed) in enumerate(plan)
+    ]
+    live = [ep for ep in episodes if ep.start()]
+    rnd = 0
+    while live:
+        rnd += 1
+        texts = [ep.conv.render(ep.prompt) for ep in live]
+        logger.info("vLLM round %d/%d: %d prompts, max_new_tokens=%d",
+                    rnd, num_rounds, len(texts), max_new_tokens)
+        raws = generate_vllm(llm, tokenizer, texts, max_new_tokens,
+                             temperature, lora_request)
+        live = [ep for ep, text, raw in zip(live, texts, raws)
+                if ep.step(text, raw)]
 
-    random.setstate(rng_states[0])
-    np.random.set_state(rng_states[1])
-    torch.set_rng_state(rng_states[2])
-    presentation_rng.setstate(rng_states[3])
-    logger.info("vLLM batch: %d prompts, max_new_tokens=%d",
-                len(records), max_new_tokens)
-    responses = generate_vllm(llm, tokenizer, [r["text"] for r in records],
-                              max_new_tokens, eval_cfg.get("temperature", 1.0),
-                              lora_request)
-
-    replay = make_replay_policy_fn(records, responses, raw_log, prompt_wrapper)
     all_results = []
-    for opp in opponents:
-        result = run_opponent(cfg, opp, replay, presentation_rng, raw_log=raw_log)
+    for opp, plan in plans:
+        eps = [ep for ep in episodes if ep.opponent == opp]
+        if raw_log is not None:
+            for ep in eps:
+                _tag_raw_records(ep.records, ep.traj, ep.ep_idx, opp)
+                raw_log.extend(ep.records)
+        result = summarize_opponent(cfg, opp, [ep.traj for ep in eps],
+                                    [ep.config for ep in eps])
         all_results.append(result)
         _print_summary(opp, result)
-    if replay.consumed() != len(records):
-        raise RuntimeError(f"replay used {replay.consumed()} of "
-                           f"{len(records)} recorded prompts")
     return all_results
 
 
@@ -534,8 +618,9 @@ def build_parser() -> argparse.ArgumentParser:
                              "preamble to the table/prose payoff block "
                              "(docs/pgg_design.md §9.4). on|off.")
     parser.add_argument("--backend", choices=["hf", "vllm"], default=None,
-                        help="Generation backend (default hf). 'vllm' batches "
-                             "all decisions of a single-round eval.")
+                        help="Generation backend (default vllm: all episodes "
+                             "advance in lockstep, one batch per round). "
+                             "'hf' decodes one episode at a time.")
     parser.add_argument("--enable-thinking", type=_bool_arg, default=None,
                         metavar="true|false",
                         help="Override prompt.enable_thinking (chat-template "
@@ -694,7 +779,7 @@ def build_metadata(
         "game_reward": cfg["reward"].get("game_reward", "raw"),
         "eval_temperature": eval_block.get("temperature", 1.0),
         "eval_max_new_tokens": eval_block.get("max_new_tokens", 10),
-        "eval_backend": eval_block.get("backend", "hf"),
+        "eval_backend": resolve_backend(cfg),
         "minimal_parsing": cfg.get("prompt", {}).get("minimal_parsing", False),
         "reasoning": cfg.get("prompt", {}).get("reasoning", False),
         # Hybrid-thinking switch (Qwen3) and the PGG mechanism preamble:

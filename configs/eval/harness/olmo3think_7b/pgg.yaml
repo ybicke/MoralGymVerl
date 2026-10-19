@@ -2,8 +2,7 @@
 # PGG harness, Olmo-3-7B-Think.
 #
 # harness/olmo3_7b/pgg.yaml with the model swapped and the generation budget
-# raised for thinking (see harness/olmo3think_7b/classic.yaml). Prefer
-# --backend vllm for single-round cells.
+# raised for thinking (see harness/olmo3think_7b/classic.yaml).
 #
 # Game design: docs/pgg_design.md §9.2. Binary linear public-goods game,
 # canonical N=4 E=10 s=5 (r=2, MPCR 0.5), balanced over the 8 fabricated

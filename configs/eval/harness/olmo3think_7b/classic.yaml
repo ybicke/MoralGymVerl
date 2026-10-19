@@ -5,8 +5,8 @@
 # budget raised for thinking: the stock template prefills <think> in the
 # generation prompt, there is no thinking switch, and the answer parser reads
 # the action after the last </think>. Probe 2026-10-16 (T 1.0): mean 6.7k
-# tokens, p99 13.7k, 1/128 past 16k. Prefer --backend vllm (single-round);
-# the sequential HF path is slow at these lengths.
+# tokens, p99 13.7k, 1/128 past 16k. Keep the default vllm backend; the
+# sequential HF path is slow at these lengths.
 #
 # Sweep driver: scripts/slurm/submit_sweep.py configs/eval/<root>/olmo3think_7b/classic/<experiment>.yaml
 # =============================================================================

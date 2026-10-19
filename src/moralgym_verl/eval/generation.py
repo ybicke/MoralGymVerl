@@ -57,6 +57,75 @@ def generate(model, tokenizer, inputs, max_new_tokens, temperature):
     return tokenizer.decode(generated, skip_special_tokens=True)
 
 
+class Conversation:
+    """One episode's chat transcript and its generation-time rendering.
+
+    The stored transcript stays plain; with `prompt_wrapper` (teacher
+    context) `wrap_position` picks where the value appears at generation
+    time: 'first' = the episode's first user turn, training-exact for
+    multi-turn SDPO (see teacher_context.wrap_first_user); 'latest' = the
+    current turn (persistent-context ablation). A single-round episode is
+    a one-turn conversation, so the same object serves both protocols.
+    """
+
+    def __init__(self, tokenizer, prompt_wrapper=None,
+                 wrap_position: str = "first",
+                 enable_thinking: Optional[bool] = None):
+        if wrap_position not in ("first", "latest"):
+            raise ValueError(f"wrap_position must be 'first' or 'latest', "
+                             f"got {wrap_position!r}")
+        self.tokenizer = tokenizer
+        self.prompt_wrapper = prompt_wrapper
+        self.wrap_fn = (wrap_first_user if wrap_position == "first"
+                        else wrap_latest_user)
+        self.enable_thinking = enable_thinking
+        self.messages: List[Dict[str, str]] = []
+
+    def reset(self) -> None:
+        self.messages.clear()
+
+    def push(self, prompt: str) -> List[Dict[str, str]]:
+        """Append the user turn; return the messages to generate from."""
+        self.messages.append({"role": "user", "content": prompt})
+        return (self.wrap_fn(self.messages, self.prompt_wrapper)
+                if self.prompt_wrapper is not None else self.messages)
+
+    def render(self, prompt: str) -> str:
+        """Append the user turn and return the generation prompt text."""
+        return render_chat_text(self.tokenizer, self.push(prompt),
+                                self.enable_thinking)
+
+    def record(self, raw: str) -> None:
+        """Append the model's turn."""
+        self.messages.append({"role": "assistant", "content": raw})
+
+    def log_prompt(self, rendered: str) -> str:
+        """What raw_log stores for this call: the wrapped prompt for a
+        one-turn conversation (offline analysis reads it as the game
+        prompt), the fully rendered context once the transcript has
+        history, so the text the model actually saw is inspectable."""
+        user_turns = [m for m in self.messages if m["role"] == "user"]
+        if len(user_turns) > 1:
+            return rendered
+        prompt = user_turns[-1]["content"]
+        return (self.prompt_wrapper(prompt) if self.prompt_wrapper is not None
+                else prompt)
+
+
+def _hf_policy_fn(model, tokenizer, conv: Conversation, max_new_tokens,
+                  temperature, raw_log):
+    def policy_fn(prompt: str) -> str:
+        text, inputs = render_chat_inputs(tokenizer, conv.push(prompt),
+                                          model.device, conv.enable_thinking)
+        raw = generate(model, tokenizer, inputs, max_new_tokens, temperature)
+        conv.record(raw)
+        if raw_log is not None:
+            raw_log.append({"prompt": conv.log_prompt(text), "raw": raw})
+        return raw
+
+    return policy_fn
+
+
 def make_policy_fn(
     model,
     tokenizer,
@@ -66,25 +135,22 @@ def make_policy_fn(
     prompt_wrapper=None,
     enable_thinking: Optional[bool] = None,
 ):
-    """Policy function for run_episode.
+    """Stateless single-round policy for run_episode: every call is a
+    fresh one-turn conversation.
 
     Default T=1.0 multinomial (top_k=0, top_p=1.0) mirrors Tennant's
     trl respond_to_batch — measures the stochastic policy as trained;
     temperature=0/None -> greedy. raw_log (list) collects {"prompt",
-    "raw"} per call. prompt_wrapper (teacher-signal eval) is applied
-    before chat templating, so raw_log records exactly what the model saw.
+    "raw"} per call, with the prompt as wrapped, so raw_log records
+    exactly what the model saw.
     """
+    conv = Conversation(tokenizer, prompt_wrapper, "first", enable_thinking)
+    inner = _hf_policy_fn(model, tokenizer, conv, max_new_tokens,
+                          temperature, raw_log)
 
     def policy_fn(prompt: str) -> str:
-        if prompt_wrapper is not None:
-            prompt = prompt_wrapper(prompt)
-        messages = [{"role": "user", "content": prompt}]
-        _, inputs = render_chat_inputs(tokenizer, messages, model.device,
-                                       enable_thinking)
-        raw = generate(model, tokenizer, inputs, max_new_tokens, temperature)
-        if raw_log is not None:
-            raw_log.append({"prompt": prompt, "raw": raw})
-        return raw
+        conv.reset()
+        return inner(prompt)
 
     return policy_fn
 
@@ -99,63 +165,21 @@ def make_chat_policy_fn(
     wrap_position: str = "first",
     enable_thinking: Optional[bool] = None,
 ):
-    """Transcript-mode policy for multi-turn eval (Stage 1b): the episode
-    conversation accumulates, mirroring verl's multi-turn agent loop, so
-    history-dependent behavior is expressible exactly as in training.
-
-    The stored transcript stays plain; with `prompt_wrapper`,
-    `wrap_position` picks where the value appears at generation time:
-    'first' (default) = episode's first user turn, training-exact for
-    multi-turn SDPO (see teacher_context.wrap_first_user); 'latest' =
-    current turn (persistent-context ablation). The caller MUST call
-    policy_fn.reset() between episodes (evaluate() does) — otherwise
-    conversations leak across episodes.
+    """Transcript-mode policy for multi-round eval: the episode
+    conversation accumulates (see Conversation), mirroring verl's
+    multi-turn agent loop. The caller MUST call policy_fn.reset() between
+    episodes (run_opponent does) — otherwise conversations leak across
+    episodes.
     """
-    if wrap_position not in ("first", "latest"):
-        raise ValueError(f"wrap_position must be 'first' or 'latest', "
-                         f"got {wrap_position!r}")
-
-    state: Dict[str, list] = {"messages": []}
-    wrap_fn = wrap_first_user if wrap_position == "first" else wrap_latest_user
-
-    def policy_fn(prompt: str) -> str:
-        state["messages"].append({"role": "user", "content": prompt})
-        gen_messages = (
-            wrap_fn(state["messages"], prompt_wrapper)
-            if prompt_wrapper is not None else state["messages"]
-        )
-        text, inputs = render_chat_inputs(tokenizer, gen_messages, model.device,
-                                          enable_thinking)
-        raw = generate(model, tokenizer, inputs, max_new_tokens, temperature)
-        state["messages"].append({"role": "assistant", "content": raw})
-        if raw_log is not None:
-            # Log the fully rendered context, not just the last message —
-            # the transcript the model actually saw is then inspectable.
-            raw_log.append({"prompt": text, "raw": raw})
-        return raw
-
-    policy_fn.reset = lambda: state["messages"].clear()
+    conv = Conversation(tokenizer, prompt_wrapper, wrap_position,
+                        enable_thinking)
+    policy_fn = _hf_policy_fn(model, tokenizer, conv, max_new_tokens,
+                              temperature, raw_log)
+    policy_fn.reset = conv.reset
     return policy_fn
 
 
-# --- Batched vLLM path (single-round evals) ---------------------------------
-# A single-round answer never feeds a later prompt, so every prompt can be
-# rendered first, generated in one batch, and replayed into the episode loop.
-
-
-def make_recording_policy_fn(tokenizer, records: list, prompt_wrapper=None,
-                             enable_thinking: Optional[bool] = None):
-    """Policy that renders and stores each prompt and answers nothing."""
-
-    def policy_fn(prompt: str) -> str:
-        if prompt_wrapper is not None:
-            prompt = prompt_wrapper(prompt)
-        text = render_chat_text(tokenizer, [{"role": "user", "content": prompt}],
-                                enable_thinking)
-        records.append({"prompt": prompt, "text": text})
-        return ""
-
-    return policy_fn
+# --- vLLM path --------------------------------------------------------------
 
 
 def generate_vllm(llm, tokenizer, texts: List[str], max_new_tokens: int,
@@ -175,27 +199,6 @@ def generate_vllm(llm, tokenizer, texts: List[str], max_new_tokens: int,
     )
     prompts = [TokensPrompt(prompt_token_ids=tokenizer(
         t, add_special_tokens=False)["input_ids"]) for t in texts]
-    outputs = llm.generate(prompts, params, lora_request=lora_request)
+    outputs = llm.generate(prompts, params, lora_request=lora_request,
+                           use_tqdm=False)
     return [o.outputs[0].text for o in outputs]
-
-
-def make_replay_policy_fn(records: list, responses: List[str],
-                          raw_log: Optional[list] = None, prompt_wrapper=None):
-    """Policy that returns the batch responses in recording order. Raises if
-    a prompt differs from its recording or the counts disagree."""
-    pos = {"i": 0}
-
-    def policy_fn(prompt: str) -> str:
-        if prompt_wrapper is not None:
-            prompt = prompt_wrapper(prompt)
-        i = pos["i"]
-        if i >= len(records) or records[i]["prompt"] != prompt:
-            raise RuntimeError(f"replay prompt {i} differs from its recording")
-        pos["i"] += 1
-        raw = responses[i]
-        if raw_log is not None:
-            raw_log.append({"prompt": prompt, "raw": raw})
-        return raw
-
-    policy_fn.consumed = lambda: pos["i"]
-    return policy_fn
