@@ -1,0 +1,20 @@
+# @package _global_
+# =============================================================================
+# Fir-only overrides. scripts/slurm/fir/train_job.sh appends this file to
+# every run with `+cluster=fir`, which places it AFTER the run config: any
+# key here beats _base_clariden.yaml AND the run config. Keep it to settings
+# that are true for every run on Fir's H100 nodes; per-run tuning stays in
+# the run configs.
+#
+# _base_clariden.yaml is cluster-neutral in practice (paths from env, 4 GPUs
+# per node, TP=1, vLLM share 0.4, FSDP offload) and is used unchanged.
+# Differences to keep in mind on H100 (80 GB vs 97 GB, PCIe offload instead
+# of NVLink-C2C), none applied yet (2026-10-20, no smoke run on Fir so far):
+#   - the 0.4 vLLM share is 32 GB (was 39); ~48 GB remain for the FSDP
+#     actor/ref shards of an 8-9B LoRA run, which should still fit.
+#   - param/optimizer offload is slower per step over PCIe.
+#   - the 32B memory plan (qwen3_32b_*) assumes 97 GB and must be redone.
+# =============================================================================
+trainer:
+  n_gpus_per_node: 4
+  nnodes: 1

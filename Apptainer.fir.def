@@ -1,0 +1,37 @@
+# MoralGymVerl container for Fir (x86-64, H100) — Apptainer definition.
+# Same base image as Dockerfile.gh200 (Clariden), amd64 variant, same
+# pinned requirements, so the two clusters run the same Python stack.
+#
+# Build (scripts/setup/setup_fir.sh does this, from the repo root so the
+# %files path resolves):
+#   apptainer build --fakeroot $SCRATCH/containers/moralgym-verl-fir.sif Apptainer.fir.def
+#
+# SDPO and moralgym_verl are NOT installed into the image: the SIF is
+# read-only, so both come in at job start through PYTHONPATH from the
+# bind-mounted checkouts (scripts/slurm/fir/train_job.sh, eval_pack.sh).
+Bootstrap: docker
+From: nvcr.io/nvidia/vllm:25.12.post1-py3
+
+%files
+    requirements-gh200.txt /app/requirements-gh200.txt
+
+%post
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update && apt-get install -y --no-install-recommends \
+        git wget curl build-essential libsndfile1 libgl1 libglib2.0-0 \
+        && rm -rf /var/lib/apt/lists/*
+    # torch, vllm, flash_attn, flashinfer, xformers, triton come with the
+    # NGC image; requirements-gh200.txt excludes them (see its header).
+    pip install --no-cache-dir -r /app/requirements-gh200.txt
+    mkdir -p /app /scratch /project /localscratch
+
+%environment
+    export ROCR_VISIBLE_DEVICES=""
+
+%labels
+    Project MoralGymVerl
+    Base nvcr.io/nvidia/vllm:25.12.post1-py3
+
+%help
+    MoralGymVerl training/eval runtime for Fir. Run through the launchers in
+    scripts/slurm/fir/ (fir_env.sh adds --nv and the bind mounts).

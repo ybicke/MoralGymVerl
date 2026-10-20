@@ -67,6 +67,7 @@ PYTHONPATH=src:scripts/analysis python3.11 -m pytest tests/
 - Code changes need no rebuild: both packages are reinstalled from the mounted sources at job start.
 - For a new model, run `scripts/preflight/check_model_template.py` and a short debug job before the full run. Gated models need `hf auth login`; download models above ~10 GB in a transfer job.
 - Checkpoints and rollouts land in `MORALGYM_CKPT_ROOT/<run>`, logs in `~/logs_verl/`, and evaluation cells in `eval_results/`, mirroring the spec path.
+- **Fir (Alliance Canada, H100 + Apptainer)**: a second, separate setup under `scripts/slurm/fir/` with `scripts/setup/setup_fir.sh` and `Apptainer.fir.def`; the Clariden files above are unchanged. See `scripts/slurm/fir/README.md`.
 
 ## Naming
 
