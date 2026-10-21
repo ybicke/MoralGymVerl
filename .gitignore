@@ -30,3 +30,7 @@ scripts/publish/
 
 # Private cluster settings (template: scripts/slurm/cluster.env.example)
 scripts/slurm/cluster.env
+
+# pilot run outputs and session handoffs: archived to HF (moralgym/cluster-archive), not tracked
+pilots/*/results/
+pilots/*/handoffs/
