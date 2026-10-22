@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -68,9 +68,11 @@ def load_vllm_for_eval(checkpoint: Optional[str], base_model: str,
             lora_request = LoRARequest("adapter", 1, str(checkpoint))
         else:
             model_path = checkpoint
+    # Never ask for more context than the model has (Gemma-2: 8192).
+    native_len = AutoConfig.from_pretrained(model_path).max_position_embeddings
     llm = LLM(
         model=model_path, dtype="bfloat16", seed=seed,
-        max_model_len=max_model_len,
+        max_model_len=min(max_model_len, native_len),
         gpu_memory_utilization=0.85,
         enable_lora=lora_request is not None,
         **({"max_lora_rank": lora_rank} if lora_rank else {}),
