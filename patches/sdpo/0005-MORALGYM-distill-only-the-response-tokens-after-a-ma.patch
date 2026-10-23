@@ -1,0 +1,162 @@
+From e663d03270fe00303665ecefa3ef260eb09ff839 Mon Sep 17 00:00:00 2001
+From: Yves Bicker <yves_bicker@icloud.com>
+Date: Fri, 16 Oct 2026 16:51:20 +0200
+Subject: [PATCH 5/6] [MORALGYM] distill only the response tokens after a
+ marker
+
+New self_distillation.distill_after (default null). When set, the SDPO
+loss covers only the tokens after the last occurrence of the marker in
+each response, e.g. "</think>": a reasoning model's thinking still
+conditions student and teacher but receives no gradient. Responses
+without the marker contribute no loss. Logs the distilled-token and
+marker-found fractions. The marker is matched on token pieces, so a
+multi-token marker (Olmo-3) works like a single-token one (Qwen3).
+---
+ verl/trainer/config/actor/actor.yaml |  4 ++++
+ verl/trainer/ppo/core_algos.py       |  3 +++
+ verl/trainer/ppo/ray_trainer.py      | 31 ++++++++++++++++++++++++++++
+ verl/workers/actor/dp_actor.py       |  3 +++
+ verl/workers/config/actor.py         |  2 ++
+ 5 files changed, 43 insertions(+)
+
+diff --git a/verl/trainer/config/actor/actor.yaml b/verl/trainer/config/actor/actor.yaml
+index a717e9f..ef00725 100644
+--- a/verl/trainer/config/actor/actor.yaml
++++ b/verl/trainer/config/actor/actor.yaml
+@@ -116,6 +116,10 @@ self_distillation:
+   # Whether to remove <think>...</think> tags from successful demonstrations before reprompting
+   remove_thinking_from_demonstration: True
+ 
++  # If set, distill only the response tokens after the last occurrence of this marker
++  # (e.g. "</think>"); responses without the marker contribute no loss
++  distill_after: null
++
+   # Whether to include environment feedback in reprompting for wrong attempts
+   # If True and feedback exists: use reprompt_template_feedback_solution (with solution) or reprompt_template_feedback (without solution)
+   include_environment_feedback: True
+diff --git a/verl/trainer/ppo/core_algos.py b/verl/trainer/ppo/core_algos.py
+index 25509cd..e330545 100644
+--- a/verl/trainer/ppo/core_algos.py
++++ b/verl/trainer/ppo/core_algos.py
+@@ -1095,6 +1095,7 @@ def compute_self_distillation_loss(
+     self_distillation_mask: Optional[torch.Tensor] = None,
+     loss_agg_mode: str = "token-mean",
+     rollout_is_weights: Optional[torch.Tensor] = None,
++    distill_token_mask: Optional[torch.Tensor] = None,
+ ) -> tuple[torch.Tensor, dict[str, Any]]:
+ 
+     metrics = {}
+@@ -1102,6 +1103,8 @@ def compute_self_distillation_loss(
+     loss_mask = response_mask
+     if self_distillation_mask is not None:
+         loss_mask = loss_mask * self_distillation_mask.unsqueeze(1)
++    if distill_token_mask is not None:
++        loss_mask = loss_mask * distill_token_mask
+ 
+     if self_distillation_config.full_logit_distillation:
+         use_topk = self_distillation_config.distillation_topk is not None
+diff --git a/verl/trainer/ppo/ray_trainer.py b/verl/trainer/ppo/ray_trainer.py
+index 4facafe..7ead734 100644
+--- a/verl/trainer/ppo/ray_trainer.py
++++ b/verl/trainer/ppo/ray_trainer.py
+@@ -281,6 +281,27 @@ def compute_advantage(
+     return data
+ 
+ 
++def _mask_after_marker(responses: torch.Tensor, response_mask: torch.Tensor, tokenizer, marker: str) -> torch.Tensor:
++    """(bs, L) float mask of the response tokens after the last `marker`, all-zero where absent.
++
++    Matched on the concatenated token pieces, so a marker that spans several tokens or merges
++    with a neighbour (Olmo-3: `</`, `think`, `>\\n`) is found like a single-token one (Qwen3).
++    """
++    out = torch.zeros_like(response_mask, dtype=torch.float32)
++    for i, ids in enumerate(responses.tolist()):
++        n = int(response_mask[i].sum().item())
++        text, ends = "", []
++        for piece in tokenizer.convert_ids_to_tokens(ids[:n]):
++            text += piece
++            ends.append(len(text))
++        k = text.rfind(marker)
++        if k < 0:
++            continue
++        last = next(j for j, e in enumerate(ends) if e >= k + len(marker))
++        out[i, last + 1 : n] = 1.0
++    return out * response_mask
++
++
+ class RayPPOTrainer:
+     """Distributed PPO trainer using Ray for scalable reinforcement learning.
+ 
+@@ -777,6 +798,11 @@ class RayPPOTrainer:
+             device=device
+         )
+ 
++        tensors = {}
++        distill_after = self_distillation_cfg.get("distill_after", None)
++        if distill_after:
++            tensors["distill_token_mask"] = _mask_after_marker(responses, response_mask, self.tokenizer, distill_after)
++
+         uids = set(batch.non_tensor_batch["uid"])
+         num_with_feedback_available = sum(1 for f in feedback_list if f is not None)
+         num_with_feedback_used = sum(1 for f in feedback_used if f)
+@@ -788,11 +814,16 @@ class RayPPOTrainer:
+             "self_distillation/feedback_used_fraction": num_with_feedback_used / batch_size,
+             "self_distillation/reprompt_sample_fraction": self_distillation_mask.float().mean().item(),
+         }
++        if "distill_token_mask" in tensors:
++            m = tensors["distill_token_mask"]
++            metrics["self_distillation/distill_token_fraction"] = (m.sum() / response_mask.sum().clamp(min=1)).item()
++            metrics["self_distillation/marker_found_fraction"] = (m.sum(-1) > 0).float().mean().item()
+         return DataProto.from_dict(tensors={
+             "teacher_input_ids": teacher_input_ids,
+             "teacher_attention_mask": teacher_attention_mask,
+             "teacher_position_ids": teacher_position_ids,
+             "self_distillation_mask": self_distillation_mask,
++            **tensors,
+         }), metrics
+ 
+     def _get_gen_batch(self, batch: DataProto) -> DataProto:
+diff --git a/verl/workers/actor/dp_actor.py b/verl/workers/actor/dp_actor.py
+index c35f057..1cd71e2 100644
+--- a/verl/workers/actor/dp_actor.py
++++ b/verl/workers/actor/dp_actor.py
+@@ -707,6 +707,8 @@ class DataParallelPPOActor(BasePPOActor):
+             select_keys.append("ref_log_prob")
+         if self_distillation_enabled:
+             select_keys.extend(list(self_distillation_required_keys))
++            if "distill_token_mask" in data.batch.keys():
++                select_keys.append("distill_token_mask")
+         # Include pre-computed IS weights if present in batch
+         # Weights are computed centrally in trainer and added to batch when algorithm.rollout_is=True
+         if "rollout_is_weights" in data.batch.keys():
+@@ -841,6 +843,7 @@ class DataParallelPPOActor(BasePPOActor):
+                             student_topk_log_probs=student_topk_logps,
+                             teacher_topk_log_probs=teacher_topk_logps,
+                             self_distillation_mask=self_distillation_mask,
++                            distill_token_mask=model_inputs.get("distill_token_mask"),
+                             loss_agg_mode=loss_agg_mode,
+                             rollout_is_weights=rollout_is_weights,
+                         )
+diff --git a/verl/workers/config/actor.py b/verl/workers/config/actor.py
+index f2779d7..013872a 100644
+--- a/verl/workers/config/actor.py
++++ b/verl/workers/config/actor.py
+@@ -52,6 +52,7 @@ class SelfDistillationConfig(BaseConfig):
+         reprompt_truncation (str): Truncation method for the reprompted prompt (recommended to use "right" or "error").
+         dont_reprompt_on_self_success (bool): Whether to not reprompt on self-success.
+         remove_thinking_from_demonstration (bool): Whether to remove <think>...</think> tags from successful demonstrations before reprompting.
++        distill_after (Optional[str]): If set, distill only the response tokens after the last occurrence of this marker (e.g. "</think>"); responses without it get no loss.
+         is_clip (Optional[float]): Clip value for distillation IS ratio; None disables IS weighting.
+         reprompt_template (str): Template for reprompting. Uses {prompt}, {solution}, {feedback} placeholders.
+         solution_template (str): Template for formatting solution section. Uses {successful_previous_attempt} placeholder.
+@@ -73,6 +74,7 @@ class SelfDistillationConfig(BaseConfig):
+     reprompt_truncation: str = "right"
+     dont_reprompt_on_self_success: bool = False
+     remove_thinking_from_demonstration: bool = False
++    distill_after: Optional[str] = None
+     is_clip: Optional[float] = None
+     reprompt_template: str = (
+         "{prompt}{solution}{feedback}\n\n"
+-- 
+2.43.0
+
