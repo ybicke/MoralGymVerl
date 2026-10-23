@@ -117,7 +117,9 @@ CoT), P(action4 | recognised). Recognition under a principle is inflated by reci
 
 - this folder (scripts, docs, logs, traces: ~60 MB)
 - Qwen/Qwen3-8B weights (HF) and the LoRA adapters: HF org moralgym, private per-run repos
-  (qwen3_8b_sdpo_pd_deon_tft_200_seed1, qwen3_8b_grpo_pd_deon_tft_200_v2_seed1, seeds 2/3)
+  (moralgym/qwen3-8b-sdpo-pd-deon-tft-seed1 = run qwen3_8b_sdpo_pd_deon_tft_200_seed1,
+  moralgym/qwen3-8b-grpo-pd-deon-tft-seed1 = run qwen3_8b_grpo_pd_deon_tft_200_v2_seed1,
+  step-200/ holds the adapter; seeds 2/3 in the -seed2/-seed3 repos)
 - container: nvcr vllm 25.12 base + transformers (see MoralGymVerl Dockerfile.gh200)
 - MoralGymVerl repo (registry texts in src/moralgym_verl/game/moral_values.py)
 
