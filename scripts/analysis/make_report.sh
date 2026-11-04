@@ -202,6 +202,15 @@ for M in "olmo3_7b|Olmo-3-7B-Instruct|Olmo-3-7B" "gemma2_9b|gemma-2-9b-it|Gemma-
             --name ${dir}_$(echo $A | tr A-Z a-z)_seed1_s200
     done
 done
+# Mixed-game run (ACL app:multigame): PD-only seed 1 and PD+SH+CH at step
+# 200, each with the Qwen v3 screen as base / +ctx reference.
+R=eval_results/teacher_signal/qwen3_8b/pgg/single_turn_v3
+$PY $MF seed-grid --group $T/single_round_sdpo_seed1 --group $R --step 200 --seed 1 \
+    --model Qwen3-8B --principle deontological --title "Qwen3-8B, SDPO on PD, step 200" \
+    --name qwen3_8b_sdpo_pd_seed1_s200 --analysis-dir $CMP
+$PY $MF seed-grid --group $T/single_round_sdpo_pdshch_seed1 --group $R --step 200 \
+    --model Qwen3-8B --principle deontological --title "Qwen3-8B, SDPO on PD + SH + CH, step 200" \
+    --name qwen3_8b_sdpo_pdshch_seed1_s200 --analysis-dir $CMP
 O=eval_results/transfer/olmo3_7b/pgg
 $PY $MF multiround-compare --name olmo3_7b_opening_s200 --analysis-dir $CMP \
     --cell "base=$O/multi_round_sdpo_seed1/cells/public_goods__none__decision_full__multi_round__base_3714301" \
@@ -213,6 +222,7 @@ cp $CMP/figures/pdf/multi_round_qwen3_8b_seeds_s200.pdf \
    $CMP/figures/pdf/multi_round_qwen3_8b_sdpo_randlabels_seed1_s200.pdf \
    $CMP/figures/pdf/multi_round_qwen3_8b_thinking_vs_nothinking_seeds_s200.pdf \
    $CMP/figures/pdf/transfer_final_{olmo3_7b,gemma2_9b}_{sdpo,grpo}_seed1_s200.pdf \
+   $CMP/figures/pdf/transfer_final_qwen3_8b_sdpo_{pd,pdshch}_seed1_s200.pdf \
    $CMP/figures/pdf/multi_round_compare_olmo3_7b_opening_s200.pdf \
    ~/moralgym-report/figures/ && echo "mirrored ACL live-play figures"
 
