@@ -918,10 +918,10 @@ def fig_seed_figures(args, out_dir: Path, protocol: str) -> None:
     every seed plus the model's base / in-context cells), --step, --model."""
     from seed_figures import fig_seed_grid, fig_seed_multi, load_cells
     cells = load_cells([Path(g).expanduser() for g in args.group], protocol,
-                       args.model, args.seed)
+                       args.model, args.seed, args.channel, args.split_thinking)
     draw = fig_seed_grid if protocol == "single_round" else fig_seed_multi
     steps = [int(x) for x in args.step.split(",")]
-    for pth in draw(cells, steps, args.principle, out_dir, args.name):
+    for pth in draw(cells, steps, args.principle, out_dir, args.name, args.title):
         print(f"wrote {pth}")
 
 
@@ -984,6 +984,12 @@ def main() -> None:
                          "seeds, comma-separated")
     ap.add_argument("--seed", type=int,
                     help="seed-grid/seed-multi: keep one training seed only")
+    ap.add_argument("--channel", action="append",
+                    help="seed-grid/seed-multi: keep only this algo (GRPO, "
+                         "SDPO); repeatable")
+    ap.add_argument("--split-thinking", action="store_true",
+                    help="seed-multi: draw thinking-on and thinking-off cells "
+                         "as separate channels (think / no-think)")
     ap.add_argument("--model", help="seed-grid/seed-multi: base-model name "
                     "to keep (e.g. Qwen3-8B) when --group dirs mix models")
     ap.add_argument("--table-only", action="store_true",

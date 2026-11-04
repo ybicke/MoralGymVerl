@@ -10,7 +10,10 @@ come from the same groups (checkpoint: base cells of the given model).
              channels, dots = seeds; right: P(C) vs k_O for own previous
              move C and D, band over seeds.
   seed-multi multi-round P(C) per round, one panel per co-player group,
-             band over seeds, base dashed, base+ctx dotted.
+             band over seeds, base dashed, base+ctx dotted. With
+             --split-thinking, cells evaluated with the thinking block on
+             and off form separate channels ("think" / "no-think"), each
+             with its own base+ctx reference.
 
 Same data layer and style as the rest of make_figures.py.
 """
@@ -42,6 +45,8 @@ class Cell:
         self.value = meta["moral_value"]
         self.protocol = meta["protocol"]
         self.representation = meta.get("representation")
+        self.thinking = bool(meta.get("enable_thinking"))
+        self.tag = ""                      # set by load_cells(split_thinking)
         self.blocks = {o["opponent"]: o for o in opponents}
         self.first = opponents[0]
         m = CKPT_RE.search(meta.get("checkpoint") or "")
@@ -59,9 +64,13 @@ class Cell:
 
 
 def load_cells(groups: List[Path], protocol: str, model: Optional[str] = None,
-               seed: Optional[int] = None) -> List[Cell]:
+               seed: Optional[int] = None, channels: Optional[List[str]] = None,
+               split_thinking: bool = False) -> List[Cell]:
     """PGG cells of one protocol; --seed keeps one training seed (reference
-    rows have none and are always kept)."""
+    rows have none and are always kept); --channel keeps the named algos
+    (GRPO, SDPO); --split-thinking tags every cell "think" / "no-think"
+    by its enable_thinking flag so the two evaluation modes are drawn
+    as separate channels."""
     cells = []
     for d in discover_run_dirs(groups):
         beh = load_json(d, "behavioral.json")
@@ -74,6 +83,12 @@ def load_cells(groups: List[Path], protocol: str, model: Optional[str] = None,
             continue
         if seed is not None and c.channel != "base" and c.seed != seed:
             continue
+        if channels and c.channel != "base" and c.algo not in channels:
+            continue
+        if split_thinking:
+            c.tag = "think" if c.thinking else "no-think"
+            if c.channel != "base":
+                c.channel = f"{c.channel} {c.tag}"
         cells.append(c)
     if not cells:
         raise SystemExit(f"no {protocol} PGG cells under the --group dirs")
@@ -81,8 +96,10 @@ def load_cells(groups: List[Path], protocol: str, model: Optional[str] = None,
 
 
 def split(cells: List[Cell], steps: List[int], principle: str):
-    """-> base cell, {moral_value: ctx cell}, {(channel, step): [seed cells]}.
-    Reference rows must share the checkpoints' presentation."""
+    """-> {tag: base cell}, {(moral_value, tag): ctx cell},
+    {(channel, step): [seed cells]}; tag is "" unless the cells were
+    loaded with split_thinking. Reference rows must share the
+    checkpoints' presentation."""
     runs = defaultdict(dict)
     for c in cells:
         if c.channel != "base" and c.value == "none" and c.step in steps:
@@ -90,13 +107,13 @@ def split(cells: List[Cell], steps: List[int], principle: str):
     if not runs:
         raise SystemExit(f"no checkpoint cells at steps {steps}")
     rep = next(iter(runs.values()))[next(iter(next(iter(runs.values()))))].representation
-    base, ctx = None, {}
+    base, ctx = {}, {}
     for c in cells:
         if c.channel == "base" and c.representation == rep:
             if c.value == "none":
-                base = base or c
+                base.setdefault(c.tag, c)
             elif c.value == principle:
-                ctx.setdefault(c.value, c)
+                ctx.setdefault((c.value, c.tag), c)
     return base, ctx, {k: list(v.values()) for k, v in runs.items()}
 
 
@@ -123,9 +140,13 @@ def _style(key, runs) -> tuple:
     color = CHANNEL_COLORS.get(ch.split()[0], RUN_COLORS[1])
     steps = sorted(s for c, s in runs if c == ch)
     label = ch.split()[0] + (f" s{step}" if len(steps) > 1 else "")
+    from transfer_figures import shade
     if len(steps) > 1:
-        from transfer_figures import shade
         color = shade(color, steps.index(step), len(steps))
+    if ch.endswith(" no-think"):
+        color, label = shade(color, 0, 2), label + " no-think"
+    elif ch.endswith(" think"):
+        label += " think"
     return color, label
 
 
@@ -136,10 +157,11 @@ def _end(ys: List[float]) -> float:
 
 
 def fig_seed_grid(cells: List[Cell], steps: List[int], principle: str,
-                  out_dir: Path, name: str) -> List[Path]:
+                  out_dir: Path, name: str, title: Optional[str] = None) -> List[Path]:
     """The transfer_final form, pooled over seeds: one panel per model,
     P(C) vs k_O, own previous move C solid / D dashed, band = min-max."""
     base, ctx, runs = split(cells, steps, principle)
+    base = next(iter(base.values()), None)
     fig, ax = plt.subplots(figsize=(WIDTHS["column"], 2.3))
     labels, ks = [], []
     for own in OWN:
@@ -162,15 +184,16 @@ def fig_seed_grid(cells: List[Cell], steps: List[int], principle: str,
     direct_labels(ax, labels, ks[-1], min_gap=8.0, fontsize=7)
     _k_axes(ax, ks, xlabel=True)
     ax.set_ylabel("P(C) (%)", fontsize=7.5)
-    ax.set_title(f"{next(iter(cells)).model}, step {'/'.join(map(str, steps))}", fontsize=8)
+    ax.set_title(title or f"{next(iter(cells)).model}, step {'/'.join(map(str, steps))}", fontsize=8)
     fig.subplots_adjust(left=0.13, right=0.99, top=0.9, bottom=0.2)
     return save(fig, out_dir / "figures", f"transfer_final_{name}")
 
 
 def fig_seed_multi(cells: List[Cell], steps: List[int], principle: str,
-                   out_dir: Path, name: str) -> List[Path]:
+                   out_dir: Path, name: str, title: Optional[str] = None) -> List[Path]:
     base, ctx, runs = split(cells, steps, principle)
-    opps = list((base or next(iter(ctx.values()))).blocks)
+    opps = list(next(iter(list(base.values()) + list(ctx.values()))).blocks)
+    from transfer_figures import shade
     n_rounds = max(int(k.split("_")[1]) for c in cells
                    for b in c.blocks.values() for k in (b.get("per_round") or {}))
     xs = list(range(1, n_rounds + 1))
@@ -179,19 +202,24 @@ def fig_seed_multi(cells: List[Cell], steps: List[int], principle: str,
                              figsize=(WIDTHS["wide"], 2.2), gridspec_kw={"wspace": 0.12})
     for j, opp in enumerate(opps):
         ax, labels = axes[0][j], []
-        if base:
-            ys = per_round(base, opp); ax.plot(xs, ys, **REF_BASE)
-            labels.append((ys[-1], "base", INK_MUTED))
-        for c in ctx.values():
-            ys = per_round(c, opp); ax.plot(xs, ys, **REF_CONTEXT)
-            labels.append((ys[-1], "base+ctx", ACCENT))
+        for i, (tag, c) in enumerate(base.items()):
+            ys = per_round(c, opp); ax.plot(xs, ys, **REF_BASE)
+            if i == 0:                     # one label: both modes sit at the floor
+                labels.append((ys[-1], "base", INK_MUTED))
+        for (_, tag), c in ctx.items():
+            style = dict(REF_CONTEXT)
+            if tag == "no-think":
+                style["color"] = shade(ACCENT, 0, 2)
+            ys = per_round(c, opp); ax.plot(xs, ys, **style)
+            labels.append((ys[-1], f"+ctx {tag}" if tag else "base+ctx", style["color"]))
         for key in _channels(runs):
             color, label = _style(key, runs)
             mean = band(ax, xs, [per_round(c, opp) for c in runs[key]], color,
                         marker="o", ms=3, lw=1.4)
             labels.append((mean[-1], label, color))
         direct_labels(ax, labels, xs[-1], min_gap=8.0, fontsize=7)
-        ax.set_xlim(0.8, n_rounds + 1.9)
+        split_tags = any(tag for tag in base) or any(tag for _, tag in ctx)
+        ax.set_xlim(0.8, n_rounds + (2.6 if split_tags else 1.9))
         ax.set_xticks(xs)
         ax.set_ylim(-3, 103)
         ax.set_title(f"vs {opp.replace('_', ' ')}", fontsize=8)
@@ -199,5 +227,7 @@ def fig_seed_multi(cells: List[Cell], steps: List[int], principle: str,
         if j == 0:
             ax.set_ylabel("P(C) (%)", fontsize=7.5)
         clean_axes(ax)
+    if title:
+        fig.suptitle(title, fontsize=8, y=0.995)
     fig.subplots_adjust(left=0.07, right=0.99, top=0.88, bottom=0.2)
     return save(fig, out_dir / "figures", f"multi_round_{name}")

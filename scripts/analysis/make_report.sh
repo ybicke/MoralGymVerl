@@ -179,6 +179,29 @@ $PY $MF seed-multi --group $T/multi_round --group $T/multi_round_incontext \
     --group $T/multi_round_sdpo_randlabels_seed1 \
     --step 200 --model Qwen3-8B --principle deontological \
     --name qwen3_8b_sdpo_randlabels_seed1_s200 --analysis-dir $CMP
+# Thinking on vs off in live play (ACL thinking appendix): SDPO seeds only,
+# each evaluation mode with its own base / +ctx reference.
+$PY $MF seed-multi --group $T/multi_round --group $T/multi_round_grid \
+    --group $T/multi_round_incontext --group $T/multi_round_sdpo_seed2 \
+    --group $T/multi_round_thinking_base --group $T/multi_round_thinking_sdpo \
+    --step 200 --model Qwen3-8B --principle deontological \
+    --channel SDPO --split-thinking \
+    --name qwen3_8b_thinking_vs_nothinking_seeds_s200 --analysis-dir $CMP
+# Other models (ACL app:olmo / app:gemma): single-round transfer, one
+# panel per model and algorithm. --seed 1 drops Gemma's unseeded
+# repair-gen ladder that shares the base cell's group.
+for M in "olmo3_7b|Olmo-3-7B-Instruct|Olmo-3-7B" "gemma2_9b|gemma-2-9b-it|Gemma-2-9B"; do
+    IFS='|' read -r dir model short <<< "$M"
+    G=eval_results/transfer/$dir/pgg
+    BASE=$G/single_round; [ -d $BASE ] || BASE=eval_results/teacher_signal/$dir/pgg/deon_gate
+    for A in SDPO GRPO; do
+        $PY $MF seed-grid --group $G/single_round_sdpo_seed1 --group $G/single_round_grpo_v2_seed1 \
+            --group $BASE --group eval_results/teacher_signal/$dir/pgg/deon_gate \
+            --step 200 --seed 1 --model $model --principle deontological --channel $A \
+            --title "$short, $A, step 200" --analysis-dir $CMP \
+            --name ${dir}_$(echo $A | tr A-Z a-z)_seed1_s200
+    done
+done
 O=eval_results/transfer/olmo3_7b/pgg
 $PY $MF multiround-compare --name olmo3_7b_opening_s200 --analysis-dir $CMP \
     --cell "base=$O/multi_round_sdpo_seed1/cells/public_goods__none__decision_full__multi_round__base_3714301" \
@@ -188,6 +211,8 @@ $PY $MF multiround-compare --name olmo3_7b_opening_s200 --analysis-dir $CMP \
     --cell "+ctx fabOpen=$O/multi_round_fabopen/cells/public_goods__deontological__decision_full__multi_round__base_3714299"
 cp $CMP/figures/pdf/multi_round_qwen3_8b_seeds_s200.pdf \
    $CMP/figures/pdf/multi_round_qwen3_8b_sdpo_randlabels_seed1_s200.pdf \
+   $CMP/figures/pdf/multi_round_qwen3_8b_thinking_vs_nothinking_seeds_s200.pdf \
+   $CMP/figures/pdf/transfer_final_{olmo3_7b,gemma2_9b}_{sdpo,grpo}_seed1_s200.pdf \
    $CMP/figures/pdf/multi_round_compare_olmo3_7b_opening_s200.pdf \
    ~/moralgym-report/figures/ && echo "mirrored ACL live-play figures"
 
