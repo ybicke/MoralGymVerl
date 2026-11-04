@@ -166,6 +166,31 @@ cp $T/analysis/generated/numbers_Seeds.tex ~/moralgym-report/generated/
 cp $T/analysis/generated/tables/seed_transfer.tex ~/moralgym-report/generated/tables/
 echo "mirrored seed-grid macros + table"
 
+# ACL live-play figures (acl_main.tex): three-seed Qwen3-8B, the
+# random-labels seed, and the Olmo-3 cold vs fabricated opening. Cells
+# live in several groups, so they are drawn from --group / --cell lists
+# and mirrored by hand (make_figures mirrors only what main.tex names).
+CMP=eval_results/transfer/comparison/analysis
+$PY $MF seed-multi --group $T/multi_round --group $T/multi_round_grid \
+    --group $T/multi_round_incontext --group $T/multi_round_sdpo_seed2 \
+    --step 200 --model Qwen3-8B --principle deontological \
+    --name qwen3_8b_seeds_s200 --analysis-dir $CMP
+$PY $MF seed-multi --group $T/multi_round --group $T/multi_round_incontext \
+    --group $T/multi_round_sdpo_randlabels_seed1 \
+    --step 200 --model Qwen3-8B --principle deontological \
+    --name qwen3_8b_sdpo_randlabels_seed1_s200 --analysis-dir $CMP
+O=eval_results/transfer/olmo3_7b/pgg
+$PY $MF multiround-compare --name olmo3_7b_opening_s200 --analysis-dir $CMP \
+    --cell "base=$O/multi_round_sdpo_seed1/cells/public_goods__none__decision_full__multi_round__base_3714301" \
+    --cell "SDPO=$O/multi_round_sdpo_seed1/cells/public_goods__none__decision_full__multi_round__olmo3_7b_sdpo_pd_deon_tft_200_seed1-global_step_200_3714301" \
+    --cell "+ctx=$O/multi_round_incontext/cells/public_goods__deontological__decision_full__multi_round__base_3636216" \
+    --cell "SDPO fabOpen=$O/multi_round_fabopen/cells/public_goods__none__decision_full__multi_round__olmo3_7b_sdpo_pd_deon_tft_200_seed1-global_step_200_3714299" \
+    --cell "+ctx fabOpen=$O/multi_round_fabopen/cells/public_goods__deontological__decision_full__multi_round__base_3714299"
+cp $CMP/figures/pdf/multi_round_qwen3_8b_seeds_s200.pdf \
+   $CMP/figures/pdf/multi_round_qwen3_8b_sdpo_randlabels_seed1_s200.pdf \
+   $CMP/figures/pdf/multi_round_compare_olmo3_7b_opening_s200.pdf \
+   ~/moralgym-report/figures/ && echo "mirrored ACL live-play figures"
+
 # Hanabi-RL transfer check (external checkpoint of Ramesh et al., ICML 2026,
 # staged as qwen3_4b_grpo_hanabi_o3ratings_selfplay_ext-ramesh2026): the
 # same in-play protocol on Qwen3-4B-Instruct-2507, base vs the released

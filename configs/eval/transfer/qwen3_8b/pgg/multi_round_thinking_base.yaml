@@ -1,0 +1,22 @@
+# Thinking-mode live play, base Qwen3-8B with and without the principle:
+# the references for multi_round_thinking_sdpo. Protocol as in
+# multi_round.yaml (5 live rounds, three co-player groups), thinking on.
+#
+#   EVAL_STAGE=eval /usr/bin/python3.11 scripts/slurm/submit_sweep.py \
+#       configs/eval/transfer/qwen3_8b/pgg/multi_round_thinking_base.yaml --dry-run
+
+num_episodes: 20           # per co-player group; x3 x5 rounds = 300 decisions/cell
+
+axes:
+  game: [public_goods]
+  representation: [decision_full]
+  moral_value: [none, deontological]
+  protocol: [multi_round]
+  checkpoint: [base]
+
+env:
+  RUN_PROBES: "off"
+  GAME_DESCRIPTION: "off"
+
+extra_args: ["--temperature", "0.7", "--enable-thinking", "true",
+             "--max-new-tokens", "30000"]

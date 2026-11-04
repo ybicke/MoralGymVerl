@@ -52,6 +52,8 @@ INK_MUTED = "#6b6a63"
 # Reference-line grammar, identical in every figure.
 REF_BASE = {"color": INK_MUTED, "ls": "--", "lw": 1.0}     # untrained base
 REF_CONTEXT = {"color": ACCENT, "ls": ":", "lw": 1.0}      # principle in ctx
+# Learning channel colours, identical in every figure.
+CHANNEL_COLORS = {"GRPO": RUN_COLORS[0], "SDPO": RUN_COLORS[2]}
 
 # TeX-ready labels, subscripts matching the results docs' convention.
 STATE_TEX = {

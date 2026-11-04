@@ -26,13 +26,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import matplotlib.pyplot as plt  # noqa: E402
 from eval_cells import discover_run_dirs, load_json  # noqa: E402
 from figure_style import (  # noqa: E402
-    ACCENT, INK_MUTED, REF_BASE, REF_CONTEXT, RUN_COLORS, WIDTHS,
+    ACCENT, CHANNEL_COLORS, INK_MUTED, REF_BASE, REF_CONTEXT, RUN_COLORS, WIDTHS,
     clean_axes, direct_labels, save,
 )
 from transfer_figures import OWN, OWN_STYLE, _k_axes, curve  # noqa: E402
 
 CKPT_RE = re.compile(r"/([^/]+?)(?:_seed(\d+))?/global_step_(\d+)/")
-CHANNEL_COLORS = {"GRPO": RUN_COLORS[0], "SDPO": RUN_COLORS[2]}
 
 
 class Cell:
@@ -130,6 +129,12 @@ def _style(key, runs) -> tuple:
     return color, label
 
 
+def _end(ys: List[float]) -> float:
+    """Label height: the last point, ties broken by the curve's mean so
+    lines that meet at the right edge keep their vertical order."""
+    return ys[-1] + 1e-3 * sum(ys) / len(ys)
+
+
 def fig_seed_grid(cells: List[Cell], steps: List[int], principle: str,
                   out_dir: Path, name: str) -> List[Path]:
     """The transfer_final form, pooled over seeds: one panel per model,
@@ -144,13 +149,13 @@ def fig_seed_grid(cells: List[Cell], steps: List[int], principle: str,
         for c in ctx.values():
             ys = curve(c.first, own); ks = list(range(len(ys)))
             ax.plot(ks, ys, color=ACCENT, lw=0.9, ms=2.0, **OWN_STYLE[own])
-            labels.append((ys[-1], f"+ctx {own}$_A$", ACCENT))
+            labels.append((_end(ys), f"+ctx {own}$_A$", ACCENT))
         for key in _channels(runs):
             color, label = _style(key, runs)
             series = [curve(c.first, own) for c in runs[key]]
             ks = list(range(len(series[0])))
             mean = band(ax, ks, series, color, lw=1.2, ms=2.6, **OWN_STYLE[own])
-            labels.append((mean[-1], f"{label} {own}$_A$", color))
+            labels.append((_end(mean), f"{label} {own}$_A$", color))
     if base:
         ends = [curve(base.first, own)[-1] for own in OWN]
         labels.append((sum(ends) / len(ends), "base", INK_MUTED))

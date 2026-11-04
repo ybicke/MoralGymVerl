@@ -35,7 +35,7 @@ prose | list) is a prompt variant, NOT a presentation axis.
 Shared machinery (imported by the entry points, not runnable):
 
     config           YAML loading, protocol presets, per-episode EpisodeConfig
-    model_loading    checkpoint dispatch (base / LoRA merge / full model)
+    model_loading    checkpoint dispatch (base / LoRA adapter / full model)
     generation       chat rendering, sampling, policy functions
     metrics          trajectory aggregation for behavioral.json
     scoring          per-decision reward streams + regret baselines;

@@ -87,8 +87,8 @@ RESULTS_ROOTS = ("teacher_signal", "post_training", "transfer")
 GAME_TOKENS = {"pd": ("prisoners_dilemma",), "sh": ("stag_hunt",),
                "ch": ("chicken",), "pgg": ("public_goods",),
                "pdshch": ("prisoners_dilemma", "stag_hunt", "chicken")}
-MODEL_TOKENS = ("gemma2_9b", "gemma3_12b", "llama31_8b", "olmo3_7b", "qwen3_4b",
-                "qwen3_8b", "qwen3_32b")
+MODEL_TOKENS = ("gemma2_9b", "gemma3_12b", "llama31_8b", "olmo3_7b", "olmo3think_7b",
+                "qwen3_4b", "qwen3_8b", "qwen3_32b")
 # Game families, mirroring src/moralgym_verl/game/ (classic_games.py = 2x2
 # matrix games, pgg_game.py = n-player). The family is a path level between
 # subject and experiment; a sweep's game axis must stay inside its family.

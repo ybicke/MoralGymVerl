@@ -8,54 +8,9 @@ from pathlib import Path
 from typing import Optional
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 
 logger = logging.getLogger(__name__)
-
-
-def merge_lora_weights(model, checkpoint_path: str):
-    """Merge LoRA adapter weights into the base model in-place:
-    W' = W + (lora_alpha / r) * lora_B @ lora_A per adapted layer. Same
-    math as PeftModel.merge_and_unload(), without the peft dependency
-    (not installed in the NeMo-RL container).
-    """
-    from safetensors.torch import load_file
-
-    ckpt = Path(checkpoint_path)
-    with open(ckpt / "adapter_config.json") as f:
-        lora_cfg = json.load(f)
-
-    r = lora_cfg["r"]
-    alpha = lora_cfg["lora_alpha"]
-    scale = alpha / r
-
-    adapters = load_file(ckpt / "adapter_model.safetensors")
-    state_dict = model.state_dict()
-
-    merged_count = 0
-    for key in list(adapters.keys()):
-        if ".lora_B." not in key:
-            continue
-        a_key = key.replace(".lora_B.", ".lora_A.")
-        # PEFT keys: "base_model.model.<module>.lora_B.weight"
-        # Base model keys: "<module>.weight"
-        base_key = (
-            key.replace("base_model.model.", "")
-            .replace(".lora_B.weight", ".weight")
-        )
-        if base_key not in state_dict:
-            raise KeyError(
-                f"LoRA target '{base_key}' not found in base model. "
-                f"Adapter key: '{key}'"
-            )
-        B = adapters[key].to(device=state_dict[base_key].device)    # (out_dim, r)
-        A = adapters[a_key].to(device=state_dict[base_key].device)  # (r, in_dim)
-        state_dict[base_key] += (scale * (B @ A)).to(state_dict[base_key].dtype)
-        merged_count += 1
-
-    model.load_state_dict(state_dict)
-    logger.info("Merged %d LoRA adapters (r=%d, alpha=%d, scale=%.1f)", merged_count, r, alpha, scale)
-    return model
 
 
 def load_model_for_eval(
@@ -66,8 +21,9 @@ def load_model_for_eval(
 
     Dispatch (on checkpoint contents, not argument shape):
     - checkpoint=None: base model only (no adapter)
-    - checkpoint dir containing adapter_config.json: LoRA adapter merged
-      onto base_model
+    - checkpoint dir containing adapter_config.json: LoRA adapter kept
+      separate on top of base_model (PEFT). Merging into bf16 weights
+      perturbs the trained policy, so it is never merged here.
     - any other checkpoint: full-model HF checkpoint (base_model unused)
     """
     if checkpoint is None:
@@ -79,7 +35,8 @@ def load_model_for_eval(
         model = AutoModelForCausalLM.from_pretrained(
             base_model, torch_dtype=torch.bfloat16, device_map="auto",
         )
-        model = merge_lora_weights(model, checkpoint)
+        from peft import PeftModel
+        model = PeftModel.from_pretrained(model, checkpoint)
         tokenizer = AutoTokenizer.from_pretrained(base_model)
     else:
         model = AutoModelForCausalLM.from_pretrained(
@@ -92,3 +49,33 @@ def load_model_for_eval(
 
     model.eval()
     return model, tokenizer
+
+
+def load_vllm_for_eval(checkpoint: Optional[str], base_model: str,
+                       max_model_len: int, seed: int):
+    """vLLM engine for batched evaluation, dispatching like
+    load_model_for_eval. A LoRA adapter is served through vLLM's LoRA
+    support rather than merged. Returns (llm, tokenizer, lora_request)."""
+    from vllm import LLM
+    from vllm.lora.request import LoRARequest
+
+    lora_request, lora_rank = None, None
+    model_path = base_model
+    if checkpoint is not None:
+        if (Path(checkpoint) / "adapter_config.json").exists():
+            with open(Path(checkpoint) / "adapter_config.json") as f:
+                lora_rank = json.load(f)["r"]
+            lora_request = LoRARequest("adapter", 1, str(checkpoint))
+        else:
+            model_path = checkpoint
+    # Never ask for more context than the model has (Gemma-2: 8192).
+    native_len = AutoConfig.from_pretrained(model_path).max_position_embeddings
+    llm = LLM(
+        model=model_path, dtype="bfloat16", seed=seed,
+        max_model_len=min(max_model_len, native_len),
+        gpu_memory_utilization=0.85,
+        enable_lora=lora_request is not None,
+        **({"max_lora_rank": lora_rank} if lora_rank else {}),
+    )
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    return llm, tokenizer, lora_request

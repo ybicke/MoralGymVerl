@@ -1,0 +1,33 @@
+# =============================================================================
+# Olmo-3-7B-Think, SDPO on the full response, thinking included, 80 steps.
+# The native application of SDPO to a model that always thinks: the teacher
+# reads prompt + principle and scores the whole trace, as in the Instruct
+# runs. Both masked variants failed because the decision forms inside the
+# thinking: loss after </think> with the teacher reading the thinking (tft_50,
+# job 3683029: flat 1-5%) and with the teacher blind to it (tft_80, job
+# 3696810: flat through step 34, thinking drifting longer). Same budget, n 8
+# and schedule as tft_80; only the mask is off.
+#
+# Read the traces, not just the curve: recitation of the principle inside
+# the thinking, faithfulness of the payoff reasoning, PGG transfer with
+# thinking on, against the Qwen thinking-mode rows.
+#
+# Smoke BEFORE the full run:
+#   PARTITION=debug TIME=00:20:00 bash scripts/slurm/train_verl.sh \
+#        olmo3think_7b_sdpo_pd_deon-randlabels_tft_80_v2 \
+#        olmo3think_7b_sdpo_pd_deon-randlabels_tft_smoke4 trainer.total_training_steps=1 \
+#        trainer.test_freq=-1 data.train_batch_size=4 actor_rollout_ref.rollout.n=4 \
+#        actor_rollout_ref.actor.ppo_mini_batch_size=4
+# Full run:
+#   SEED=1 DRY_RUN=1 bash scripts/slurm/train_verl.sh olmo3think_7b_sdpo_pd_deon-randlabels_tft_80_v2
+# =============================================================================
+defaults:
+  - olmo3think_7b_sdpo_pd_deon-randlabels_tft_80
+  - _self_
+
+actor_rollout_ref:
+  actor:
+    self_distillation:
+      distill_after: null
+      distill_after_hide_thinking: false
+      distill_after_teacher_prefix: ""
