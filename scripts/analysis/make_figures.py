@@ -921,7 +921,8 @@ def fig_seed_figures(args, out_dir: Path, protocol: str) -> None:
                        args.model, args.seed, args.channel, args.split_thinking)
     draw = fig_seed_grid if protocol == "single_round" else fig_seed_multi
     steps = [int(x) for x in args.step.split(",")]
-    for pth in draw(cells, steps, args.principle, out_dir, args.name, args.title):
+    extra = {"legend": args.legend} if protocol == "multi_round" else {}
+    for pth in draw(cells, steps, args.principle, out_dir, args.name, args.title, **extra):
         print(f"wrote {pth}")
 
 
@@ -987,6 +988,9 @@ def main() -> None:
     ap.add_argument("--channel", action="append",
                     help="seed-grid/seed-multi: keep only this algo (GRPO, "
                          "SDPO); repeatable")
+    ap.add_argument("--legend", action="store_true",
+                    help="seed-multi: shared legend under the panels instead "
+                         "of direct labels")
     ap.add_argument("--split-thinking", action="store_true",
                     help="seed-multi: draw thinking-on and thinking-off cells "
                          "as separate channels (think / no-think)")

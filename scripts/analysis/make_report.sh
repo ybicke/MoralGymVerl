@@ -185,7 +185,7 @@ $PY $MF seed-multi --group $T/multi_round --group $T/multi_round_grid \
     --group $T/multi_round_incontext --group $T/multi_round_sdpo_seed2 \
     --group $T/multi_round_thinking_base --group $T/multi_round_thinking_sdpo \
     --step 200 --model Qwen3-8B --principle deontological \
-    --channel SDPO --split-thinking \
+    --channel SDPO --split-thinking --legend \
     --name qwen3_8b_thinking_vs_nothinking_seeds_s200 --analysis-dir $CMP
 # Other models (ACL app:olmo / app:gemma): single-round transfer, one
 # panel per model and algorithm. --seed 1 drops Gemma's unseeded

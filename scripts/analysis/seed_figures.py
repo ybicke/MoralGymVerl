@@ -190,7 +190,10 @@ def fig_seed_grid(cells: List[Cell], steps: List[int], principle: str,
 
 
 def fig_seed_multi(cells: List[Cell], steps: List[int], principle: str,
-                   out_dir: Path, name: str, title: Optional[str] = None) -> List[Path]:
+                   out_dir: Path, name: str, title: Optional[str] = None,
+                   legend: bool = False) -> List[Path]:
+    """--legend: one shared legend under the panels instead of direct
+    labels at the right edge (which cost each panel a label column)."""
     base, ctx, runs = split(cells, steps, principle)
     opps = list(next(iter(list(base.values()) + list(ctx.values()))).blocks)
     from transfer_figures import shade
@@ -200,26 +203,34 @@ def fig_seed_multi(cells: List[Cell], steps: List[int], principle: str,
     per_round = lambda c, opp: [100 * c.blocks[opp]["per_round"][f"round_{r}"]["p_C"] for r in xs]
     fig, axes = plt.subplots(1, len(opps), sharey=True, squeeze=False,
                              figsize=(WIDTHS["wide"], 2.2), gridspec_kw={"wspace": 0.12})
+    handles = {}                           # label -> line, for the shared legend
     for j, opp in enumerate(opps):
         ax, labels = axes[0][j], []
         for i, (tag, c) in enumerate(base.items()):
             ys = per_round(c, opp); ax.plot(xs, ys, **REF_BASE)
             if i == 0:                     # one label: both modes sit at the floor
                 labels.append((ys[-1], "base", INK_MUTED))
+                handles.setdefault("base", ax.lines[-1])
         for (_, tag), c in ctx.items():
             style = dict(REF_CONTEXT)
             if tag == "no-think":
                 style["color"] = shade(ACCENT, 0, 2)
             ys = per_round(c, opp); ax.plot(xs, ys, **style)
-            labels.append((ys[-1], f"+ctx {tag}" if tag else "base+ctx", style["color"]))
+            label = f"+ctx {tag}" if tag else "base+ctx"
+            labels.append((ys[-1], label, style["color"]))
+            handles.setdefault(label, ax.lines[-1])
         for key in _channels(runs):
             color, label = _style(key, runs)
             mean = band(ax, xs, [per_round(c, opp) for c in runs[key]], color,
                         marker="o", ms=3, lw=1.4)
             labels.append((mean[-1], label, color))
-        direct_labels(ax, labels, xs[-1], min_gap=8.0, fontsize=7)
-        split_tags = any(tag for tag in base) or any(tag for _, tag in ctx)
-        ax.set_xlim(0.8, n_rounds + (2.6 if split_tags else 1.9))
+            handles.setdefault(label, ax.lines[-1])
+        if legend:
+            ax.set_xlim(0.8, n_rounds + 0.3)
+        else:
+            direct_labels(ax, labels, xs[-1], min_gap=8.0, fontsize=7)
+            split_tags = any(tag for tag in base) or any(tag for _, tag in ctx)
+            ax.set_xlim(0.8, n_rounds + (2.6 if split_tags else 1.9))
         ax.set_xticks(xs)
         ax.set_ylim(-3, 103)
         ax.set_title(f"vs {opp.replace('_', ' ')}", fontsize=8)
@@ -229,5 +240,14 @@ def fig_seed_multi(cells: List[Cell], steps: List[int], principle: str,
         clean_axes(ax)
     if title:
         fig.suptitle(title, fontsize=8, y=0.995)
-    fig.subplots_adjust(left=0.07, right=0.99, top=0.88, bottom=0.2)
+    if legend:
+        rank = lambda k: (not k.startswith(("GRPO", "SDPO")), k.startswith("base"),
+                          k.endswith("no-think"), k)
+        order = sorted(handles, key=rank)   # runs, +ctx, base; think before no-think
+        fig.legend([handles[k] for k in order], order, loc="lower center",
+                   ncol=len(order), fontsize=7, frameon=False, handlelength=2.2,
+                   columnspacing=1.4, bbox_to_anchor=(0.5, 0.0))
+        fig.subplots_adjust(left=0.07, right=0.99, top=0.88, bottom=0.33)
+    else:
+        fig.subplots_adjust(left=0.07, right=0.99, top=0.88, bottom=0.2)
     return save(fig, out_dir / "figures", f"multi_round_{name}")
