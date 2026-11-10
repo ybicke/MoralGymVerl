@@ -1,0 +1,11 @@
+{
+  "checkpoint": "base",
+  "checkpoint_kind": "base",
+  "checkpoint_path": "",
+  "base_model": "Qwen/Qwen3-8B",
+  "config": "configs/eval/harness/qwen3_8b/retention.yaml",
+  "benchmarks": [
+    "gsm8k",
+    "mmlu"
+  ]
+}

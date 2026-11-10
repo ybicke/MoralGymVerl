@@ -1,0 +1,23 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{Stock lm-eval tasks gsm8k_cot_llama and mmlu; base = same protocol without an adapter. Accuracy in percent with binomial standard error; Δ base is the difference to the untrained row in points, bold at 2 points or more. GSM8K n = 1319 (8-shot chain of thought as chat turns, exact match on the final number); MMLU n = 14042 (5-shot log-likelihood over the answer letters, size-weighted over 57 subjects). Greedy decoding, thinking off.}
+\label{tab:T1-retention}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrr}
+\toprule
+ & \multicolumn{2}{c}{GSM8K} & \multicolumn{2}{c}{MMLU} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+checkpoint & acc ± s.e. & Δ base & acc ± s.e. & Δ base \\
+\midrule
+base & 90.4 ± 0.8 &  & 74.9 ± 0.3 &  \\
+grpo_pd_deon_tft_200_v2_seed1 s200 & 90.6 ± 0.8 & +0.2 & 74.9 ± 0.3 & +0.0 \\
+grpo_pd_deon_tft_200_v2_seed2 s200 & 90.5 ± 0.8 & +0.1 & 75.0 ± 0.3 & +0.1 \\
+grpo_pd_deon_tft_200_v2_seed3 s200 & 90.8 ± 0.8 & +0.3 & 74.8 ± 0.3 & -0.1 \\
+sdpo_pd_deon_tft_200_seed1 s200 & 90.7 ± 0.8 & +0.2 & 75.0 ± 0.3 & +0.1 \\
+sdpo_pd_deon_tft_200_seed3 s200 & 90.8 ± 0.8 & +0.3 & 75.1 ± 0.3 & +0.2 \\
+sdpo_pd_deon_tft_300_seed2 s200 & 90.8 ± 0.8 & +0.3 & 75.0 ± 0.3 & +0.1 \\
+\bottomrule
+\end{tabular}
+\end{table}

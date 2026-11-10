@@ -1,0 +1,11 @@
+{
+  "checkpoint": "qwen3_8b_grpo_pd_deon_tft_200_v2_seed1/global_step_200",
+  "checkpoint_kind": "adapter",
+  "checkpoint_path": "/iopsstor/scratch/cscs/bickery/moralgym_verl_runs/qwen3_8b_grpo_pd_deon_tft_200_v2_seed1/global_step_200/actor/lora_adapter",
+  "base_model": "Qwen/Qwen3-8B",
+  "config": "configs/eval/harness/qwen3_8b/retention.yaml",
+  "benchmarks": [
+    "gsm8k",
+    "mmlu"
+  ]
+}

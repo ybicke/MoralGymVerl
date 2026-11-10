@@ -18,6 +18,7 @@ eval_results/**
 !eval_results/**/behavioral.json
 !eval_results/**/probe_*.json
 !eval_results/**/summary.txt
+!eval_results/benchmarks/**/*.json
 eval_results/_archive/
 eval_results/**/*.jsonl
 eval_results/**/Untitled

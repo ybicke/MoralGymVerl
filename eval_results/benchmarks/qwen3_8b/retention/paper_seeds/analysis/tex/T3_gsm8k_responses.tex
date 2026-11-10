@@ -1,0 +1,23 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{Mean and maximum response length in words, share of responses that end with the required answer line, and accuracy under the lenient last-number extraction. A length collapse or a missing answer line flags a changed output habit rather than lost ability.}
+\label{tab:T3-gsm8k-responses}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrr}
+\toprule
+ & \multicolumn{3}{c}{GSM8K responses} \\
+\cmidrule(lr){2-4}
+checkpoint & words & answer line % & acc flexible \\
+\midrule
+base & 81 (max 384) & 100.0 & 90.4 \\
+grpo_pd_deon_tft_200_v2_seed1 s200 & 81 (max 807) & 99.9 & 90.5 \\
+grpo_pd_deon_tft_200_v2_seed2 s200 & 81 (max 545) & 100.0 & 90.4 \\
+grpo_pd_deon_tft_200_v2_seed3 s200 & 81 (max 287) & 100.0 & 90.7 \\
+sdpo_pd_deon_tft_200_seed1 s200 & 86 (max 771) & 99.8 & 90.5 \\
+sdpo_pd_deon_tft_200_seed3 s200 & 85 (max 771) & 99.9 & 90.6 \\
+sdpo_pd_deon_tft_300_seed2 s200 & 85 (max 470) & 100.0 & 90.7 \\
+\bottomrule
+\end{tabular}
+\end{table}

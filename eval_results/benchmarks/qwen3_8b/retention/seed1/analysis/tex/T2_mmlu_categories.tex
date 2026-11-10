@@ -1,0 +1,20 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{Accuracy in percent per MMLU category, difference to base in parentheses.}
+\label{tab:T2-mmlu-categories}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrr}
+\toprule
+ & \multicolumn{4}{c}{MMLU category} \\
+\cmidrule(lr){2-5}
+checkpoint & stem & humanities & social sciences & other \\
+\midrule
+base & 75.5 & 66.3 & 83.9 & 78.5 \\
+grpo_pd_deon_tft_200_v2_seed1 s200 & 75.5 (+0.0) & 66.3 (+0.0) & 84.0 (+0.0) & 78.6 (+0.1) \\
+sdpo_pd_deon_tft_200_seed1 s200 & 75.3 (-0.2) & 66.8 (+0.5) & 84.1 (+0.1) & 78.5 (-0.0) \\
+sdpo_pdshch_deon_tft_200_seed1 s200 & 75.5 (+0.1) & 66.6 (+0.4) & 84.1 (+0.2) & 78.4 (-0.1) \\
+\bottomrule
+\end{tabular}
+\end{table}
