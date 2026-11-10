@@ -1,0 +1,19 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{Cooperation rate (\%) of gemma-2-9b-it by fabricated previous state; 100 decisions per state (binomial s.e.\ $\leq$5 points; differences under $\approx$14 points are not distinguishable). P(C) = mean of the four state rates, which the balanced design makes equal to the cell's overall cooperation rate. $\Delta_{opp}$ = P(C$\mid$C$_O$) $-$ P(C$\mid$D$_O$), the opponent-conditioning gap (reciprocity signature).}
+\label{tab:post-training-gemma_run2_200}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrrrr}
+\toprule
+Policy & P(C$\mid$C$_A$C$_O$) & P(C$\mid$C$_A$D$_O$) & P(C$\mid$D$_A$C$_O$) & P(C$\mid$D$_A$D$_O$) & P(C) & $\Delta_{opp}$ \\
+\midrule
+base, no context & 5 & 1 & 5 & 8 & 5 & +1 \\
+trained, step 60 & 94 & 16 & 71 & 7 & 47 & +71 \\
+trained, step 120 & 99 & 53 & 96 & 7 & 64 & +68 \\
+trained, step 200 & 100 & 63 & 90 & 9 & 65 & +59 \\
+base + `deontological+repair+generosity` in context & 100 & 43 & 83 & 6 & 58 & +67 \\
+\bottomrule
+\end{tabular}
+\end{table}

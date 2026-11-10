@@ -1,0 +1,69 @@
+{
+  "metadata": {
+    "moral_value": "utilitarian",
+    "base_model": "google/gemma-2-9b-it",
+    "checkpoint": "base",
+    "protocol": "single_round",
+    "num_rounds": 1,
+    "game_type": "prisoners_dilemma",
+    "representation": "matrix",
+    "teacher_template_source": "/users/bickery/MoralGymVerl/configs/verl/sdpo_pd_tft.yaml",
+    "eval_seed": 42,
+    "timestamp": "2026-08-10T19:39:37.038056",
+    "git_commit": "2066d22-dirty",
+    "config": "/users/bickery/MoralGymVerl/configs/eval/teacher_signal_9b.yaml",
+    "probe": "probe_a",
+    "continuation_token_ids": {
+      " action3": [
+        3105,
+        235304
+      ],
+      " action4": [
+        3105,
+        235310
+      ]
+    }
+  },
+  "probe_a": {
+    "first": {
+      "logodds_student": 1.0,
+      "logodds_teacher": -0.125,
+      "answer_delta": -1.125,
+      "p_coop_student": 0.7310585786300049,
+      "p_coop_teacher": 0.46879062662624377,
+      "jsd": 0.03634173990295169
+    },
+    "CC": {
+      "logodds_student": -2.625,
+      "logodds_teacher": -2.75,
+      "answer_delta": -0.125,
+      "p_coop_student": 0.0675466911396291,
+      "p_coop_teacher": 0.060086650174007626,
+      "jsd": 0.00011650088326725975
+    },
+    "CD": {
+      "logodds_student": 0.125,
+      "logodds_teacher": -0.25,
+      "answer_delta": -0.375,
+      "p_coop_student": 0.5312093733737563,
+      "p_coop_teacher": 0.43782349911420193,
+      "jsd": 0.004371043251771699
+    },
+    "DC": {
+      "logodds_student": 2.375,
+      "logodds_teacher": 1.9999990463256836,
+      "answer_delta": -0.3750009536743164,
+      "p_coop_student": 0.9149009549929797,
+      "p_coop_teacher": 0.8807969778481604,
+      "jsd": 0.0015918576965825784
+    },
+    "DD": {
+      "logodds_student": 2.9999990463256836,
+      "logodds_teacher": 2.3750009536743164,
+      "answer_delta": -0.6249980926513672,
+      "p_coop_student": 0.9525740837385945,
+      "p_coop_teacher": 0.9149010292433601,
+      "jsd": 0.0029046325395260877
+    }
+  }
+}

@@ -1,0 +1,23 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{Measures whether behaviour reads the payoff structure or its surface rendering: the same PD is re-rendered along one presentation axis at a time and cooperation by state is compared against the fixed rendering. A surface-reader moves when the rendering changes; a payoff-reader only when the payoffs do. One panel per moral value; rows are the randomization axes: `fixed' = the screen's fixed-presentation cell; each `only' row randomizes one surface axis with the other three fixed; `all four (surface)' draws labels, layout, label order and role jointly (payoffs fixed); `payoffs' resamples T, R, P, S preserving the PD ordering (the content control). Distance from the fixed row = that axis's own effect; distance from the all-four row = what the remaining axes add. $\Delta_{opp}$ = P(C$\mid$C$_O$) $-$ P(C$\mid$D$_O$); $\Delta_{surf}$(axis) = $\Delta_{opp}$(axis) $-$ $\Delta_{opp}$(fixed). PD only.}
+\label{tab:randomization-ablation}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrrrrrrrrrrrr}
+\toprule
+ & \multicolumn{2}{c}{P(C)} & \multicolumn{2}{c}{P(C$\mid$C$_A$C$_O$)} & \multicolumn{2}{c}{P(C$\mid$C$_A$D$_O$)} & \multicolumn{2}{c}{P(C$\mid$D$_A$C$_O$)} & \multicolumn{2}{c}{P(C$\mid$D$_A$D$_O$)} & \multicolumn{2}{c}{$\Delta_{opp}$} & \multicolumn{2}{c}{$\Delta_{surf}$} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}\cmidrule(lr){8-9}\cmidrule(lr){10-11}\cmidrule(lr){12-13}\cmidrule(lr){14-15}
+Presentation (matrix $\mid$ prose) & mat. & prose & mat. & prose & mat. & prose & mat. & prose & mat. & prose & mat. & prose & mat. & prose \\
+\midrule
+\multicolumn{15}{l}{\emph{None (base)}} \\
+fixed & 2 & 4 & 2 & 12 & 0 & 0 & 3 & 2 & 5 & 4 & +0 & +5 & -- & -- \\
+all four (surface) & 42 & 18 & 62 & 29 & 23 & 6 & 37 & 8 & 48 & 27 & +14 & +2 & +14 & -3 \\
+\addlinespace
+\multicolumn{15}{l}{\emph{Deontological}} \\
+fixed & 73 & 73 & 99 & 100 & 74 & 68 & 80 & 91 & 38 & 32 & +34 & +45 & -- & -- \\
+all four (surface) & 48 & 53 & 92 & 97 & 28 & 29 & 61 & 70 & 9 & 15 & +58 & +62 & +24 & +17 \\
+\bottomrule
+\end{tabular}
+\end{table}

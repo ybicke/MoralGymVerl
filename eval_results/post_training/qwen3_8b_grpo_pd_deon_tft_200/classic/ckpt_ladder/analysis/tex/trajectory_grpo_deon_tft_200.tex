@@ -1,0 +1,24 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{Cooperation rate (\%) by fabricated previous state over training, in 20-step windows (5120 decisions per window). Illegal (unparseable) moves are excluded from the state denominators and reported as a rate. mean P(C$\mid$state) = UNWEIGHTED mean of the four state rates -- the states are unbalanced here, so this is a mean of rates, NOT the window's pooled cooperation rate. normative \% and recites \% are the trace measures defined in chapter 1, computed over EVERY rollout in the window: they put the onset of the moral vocabulary next to the behaviour it accompanies.}
+\label{tab:trajectory-grpo_deon_tft_200}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrrrrrrr}
+\toprule
+Steps & P(C$\mid$C$_A$C$_O$) & P(C$\mid$C$_A$D$_O$) & P(C$\mid$D$_A$C$_O$) & P(C$\mid$D$_A$D$_O$) & mean P(C$\mid$state) & normative \% & recites \% & illegal \% & n \\
+\midrule
+1–20 & 6 & 0 & 6 & 9 & 5 & 4 & 0 & 0.0 & 5120 \\
+21–40 & 10 & 0 & 7 & 12 & 7 & 4 & 0 & 0.0 & 5120 \\
+41–60 & 42 & 0 & 19 & 13 & 19 & 6 & 0 & 0.0 & 5120 \\
+61–80 & 92 & 2 & 52 & 9 & 39 & 6 & 0 & 0.0 & 5120 \\
+81–100 & 98 & 2 & 75 & 11 & 47 & 5 & 0 & 0.0 & 5120 \\
+101–120 & 96 & 1 & 80 & 11 & 47 & 5 & 0 & 0.0 & 5120 \\
+121–140 & 98 & 1 & 88 & 5 & 48 & 4 & 0 & 0.0 & 5120 \\
+141–160 & 96 & 1 & 89 & 6 & 48 & 5 & 0 & 0.0 & 5120 \\
+161–180 & 98 & 0 & 91 & 4 & 48 & 5 & 0 & 0.0 & 5120 \\
+181–200 & 98 & 0 & 90 & 3 & 48 & 4 & 0 & 0.0 & 5120 \\
+\bottomrule
+\end{tabular}
+\end{table}

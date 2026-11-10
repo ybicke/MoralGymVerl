@@ -1,0 +1,18 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{Pooled over the agent's previous move; percentages of that $k_O$'s episodes. The prose states only the AGENT's payoff row, so a principle that ranks group outcomes has to derive the others'. The fixed-others read applies the agent's own row for the observed $k_O$ to every player, ignoring that its own contribution raises everyone else by $s$; it reverses the welfare ranking at every $k_O$. A trace is tagged by the total it states. Only the $k_O$ where the two totals are a clean contrast (same branch, no collision) are shown. Regex over the trace, so a lower bound.}
+\label{tab:group_arithmetic}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrrrrrr}
+\toprule
+ & \multicolumn{1}{c}{} & \multicolumn{2}{c}{total} & \multicolumn{2}{c}{states fixed-others} & \multicolumn{2}{c}{states true} & \multicolumn{1}{c}{} \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-6}\cmidrule(lr){7-8}
+Value & $k_O$ & fixed-others & true & % & P(C) & % & P(C) & all P(C) \\
+\midrule
+Utilitarian & 0 & 35 & 50 & 31 & 0 & 44 & 0 & 5 \\
+ & 3 & 85 & 70 & 45 & 0 & 40 & 5 & 7 \\
+\bottomrule
+\end{tabular}
+\end{table}

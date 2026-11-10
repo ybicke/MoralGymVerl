@@ -1,0 +1,28 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{Live episodes: cold open (round 1 has no history), one conversation per episode, moves simultaneous. P(C) per round over that opponent's episodes (20 per cell, binomial s.e. $\leq$11 points/round). pooled = all decisions. Round 1 is the untrained opening state; later rounds condition on the episode's own history.}
+\label{tab:mr-per-round}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrrrr}
+\toprule
+Policy & r1 & r2 & r3 & r4 & r5 & pooled \\
+\midrule
+\multicolumn{7}{l}{\emph{vs `full_contributor`}} \\
+base & 0 & 0 & 0 & 0 & 0 & \textbf{0} \\
+SDPO deon-repair-gen s80 & 5 & 35 & 40 & 40 & 40 & \textbf{39} \\
+SDPO deon-repair-gen s150 & 15 & 55 & 75 & 70 & 70 & \textbf{64} \\
+\addlinespace
+\multicolumn{7}{l}{\emph{vs `free_rider`}} \\
+base & 0 & 0 & 0 & 0 & 0 & \textbf{0} \\
+SDPO deon-repair-gen s80 & 0 & 25 & 15 & 20 & 20 & \textbf{20} \\
+SDPO deon-repair-gen s150 & 5 & 45 & 35 & 30 & 25 & \textbf{34} \\
+\addlinespace
+\multicolumn{7}{l}{\emph{vs `noisy_conditional`}} \\
+base & 0 & 0 & 0 & 0 & 0 & \textbf{0} \\
+SDPO deon-repair-gen s80 & 10 & 35 & 45 & 45 & 45 & \textbf{42} \\
+SDPO deon-repair-gen s150 & 15 & 60 & 55 & 55 & 55 & \textbf{55} \\
+\bottomrule
+\end{tabular}
+\end{table}

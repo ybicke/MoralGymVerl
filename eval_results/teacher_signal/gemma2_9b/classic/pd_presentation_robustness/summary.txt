@@ -1,0 +1,98 @@
+
+=== behavioral (rollout episodes) ===
+
+deontological|matrix|labels=fixed|layout=fixed|label_order=fixed|role=fixed  (episodes/opp=400, T=0.7, protocol=single_round: 1rd hist)
+  vs random           coop   56%  P(C|oppC)   85% (n=200)  P(C|oppD)   27% (n=200)  parse_fail 0%
+
+deontological|matrix|labels=randomize|layout=randomize|label_order=randomize|role=randomize  (episodes/opp=400, T=0.7, protocol=single_round: 1rd hist)
+  vs random           coop   52%  P(C|oppC)   77% (n=200)  P(C|oppD)   26% (n=200)  parse_fail 0%
+
+deontological|prose|labels=fixed|layout=fixed|label_order=fixed|role=fixed  (episodes/opp=400, T=0.7, protocol=single_round: 1rd hist)
+  vs random           coop   55%  P(C|oppC)   84% (n=200)  P(C|oppD)   26% (n=200)  parse_fail 0%
+
+deontological|prose|labels=randomize|layout=randomize|label_order=randomize|role=randomize  (episodes/opp=400, T=0.7, protocol=single_round: 1rd hist)
+  vs random           coop   55%  P(C|oppC)   74% (n=200)  P(C|oppD)   36% (n=200)  parse_fail 0%
+
+none|matrix|labels=fixed|layout=fixed|label_order=fixed|role=fixed  (episodes/opp=400, T=0.7, protocol=single_round: 1rd hist)
+  vs random           coop   25%  P(C|oppC)   28% (n=200)  P(C|oppD)   22% (n=200)  parse_fail 0%
+
+none|matrix|labels=randomize|layout=randomize|label_order=randomize|role=randomize  (episodes/opp=400, T=0.7, protocol=single_round: 1rd hist)
+  vs random           coop   53%  P(C|oppC)   52% (n=200)  P(C|oppD)   54% (n=200)  parse_fail 0%
+
+none|prose|labels=fixed|layout=fixed|label_order=fixed|role=fixed  (episodes/opp=400, T=0.7, protocol=single_round: 1rd hist)
+  vs random           coop    4%  P(C|oppC)    4% (n=200)  P(C|oppD)    5% (n=200)  parse_fail 0%
+
+none|prose|labels=randomize|layout=randomize|label_order=randomize|role=randomize  (episodes/opp=400, T=0.7, protocol=single_round: 1rd hist)
+  vs random           coop   38%  P(C|oppC)   36% (n=200)  P(C|oppD)   40% (n=200)  parse_fail 0%
+
+=== probe A (answer-token log-odds; delta = teacher - student) ===
+(no probe_a.json in any cell)
+
+=== probe B ===
+(no probe_b.json in any cell)
+
+=== slices (within-run, by presentation facet) ===
+
+deontological|matrix|labels=randomize|layout=randomize|label_order=randomize|role=randomize  (pooled over 1 opponents, 400 episodes)
+| facet | level | eps | illegal | P(C) | P(C|oppC) | P(C|oppD) | gap |
+|---|---|---|---|---|---|---|---|
+| labels | coop-alphabetically-first | 212 | 0% | 53% | 75% | 28% | +47% |
+| labels | defect-alphabetically-first | 188 | 0% | 50% | 80% | 24% | +57% |
+| layout | layout=0 | 95 | 0% | 40% | 67% | 13% | +54% |
+| layout | layout=1 | 116 | 0% | 69% | 94% | 33% | +61% |
+| layout | layout=2 | 87 | 1% | 42% | 76% | 16% | +59% |
+| layout | layout=3 | 102 | 0% | 51% | 65% | 39% | +26% |
+| role | column | 200 | 0% | 48% | 77% | 19% | +58% |
+| role | row | 200 | 1% | 56% | 77% | 33% | +44% |
+| opener_order | coop-first | 194 | 1% | 43% | 75% | 16% | +59% |
+| opener_order | defect-first | 206 | 0% | 60% | 79% | 37% | +42% |
+| closer_order | coop-first | 209 | 0% | 58% | 83% | 31% | +52% |
+| closer_order | defect-first | 191 | 0% | 45% | 71% | 20% | +51% |
+
+deontological|prose|labels=randomize|layout=randomize|label_order=randomize|role=randomize  (pooled over 1 opponents, 400 episodes)
+| facet | level | eps | illegal | P(C) | P(C|oppC) | P(C|oppD) | gap |
+|---|---|---|---|---|---|---|---|
+| labels | coop-alphabetically-first | 212 | 0% | 56% | 74% | 35% | +39% |
+| labels | defect-alphabetically-first | 188 | 0% | 54% | 75% | 37% | +38% |
+| layout | layout=0 | 95 | 0% | 43% | 58% | 28% | +31% |
+| layout | layout=1 | 116 | 0% | 64% | 78% | 44% | +34% |
+| layout | layout=2 | 87 | 0% | 55% | 82% | 35% | +47% |
+| layout | layout=3 | 102 | 0% | 57% | 80% | 38% | +43% |
+| role | column | 200 | 0% | 52% | 74% | 31% | +43% |
+| role | row | 200 | 0% | 58% | 75% | 41% | +34% |
+| opener_order | coop-first | 194 | 0% | 45% | 70% | 24% | +46% |
+| opener_order | defect-first | 206 | 0% | 65% | 78% | 49% | +29% |
+| closer_order | coop-first | 209 | 0% | 59% | 77% | 40% | +36% |
+| closer_order | defect-first | 191 | 0% | 51% | 72% | 32% | +40% |
+
+none|matrix|labels=randomize|layout=randomize|label_order=randomize|role=randomize  (pooled over 1 opponents, 400 episodes)
+| facet | level | eps | illegal | P(C) | P(C|oppC) | P(C|oppD) | gap |
+|---|---|---|---|---|---|---|---|
+| labels | coop-alphabetically-first | 212 | 0% | 55% | 53% | 58% | -4% |
+| labels | defect-alphabetically-first | 188 | 0% | 51% | 52% | 50% | +1% |
+| layout | layout=0 | 95 | 0% | 31% | 31% | 30% | +1% |
+| layout | layout=1 | 116 | 0% | 72% | 71% | 73% | -2% |
+| layout | layout=2 | 87 | 0% | 55% | 58% | 53% | +5% |
+| layout | layout=3 | 102 | 0% | 52% | 43% | 59% | -15% |
+| role | column | 200 | 0% | 61% | 64% | 58% | +6% |
+| role | row | 200 | 0% | 46% | 42% | 49% | -8% |
+| opener_order | coop-first | 194 | 0% | 47% | 45% | 49% | -4% |
+| opener_order | defect-first | 206 | 0% | 59% | 59% | 60% | -1% |
+| closer_order | coop-first | 209 | 0% | 64% | 64% | 64% | -0% |
+| closer_order | defect-first | 191 | 0% | 42% | 40% | 44% | -4% |
+
+none|prose|labels=randomize|layout=randomize|label_order=randomize|role=randomize  (pooled over 1 opponents, 400 episodes)
+| facet | level | eps | illegal | P(C) | P(C|oppC) | P(C|oppD) | gap |
+|---|---|---|---|---|---|---|---|
+| labels | coop-alphabetically-first | 212 | 0% | 39% | 37% | 40% | -3% |
+| labels | defect-alphabetically-first | 188 | 0% | 37% | 36% | 39% | -3% |
+| layout | layout=0 | 95 | 0% | 15% | 17% | 13% | +4% |
+| layout | layout=1 | 116 | 0% | 53% | 47% | 62% | -15% |
+| layout | layout=2 | 87 | 0% | 22% | 21% | 22% | -1% |
+| layout | layout=3 | 102 | 0% | 56% | 54% | 57% | -3% |
+| role | column | 200 | 0% | 48% | 40% | 54% | -14% |
+| role | row | 200 | 0% | 28% | 33% | 24% | +9% |
+| opener_order | coop-first | 194 | 0% | 36% | 39% | 33% | +6% |
+| opener_order | defect-first | 206 | 0% | 40% | 34% | 46% | -12% |
+| closer_order | coop-first | 209 | 0% | 48% | 50% | 46% | +3% |
+| closer_order | defect-first | 191 | 0% | 27% | 22% | 33% | -11% |

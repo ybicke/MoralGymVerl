@@ -1,0 +1,18 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{Rounds $\geq$2 pooled over opponents and rounds; states are the episode's own realized (last move, observation) pairs, so their frequencies are policy-dependent and UNBALANCED. P(C $\mid$ state) in live play, under each policy its single-round fabricated-history row where evaluated (--reference): matching numbers mean the installed table survives the conversation surface. * marks live cells with n $<$ 10 -- read those as anecdotes.}
+\label{tab:mr-live-states}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrrrrrr}
+\toprule
+Policy & C$_A$,k=0 & C$_A$,k=1 & C$_A$,k=2 & C$_A$,k=3 & D$_A$,k=0 & D$_A$,k=1 & D$_A$,k=2 & D$_A$,k=3 \\
+\midrule
+base & 0\textsuperscript{*} & 0\textsuperscript{*} & --\textsuperscript{*} & 0\textsuperscript{*} & 1 & 0 & 0 & 1 \\
+SDPO deon s200 & 25\textsuperscript{*} & 100\textsuperscript{*} & 0\textsuperscript{*} & 91 & 3 & 8 & 0 & 5 \\
+  · single-round (fabricated) & 22 & 56 & 84 & 100 & 4 & 20 & 40 & 92 \\
+\bottomrule
+\end{tabular}
+\end{table}
+% Live n per cell varies by policy (a policy that never reaches a state contributes no estimate there).

@@ -1,0 +1,20 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{Share of reasoning traces (\%) by training step and fabricated previous state, over ALL traces at that step; same episodes as Table P1, so a row here lines up with the same step's row there. The principle text is never in these prompts.
+
+A trace counts if it contains at least one of 12 reviewed word stems (good faith, trust, exploit, moral, ethic, principle, fair, reciproc, wrong, obligat, betray, honest) anywhere in it, matched on word boundaries (`fair` excludes `fairly`); one hit marks the whole trace. This measures whether the trace reaches for moral VOCABULARY at all, NOT whether the norm is applied correctly -- a trace arguing AGAINST the norm still counts. Base rate in untrained payoff talk is roughly 2-6\%, mostly `exploit`.}
+\label{tab:trace-stats-normative}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrr}
+\toprule
+Checkpoint & C$_A$C$_O$ & C$_A$D$_O$ & D$_A$C$_O$ & D$_A$D$_O$ \\
+\midrule
+step 50 & 69 & 70 & 52 & 48 \\
+step 100 & 98 & 86 & 89 & 85 \\
+step 150 & 100 & 100 & 100 & 100 \\
+step 200 & 100 & 100 & 100 & 100 \\
+\bottomrule
+\end{tabular}
+\end{table}

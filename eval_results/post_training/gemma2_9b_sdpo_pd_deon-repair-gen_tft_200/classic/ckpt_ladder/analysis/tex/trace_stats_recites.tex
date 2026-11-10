@@ -1,0 +1,19 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{Share of reasoning traces (\%) by training step and fabricated previous state, over ALL traces at that step; same episodes as Table P1, so a row here lines up with the same step's row there. The principle text is never in these prompts.
+
+The `deontological+repair+generosity` wording is split into words and all of its 6-word n-grams collected; a trace counts if it reproduces ANY 6 consecutive words of it. VERBATIM only, so a faithful paraphrase scores 0: against the table above, the difference between the two is quoting vs. paraphrasing, not understanding vs. not.}
+\label{tab:trace-stats-recites}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrr}
+\toprule
+Checkpoint & C$_A$C$_O$ & C$_A$D$_O$ & D$_A$C$_O$ & D$_A$D$_O$ \\
+\midrule
+step 60 & 0 & 0 & 0 & 0 \\
+step 120 & 0 & 0 & 0 & 0 \\
+step 200 & 0 & 2 & 1 & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}

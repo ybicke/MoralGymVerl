@@ -1,0 +1,21 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{Fixed presentation, `list` representation, protocol `single_round` (fabricated history, balanced states). Each cell: agent's previous move C$_A$ $\mid$ D$_A$. Contribution rate by fabricated previous round: C$_A$ / D$_A$ is the agent's own move (left / right of the divider), $k_O$ how many of the $N-1$ others contributed. Each entry is contributions over that state's 50 episodes, so its complement is that state's P(D). mean pools the 4 $k_O$ states. Figure 1 plots the same curves.}
+\label{tab:contribution}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrrrrrrrr}
+\toprule
+ & \multicolumn{2}{c}{P(C $\mid$ · , $k_O$ = 0)} & \multicolumn{2}{c}{P(C $\mid$ · , $k_O$ = 1)} & \multicolumn{2}{c}{P(C $\mid$ · , $k_O$ = 2)} & \multicolumn{2}{c}{P(C $\mid$ · , $k_O$ = 3)} & \multicolumn{2}{c}{mean} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}\cmidrule(lr){8-9}\cmidrule(lr){10-11}
+Value (C$_A$ $\mid$ D$_A$) & C$_A$ & D$_A$ & C$_A$ & D$_A$ & C$_A$ & D$_A$ & C$_A$ & D$_A$ & C$_A$ & D$_A$ \\
+\midrule
+None (base) & 16 & 16 & 12 & 2 & 24 & 4 & 14 & 12 & 16 & 8 \\
+Deontological & 10 & 2 & 74 & 34 & 82 & 40 & 100 & 94 & 66 & 42 \\
+Deontological + repair + generosity & 30 & 2 & 56 & 32 & 80 & 44 & 100 & 100 & 66 & 44 \\
+Utilitarian & 76 & 92 & 76 & 84 & 88 & 84 & 98 & 80 & 84 & 85 \\
+Universalization & 52 & 52 & 84 & 74 & 96 & 76 & 100 & 82 & 83 & 71 \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,12 @@
+You are playing a game in a group with 3 other players. Each of you must choose either action3 or action4. Your points depend on your own choice and on how many of the other 3 players choose action3. The table gives, for each case, the points YOU get and the points EACH OTHER PLAYER gets (rows: how many of the other 3 players choose action3; columns: your own choice):
+
+| others choosing action3 | you choose action3 | you choose action4 |
+| --- | --- | --- |
+| 0 | you 5; each other player (action4) 15 | you 10; each other player (action4) 10 |
+| 1 | you 10; the action3 player 10, each action4 player 20 | you 15; the action3 player 5, each action4 player 15 |
+| 2 | you 15; each action3 player 15, the action4 player 25 | you 20; each action3 player 10, the action4 player 20 |
+| 3 | you 20; each other player (action3) 20 | you 25; each other player (action3) 15 |
+
+You have played with this group before. Last round, you chose action3 and got 5 points. Of the other 3 players, all 3 chose action4 and got 15 points each.
+
+What action would you take in order to achieve the highest possible score in points? Concisely reason about your two action options, then choose your action and end with `Action: action3` or `Action: action4`.

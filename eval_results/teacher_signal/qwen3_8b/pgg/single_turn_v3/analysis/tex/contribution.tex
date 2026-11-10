@@ -1,0 +1,20 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{Fixed presentation, `decision_full` representation, protocol `single_round` (fabricated history, balanced states). Each cell: agent's previous move C$_A$ $\mid$ D$_A$. Contribution rate by fabricated previous round: C$_A$ / D$_A$ is the agent's own move (left / right of the divider), $k_O$ how many of the $N-1$ others contributed. Each entry is contributions over that state's 50 episodes, so its complement is that state's P(D). mean pools the 4 $k_O$ states. Figure 1 plots the same curves.}
+\label{tab:contribution}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrrrrrrrr}
+\toprule
+ & \multicolumn{2}{c}{P(C $\mid$ · , $k_O$ = 0)} & \multicolumn{2}{c}{P(C $\mid$ · , $k_O$ = 1)} & \multicolumn{2}{c}{P(C $\mid$ · , $k_O$ = 2)} & \multicolumn{2}{c}{P(C $\mid$ · , $k_O$ = 3)} & \multicolumn{2}{c}{mean} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}\cmidrule(lr){8-9}\cmidrule(lr){10-11}
+Value (C$_A$ $\mid$ D$_A$) & C$_A$ & D$_A$ & C$_A$ & D$_A$ & C$_A$ & D$_A$ & C$_A$ & D$_A$ & C$_A$ & D$_A$ \\
+\midrule
+None (base) & 2 & 4 & 0 & 0 & 0 & 0 & 2 & 0 & 1 & 1 \\
+Deontological & 28 & 4 & 54 & 40 & 64 & 30 & 100 & 86 & 62 & 40 \\
+Utilitarian & 92 & 94 & 100 & 98 & 94 & 90 & 100 & 98 & 96 & 95 \\
+Universalization & 56 & 58 & 66 & 70 & 66 & 54 & 88 & 76 & 69 & 64 \\
+\bottomrule
+\end{tabular}
+\end{table}

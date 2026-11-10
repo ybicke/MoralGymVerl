@@ -1,0 +1,39 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{Same traces r and prompts p$_S$ (student) / p$_T$ (teacher) as Table 2, but scored over the whole trace (reasoning and answer) rather than only the answer label. Rescoring r under a prompt yields, at each of its K token positions, a probability vector over the entire vocabulary (one entry per token the model could emit next, e.g.\ 256k for gemma-2): its prediction of what comes next at that point -- so each prompt produces a K $\times$ |V| matrix, one row per position. s and t are the matching rows at one position under p$_S$ and p$_T$. The entry is the generalized Jensen-Shannon divergence between them, JSD = (1$-$a) KL(s || m) + a KL(t || m) with mixture m = (1$-$a)s + a t, averaged over the trace's positions: how much the wording reshapes the model's whole next-token prediction at each step of the reasoning, not just the probability of the token actually there (that is 2b). This is SDPO's per-token loss (compute\_self\_distillation\_loss) at step 0: the size of the training signal the wording supplies before any training. Unsigned -- it says how far the wording moves the policy, not which way -- and magnitude does not predict behavioral efficacy: a wording can score high by rewording the reasoning without changing the decision. Here a = 0.5. Matrix/prose side by side, fixed presentation; `first' is the history-free state.}
+\label{tab:probe-b-token-jsd}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrrrrrrrr}
+\toprule
+ & \multicolumn{2}{c}{first} & \multicolumn{2}{c}{C$_A$C$_O$} & \multicolumn{2}{c}{C$_A$D$_O$} & \multicolumn{2}{c}{D$_A$C$_O$} & \multicolumn{2}{c}{D$_A$D$_O$} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}\cmidrule(lr){8-9}\cmidrule(lr){10-11}
+Value (matrix $\mid$ prose) & mat. & prose & mat. & prose & mat. & prose & mat. & prose & mat. & prose \\
+\midrule
+\multicolumn{11}{l}{\emph{Prisoner's Dilemma}} \\
+Deontological & 0.015 & 0.013 & 0.025 & 0.022 & 0.017 & 0.017 & 0.016 & 0.018 & 0.017 & 0.017 \\
+Deontological + repair & 0.018 & 0.013 & 0.030 & 0.023 & 0.020 & 0.017 & 0.019 & 0.020 & 0.021 & 0.019 \\
+Deontological + repair + generosity & 0.021 & 0.017 & 0.026 & 0.025 & 0.020 & 0.020 & 0.021 & 0.019 & 0.020 & 0.019 \\
+Utilitarian & 0.024 & 0.020 & 0.018 & 0.024 & 0.016 & 0.018 & 0.016 & 0.019 & 0.017 & 0.021 \\
+Virtue & 0.017 & 0.013 & 0.018 & 0.016 & 0.016 & 0.013 & 0.011 & 0.013 & 0.015 & 0.013 \\
+Universalization & 0.017 & 0.012 & 0.016 & 0.016 & 0.013 & 0.012 & 0.012 & 0.012 & 0.013 & 0.013 \\
+\addlinespace
+\multicolumn{11}{l}{\emph{Stag Hunt}} \\
+Deontological & 0.013 & 0.011 & 0.021 & 0.021 & 0.017 & 0.016 & 0.015 & 0.018 & 0.019 & 0.019 \\
+Deontological + repair & 0.017 & 0.011 & 0.024 & 0.022 & 0.020 & 0.016 & 0.019 & 0.017 & 0.019 & 0.018 \\
+Deontological + repair + generosity & 0.017 & 0.013 & 0.023 & 0.023 & 0.021 & 0.017 & 0.019 & 0.019 & 0.020 & 0.019 \\
+Utilitarian & 0.021 & 0.020 & 0.018 & 0.023 & 0.016 & 0.019 & 0.015 & 0.018 & 0.017 & 0.021 \\
+Virtue & 0.016 & 0.010 & 0.018 & 0.016 & 0.015 & 0.013 & 0.011 & 0.012 & 0.014 & 0.014 \\
+Universalization & 0.014 & 0.012 & 0.014 & 0.013 & 0.012 & 0.012 & 0.011 & 0.012 & 0.013 & 0.012 \\
+\addlinespace
+\multicolumn{11}{l}{\emph{Chicken}} \\
+Deontological & 0.017 & 0.017 & 0.023 & 0.024 & 0.016 & 0.016 & 0.015 & 0.019 & 0.018 & 0.016 \\
+Deontological + repair & 0.020 & 0.016 & 0.029 & 0.026 & 0.020 & 0.018 & 0.018 & 0.020 & 0.021 & 0.020 \\
+Deontological + repair + generosity & 0.023 & 0.017 & 0.024 & 0.028 & 0.022 & 0.021 & 0.019 & 0.020 & 0.022 & 0.019 \\
+Utilitarian & 0.023 & 0.022 & 0.019 & 0.023 & 0.016 & 0.019 & 0.015 & 0.019 & 0.017 & 0.020 \\
+Virtue & 0.019 & 0.014 & 0.018 & 0.016 & 0.014 & 0.014 & 0.013 & 0.013 & 0.016 & 0.015 \\
+Universalization & 0.017 & 0.014 & 0.015 & 0.017 & 0.013 & 0.013 & 0.012 & 0.011 & 0.013 & 0.014 \\
+\bottomrule
+\end{tabular}
+\end{table}

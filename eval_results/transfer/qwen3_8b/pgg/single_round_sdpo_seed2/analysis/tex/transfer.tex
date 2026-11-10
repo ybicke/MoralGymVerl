@@ -1,0 +1,21 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{`decision_full` representation, fixed presentation, protocol `single_round` (fabricated history, balanced states), NO moral text in the trained rows. Each cell: agent's previous move C$_A$ $\mid$ D$_A$. Contribution rate (\%) by fabricated previous round: C$_A$ / D$_A$ is the agent's own move, $k_O$ how many of the $N-1$ others contributed; 50 episodes per state (binomial s.e.\ $\leq$7 points). mean pools the $k_O$ states within an own move; P(C) pools all states -- the balanced design makes it the cell's overall contribution rate, the transfer headline. $\Delta_k$ = P(C $\mid$ $k_O$ = N$-$1) $-$ P(C $\mid$ $k_O$ = 0) within an own move, in points: the N-player analogue of $\Delta_{opp}$ (0 = contributes the same whatever the others did; large = contributes only when they do). Trained rows are the checkpoints evaluated here; base rows are untrained cells of the same model under the same protocol.}
+\label{tab:transfer}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrrrrrrrrrrr}
+\toprule
+ & \multicolumn{2}{c}{P(C $\mid$ · , $k_O$ = 0)} & \multicolumn{2}{c}{P(C $\mid$ · , $k_O$ = 1)} & \multicolumn{2}{c}{P(C $\mid$ · , $k_O$ = 2)} & \multicolumn{2}{c}{P(C $\mid$ · , $k_O$ = 3)} & \multicolumn{2}{c}{mean} & \multicolumn{1}{c}{None} & \multicolumn{2}{c}{$\Delta_k$} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}\cmidrule(lr){8-9}\cmidrule(lr){10-11}\cmidrule(lr){13-14}
+Policy (C$_A$ $\mid$ D$_A$) & C$_A$ & D$_A$ & C$_A$ & D$_A$ & C$_A$ & D$_A$ & C$_A$ & D$_A$ & C$_A$ & D$_A$ & P(C) & C$_A$ & D$_A$ \\
+\midrule
+\multicolumn{14}{l}{\emph{SDPO deon — `qwen3_8b_sdpo_pd_deon_tft_300_seed2`}} \\
+step 150 & 28 & 2 & 60 & 36 & 76 & 24 & 100 & 74 & 66 & 34 & \textbf{50} & +72 & +72 \\
+step 200 & 42 & 4 & 82 & 40 & 88 & 34 & 100 & 76 & 78 & 38 & \textbf{58} & +58 & +72 \\
+step 250 & 42 & 2 & 92 & 50 & 88 & 38 & 100 & 96 & 80 & 46 & \textbf{64} & +58 & +94 \\
+step 300 & 52 & 2 & 82 & 48 & 92 & 56 & 100 & 84 & 82 & 48 & \textbf{64} & +48 & +82 \\
+\bottomrule
+\end{tabular}
+\end{table}

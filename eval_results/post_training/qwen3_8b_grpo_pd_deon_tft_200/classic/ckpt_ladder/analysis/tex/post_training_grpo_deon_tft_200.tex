@@ -1,0 +1,19 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{Cooperation rate (\%) of Qwen3-8B by fabricated previous state; 100 decisions per state (binomial s.e.\ $\leq$5 points; differences under $\approx$14 points are not distinguishable). P(C) = mean of the four state rates, which the balanced design makes equal to the cell's overall cooperation rate. $\Delta_{opp}$ = P(C$\mid$C$_O$) $-$ P(C$\mid$D$_O$), the opponent-conditioning gap (reciprocity signature).}
+\label{tab:post-training-grpo_deon_tft_200}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrrrr}
+\toprule
+Policy & P(C$\mid$C$_A$C$_O$) & P(C$\mid$C$_A$D$_O$) & P(C$\mid$D$_A$C$_O$) & P(C$\mid$D$_A$D$_O$) & P(C) & $\Delta_{opp}$ \\
+\midrule
+base, no context & 12 & 0 & 2 & 4 & 4 & +5 \\
+trained, step 60 & 72 & 1 & 21 & 5 & 25 & +44 \\
+trained, step 120 & 96 & 1 & 72 & 4 & 43 & +82 \\
+trained, step 180 & 96 & 1 & 72 & 3 & 43 & +82 \\
+base + `deontological+repair+generosity` in context & 99 & 33 & 94 & 40 & 66 & +60 \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,24 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{Cooperation rate (\%) by fabricated previous state over training, in 20-step windows (5120 decisions per window). Illegal (unparseable) moves are excluded from the state denominators and reported as a rate. mean P(C$\mid$state) = UNWEIGHTED mean of the four state rates -- the states are unbalanced here, so this is a mean of rates, NOT the window's pooled cooperation rate. normative \% and recites \% are the trace measures defined in chapter 1, computed over EVERY rollout in the window: they put the onset of the moral vocabulary next to the behaviour it accompanies.}
+\label{tab:trajectory-qwen_run2_200}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrrrrrrr}
+\toprule
+Steps & P(C$\mid$C$_A$C$_O$) & P(C$\mid$C$_A$D$_O$) & P(C$\mid$D$_A$C$_O$) & P(C$\mid$D$_A$D$_O$) & mean P(C$\mid$state) & normative \% & recites \% & illegal \% & n \\
+\midrule
+1–20 & 10 & 0 & 6 & 12 & 7 & 9 & 0 & 0.0 & 5120 \\
+21–40 & 67 & 1 & 20 & 16 & 26 & 57 & 0 & 0.1 & 5120 \\
+41–60 & 83 & 4 & 44 & 21 & 38 & 87 & 0 & 0.1 & 5120 \\
+61–80 & 96 & 17 & 81 & 35 & 57 & 99 & 0 & 0.0 & 5120 \\
+81–100 & 100 & 46 & 97 & 39 & 70 & 100 & 1 & 0.1 & 5120 \\
+101–120 & 100 & 46 & 98 & 43 & 72 & 100 & 11 & 0.1 & 5120 \\
+121–140 & 100 & 44 & 97 & 48 & 72 & 100 & 78 & 0.1 & 5120 \\
+141–160 & 100 & 54 & 98 & 47 & 75 & 100 & 83 & 0.1 & 5120 \\
+161–180 & 100 & 53 & 98 & 54 & 76 & 100 & 96 & 0.4 & 5120 \\
+181–200 & 100 & 56 & 98 & 58 & 78 & 100 & 97 & 0.3 & 5120 \\
+\bottomrule
+\end{tabular}
+\end{table}

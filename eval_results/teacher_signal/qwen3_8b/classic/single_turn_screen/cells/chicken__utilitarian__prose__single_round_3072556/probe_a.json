@@ -1,0 +1,69 @@
+{
+  "metadata": {
+    "moral_value": "utilitarian",
+    "base_model": "Qwen/Qwen3-8B",
+    "checkpoint": "base",
+    "protocol": "single_round",
+    "num_rounds": 1,
+    "game_type": "chicken",
+    "representation": "prose",
+    "teacher_template_source": "/users/bickery/MoralGymVerl/configs/verl/sdpo_pd_tft.yaml",
+    "eval_seed": 42,
+    "timestamp": "2026-08-13T12:36:11.912991",
+    "git_commit": "4e72b97-dirty",
+    "config": "/users/bickery/MoralGymVerl/configs/eval/teacher_signal_qwen3_8b.yaml",
+    "probe": "probe_a",
+    "continuation_token_ids": {
+      " action3": [
+        1917,
+        18
+      ],
+      " action4": [
+        1917,
+        19
+      ]
+    }
+  },
+  "probe_a": {
+    "first": {
+      "logodds_student": 0.25,
+      "logodds_teacher": -1.0,
+      "answer_delta": -1.25,
+      "p_coop_student": 0.5621765008857981,
+      "p_coop_teacher": 0.2689414213699951,
+      "jsd": 0.04501882727904988
+    },
+    "CC": {
+      "logodds_student": 1.0,
+      "logodds_teacher": -2.0,
+      "answer_delta": -3.0,
+      "p_coop_student": 0.7310585786300049,
+      "p_coop_teacher": 0.11920292202211755,
+      "jsd": 0.2081256150882579
+    },
+    "CD": {
+      "logodds_student": -0.75,
+      "logodds_teacher": -5.75,
+      "answer_delta": -5.0,
+      "p_coop_student": 0.320821300824607,
+      "p_coop_teacher": 0.0031726828424851893,
+      "jsd": 0.11851274347642536
+    },
+    "DC": {
+      "logodds_student": -1.0,
+      "logodds_teacher": -1.75,
+      "answer_delta": -0.75,
+      "p_coop_student": 0.2689414213699951,
+      "p_coop_teacher": 0.14804719803168948,
+      "jsd": 0.011199970555283992
+    },
+    "DD": {
+      "logodds_student": 1.0,
+      "logodds_teacher": 0.5,
+      "answer_delta": -0.5,
+      "p_coop_student": 0.7310585786300049,
+      "p_coop_teacher": 0.6224593312018546,
+      "jsd": 0.006763158178898096
+    }
+  }
+}

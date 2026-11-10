@@ -1,0 +1,42 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{Cooperation rate (\%) of gemma-2-9b-it by fabricated previous state; matrix/prose side by side, fixed presentation, $T=0.7$, 400 episodes per cell = 100 decisions per state (binomial s.e.\ $\leq$5 points; differences under $\approx$14 points are not distinguishable). $\Delta_{opp}$ = P(C$\mid$C$_O$) $-$ P(C$\mid$D$_O$) tells us how much the agent cooperated when the opponent cooperated, versus when the opponent defected. A large positive number indicates reciprocity behaviour.}
+\label{tab:state-cooperation}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrrrrrrrr}
+\toprule
+ & \multicolumn{2}{c}{P(C$\mid$C$_A$C$_O$)} & \multicolumn{2}{c}{P(C$\mid$C$_A$D$_O$)} & \multicolumn{2}{c}{P(C$\mid$D$_A$C$_O$)} & \multicolumn{2}{c}{P(C$\mid$D$_A$D$_O$)} & \multicolumn{2}{c}{$\Delta_{opp}$} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}\cmidrule(lr){8-9}\cmidrule(lr){10-11}
+Value (matrix $\mid$ prose) & mat. & prose & mat. & prose & mat. & prose & mat. & prose & mat. & prose \\
+\midrule
+\multicolumn{11}{l}{\emph{Prisoner's Dilemma}} \\
+None (base) & 1 & 5 & 1 & 1 & 57 & 5 & 38 & 8 & +9 & +1 \\
+Deontological & \textbf{94} & 95 & 21 & 46 & 76 & 69 & 28 & 8 & +60 & +55 \\
+Deontological + repair & 91 & 95 & 20 & 39 & 91 & \textbf{85} & 32 & 6 & \textbf{+65} & \textbf{+68} \\
+Deontological + repair + generosity & \textbf{94} & \textbf{100} & 33 & 43 & 94 & 83 & 44 & 6 & +55 & +67 \\
+Utilitarian & 11 & 11 & 21 & 17 & 90 & 44 & \textbf{82} & 48 & -1 & -5 \\
+Virtue & 56 & 76 & \textbf{46} & \textbf{61} & \textbf{95} & 72 & 78 & 71 & +14 & +8 \\
+Universalization & 44 & 54 & 38 & 50 & 89 & 77 & 70 & \textbf{75} & +12 & +3 \\
+\addlinespace
+\multicolumn{11}{l}{\emph{Stag Hunt}} \\
+None (base) & 13 & 16 & 4 & 3 & 96 & 12 & 70 & 31 & +18 & -3 \\
+Deontological & 89 & \textbf{98} & 14 & 43 & 61 & 53 & 22 & 7 & +57 & +50 \\
+Deontological + repair & 88 & 97 & 13 & 30 & 65 & 58 & 17 & 9 & +62 & +58 \\
+Deontological + repair + generosity & \textbf{94} & 96 & 16 & 21 & 72 & 74 & 18 & 2 & \textbf{+66} & \textbf{+74} \\
+Utilitarian & 41 & 40 & \textbf{72} & 38 & \textbf{99} & \textbf{75} & \textbf{68} & \textbf{73} & +0 & +2 \\
+Virtue & 26 & 47 & 21 & \textbf{48} & 66 & 47 & 39 & 36 & +16 & +5 \\
+Universalization & 30 & 24 & 17 & 31 & 60 & 68 & 65 & 53 & +4 & +4 \\
+\addlinespace
+\multicolumn{11}{l}{\emph{Chicken}} \\
+None (base) & 2 & 9 & 10 & 2 & 58 & 18 & 64 & 31 & -7 & -3 \\
+Deontological & \textbf{98} & \textbf{99} & 52 & 61 & 86 & 79 & 52 & 67 & +40 & +25 \\
+Deontological + repair & \textbf{98} & 97 & 58 & 57 & 85 & 82 & 53 & 50 & +36 & +36 \\
+Deontological + repair + generosity & \textbf{98} & 96 & 50 & 54 & \textbf{95} & \textbf{88} & 47 & 49 & \textbf{+48} & \textbf{+40} \\
+Utilitarian & 5 & 16 & 8 & 16 & 23 & 59 & 32 & 25 & -6 & +17 \\
+Virtue & 73 & 83 & 59 & 56 & 93 & 74 & \textbf{98} & 90 & +4 & +6 \\
+Universalization & 85 & 70 & \textbf{72} & \textbf{69} & 94 & 87 & 96 & \textbf{95} & +6 & -3 \\
+\bottomrule
+\end{tabular}
+\end{table}

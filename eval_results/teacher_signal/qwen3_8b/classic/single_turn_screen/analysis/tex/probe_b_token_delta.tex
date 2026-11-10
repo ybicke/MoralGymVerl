@@ -1,0 +1,39 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{Same traces r and prompts p$_S$ (student) / p$_T$ (teacher) as Table 2, but scored over the whole trace (reasoning and answer) rather than only the answer label. $\ell$(p, r) = mean per-token log-probability of trace r under prompt p; the entry is the mean over traces of $\ell$(p$_T$, r) $-$ $\ell$(p$_S$, r): how much less typical the student's own reasoning looks once the moral wording is prepended. Read the magnitude, not the sign -- it is negative almost everywhere, because r was sampled under p$_S$ and any added context lowers its likelihood. A diagnostic, not the training objective. Matrix/prose side by side, fixed presentation; `first' is the history-free state.}
+\label{tab:probe-b-token-delta}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrrrrrrrr}
+\toprule
+ & \multicolumn{2}{c}{first} & \multicolumn{2}{c}{C$_A$C$_O$} & \multicolumn{2}{c}{C$_A$D$_O$} & \multicolumn{2}{c}{D$_A$C$_O$} & \multicolumn{2}{c}{D$_A$D$_O$} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}\cmidrule(lr){8-9}\cmidrule(lr){10-11}
+Value (matrix $\mid$ prose) & mat. & prose & mat. & prose & mat. & prose & mat. & prose & mat. & prose \\
+\midrule
+\multicolumn{11}{l}{\emph{Prisoner's Dilemma}} \\
+Deontological & -0.078 & -0.069 & -0.145 & -0.130 & -0.089 & -0.091 & -0.079 & -0.101 & -0.087 & -0.094 \\
+Deontological + repair & -0.093 & -0.070 & -0.172 & -0.132 & -0.105 & -0.093 & -0.104 & -0.112 & -0.110 & -0.110 \\
+Deontological + repair + generosity & -0.107 & -0.094 & -0.155 & -0.147 & -0.114 & -0.116 & -0.122 & -0.107 & -0.103 & -0.105 \\
+Utilitarian & -0.147 & -0.119 & -0.105 & -0.146 & -0.097 & -0.099 & -0.090 & -0.119 & -0.102 & -0.135 \\
+Virtue & -0.091 & -0.071 & -0.094 & -0.088 & -0.078 & -0.070 & -0.058 & -0.067 & -0.081 & -0.067 \\
+Universalization & -0.086 & -0.064 & -0.089 & -0.101 & -0.068 & -0.069 & -0.060 & -0.070 & -0.071 & -0.076 \\
+\addlinespace
+\multicolumn{11}{l}{\emph{Stag Hunt}} \\
+Deontological & -0.063 & -0.056 & -0.115 & -0.118 & -0.082 & -0.082 & -0.080 & -0.097 & -0.097 & -0.104 \\
+Deontological + repair & -0.093 & -0.062 & -0.130 & -0.124 & -0.102 & -0.091 & -0.100 & -0.095 & -0.099 & -0.108 \\
+Deontological + repair + generosity & -0.090 & -0.072 & -0.132 & -0.135 & -0.105 & -0.094 & -0.110 & -0.106 & -0.103 & -0.108 \\
+Utilitarian & -0.119 & -0.120 & -0.120 & -0.147 & -0.095 & -0.103 & -0.083 & -0.105 & -0.104 & -0.123 \\
+Virtue & -0.086 & -0.053 & -0.098 & -0.095 & -0.071 & -0.068 & -0.054 & -0.065 & -0.078 & -0.081 \\
+Universalization & -0.073 & -0.059 & -0.080 & -0.076 & -0.066 & -0.075 & -0.057 & -0.070 & -0.082 & -0.072 \\
+\addlinespace
+\multicolumn{11}{l}{\emph{Chicken}} \\
+Deontological & -0.092 & -0.088 & -0.132 & -0.138 & -0.088 & -0.090 & -0.077 & -0.110 & -0.089 & -0.086 \\
+Deontological + repair & -0.107 & -0.088 & -0.177 & -0.153 & -0.112 & -0.099 & -0.100 & -0.112 & -0.107 & -0.119 \\
+Deontological + repair + generosity & -0.116 & -0.089 & -0.137 & -0.164 & -0.120 & -0.118 & -0.102 & -0.112 & -0.118 & -0.103 \\
+Utilitarian & -0.138 & -0.127 & -0.120 & -0.144 & -0.099 & -0.117 & -0.087 & -0.114 & -0.102 & -0.118 \\
+Virtue & -0.100 & -0.073 & -0.091 & -0.087 & -0.069 & -0.075 & -0.061 & -0.073 & -0.076 & -0.078 \\
+Universalization & -0.085 & -0.079 & -0.096 & -0.101 & -0.069 & -0.070 & -0.061 & -0.065 & -0.073 & -0.084 \\
+\bottomrule
+\end{tabular}
+\end{table}

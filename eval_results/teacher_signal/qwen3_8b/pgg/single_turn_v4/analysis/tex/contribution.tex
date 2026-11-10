@@ -1,0 +1,19 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{Fixed presentation, `decision_full` representation, protocol `single_round` (fabricated history, balanced states). Each cell: agent's previous move C$_A$ $\mid$ D$_A$. Contribution rate by fabricated previous round: C$_A$ / D$_A$ is the agent's own move (left / right of the divider), $k_O$ how many of the $N-1$ others contributed. Each entry is contributions over that state's 50 episodes, so its complement is that state's P(D). mean pools the 4 $k_O$ states. Figure 1 plots the same curves.}
+\label{tab:contribution}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrrrrrrrr}
+\toprule
+ & \multicolumn{2}{c}{P(C $\mid$ · , $k_O$ = 0)} & \multicolumn{2}{c}{P(C $\mid$ · , $k_O$ = 1)} & \multicolumn{2}{c}{P(C $\mid$ · , $k_O$ = 2)} & \multicolumn{2}{c}{P(C $\mid$ · , $k_O$ = 3)} & \multicolumn{2}{c}{mean} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}\cmidrule(lr){8-9}\cmidrule(lr){10-11}
+Value (C$_A$ $\mid$ D$_A$) & C$_A$ & D$_A$ & C$_A$ & D$_A$ & C$_A$ & D$_A$ & C$_A$ & D$_A$ & C$_A$ & D$_A$ \\
+\midrule
+Deontological + label hint & 64 & 32 & 92 & 76 & 94 & 74 & 100 & 98 & 88 & 70 \\
+Deontological (explicit referent) & 32 & 6 & 66 & 42 & 68 & 36 & 98 & 84 & 66 & 42 \\
+Fair play & 30 & 32 & 50 & 36 & 76 & 72 & 94 & 90 & 62 & 57 \\
+\bottomrule
+\end{tabular}
+\end{table}

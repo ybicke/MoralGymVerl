@@ -1,0 +1,22 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{Per value and agent's previous move, pooled over $k_O$; percentages of that half's episodes. The action labels are semantically empty and `game_description` is off, so a principle phrased over the OTHERS' conduct ("do not exploit those who act in good faith") must infer which label is the good-faith act. `inverted` = the trace attaches exploitation to the contribute label (wrong); `correct` = to the keep label; the remainder reason about neither or both. P(C) is within that subgroup. Detected by regex over the trace, so a lower bound; negated clauses excluded. Shown for arms where at least 10% of traces are tagged.}
+\label{tab:label_inversion}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrrrr}
+\toprule
+ & \multicolumn{1}{c}{} & \multicolumn{2}{c}{inverted} & \multicolumn{2}{c}{correct} & \multicolumn{1}{c}{} \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-6}
+Value & agent & % & P(C) & % & P(C) & all P(C) \\
+\midrule
+Deontological + label hint & C$_A$ & 6 & 73 & 62 & 98 & 88 \\
+ & D$_A$ & 14 & 21 & 48 & 96 & 70 \\
+Deontological (explicit referent) & C$_A$ & 11 & 18 & 46 & 98 & 66 \\
+ & D$_A$ & 31 & 8 & 26 & 85 & 42 \\
+Fair play & C$_A$ & 3 & 67 & 15 & 73 & 62 \\
+ & D$_A$ & 4 & 50 & 6 & 82 & 57 \\
+\bottomrule
+\end{tabular}
+\end{table}

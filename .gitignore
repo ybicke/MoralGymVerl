@@ -9,9 +9,18 @@ __pycache__/
 # Local logs from setup/download runs
 *.log
 
-# Evaluation output: cell data, manifests and the analysis markdown. Kept
-# out of git entirely (the copy that matters is mirrored to long-term store).
-eval_results/
+# Evaluation output: track only per-cell metrics (behavioral.json, probe_*.json) and analysis/
+# (write-ups, figures, tables, number macros). Raw rollouts (*.jsonl) and job
+# bookkeeping stay out of git; the full tree is in HF dataset moralgym/cluster-archive.
+eval_results/**
+!eval_results/**/
+!eval_results/**/analysis/**
+!eval_results/**/behavioral.json
+!eval_results/**/probe_*.json
+!eval_results/**/summary.txt
+eval_results/_archive/
+eval_results/**/*.jsonl
+eval_results/**/Untitled
 
 # Editor config (interpreter pin + debug launch configs, machine-specific)
 .vscode/

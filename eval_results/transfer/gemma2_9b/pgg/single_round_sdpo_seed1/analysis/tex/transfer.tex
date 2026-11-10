@@ -1,0 +1,21 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{`decision_full` representation, fixed presentation, protocol `single_round` (fabricated history, balanced states), NO moral text in the trained rows. Each cell: agent's previous move C$_A$ $\mid$ D$_A$. Contribution rate (\%) by fabricated previous round: C$_A$ / D$_A$ is the agent's own move, $k_O$ how many of the $N-1$ others contributed; 50 episodes per state (binomial s.e.\ $\leq$7 points). mean pools the $k_O$ states within an own move; P(C) pools all states -- the balanced design makes it the cell's overall contribution rate, the transfer headline. $\Delta_k$ = P(C $\mid$ $k_O$ = N$-$1) $-$ P(C $\mid$ $k_O$ = 0) within an own move, in points: the N-player analogue of $\Delta_{opp}$ (0 = contributes the same whatever the others did; large = contributes only when they do). Trained rows are the checkpoints evaluated here; base rows are untrained cells of the same model under the same protocol.}
+\label{tab:transfer}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrrrrrrrrrrr}
+\toprule
+ & \multicolumn{2}{c}{P(C $\mid$ · , $k_O$ = 0)} & \multicolumn{2}{c}{P(C $\mid$ · , $k_O$ = 1)} & \multicolumn{2}{c}{P(C $\mid$ · , $k_O$ = 2)} & \multicolumn{2}{c}{P(C $\mid$ · , $k_O$ = 3)} & \multicolumn{2}{c}{mean} & \multicolumn{1}{c}{None} & \multicolumn{2}{c}{$\Delta_k$} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}\cmidrule(lr){8-9}\cmidrule(lr){10-11}\cmidrule(lr){13-14}
+Policy (C$_A$ $\mid$ D$_A$) & C$_A$ & D$_A$ & C$_A$ & D$_A$ & C$_A$ & D$_A$ & C$_A$ & D$_A$ & C$_A$ & D$_A$ & P(C) & C$_A$ & D$_A$ \\
+\midrule
+\multicolumn{14}{l}{\emph{base, no context}} \\
+base, no context & 12 & 18 & 32 & 14 & 50 & 34 & 28 & 14 & 30 & 20 & \textbf{25} & +16 & -4 \\
+\addlinespace
+\multicolumn{14}{l}{\emph{SDPO deon — `gemma2_9b_sdpo_pd_deon_tft_200_seed1`}} \\
+step 200 & 50 & 8 & 82 & 38 & 92 & 64 & 96 & 80 & 80 & 48 & \textbf{64} & +46 & +72 \\
+\bottomrule
+\end{tabular}
+\end{table}

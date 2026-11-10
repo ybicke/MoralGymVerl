@@ -1,0 +1,20 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{Per policy and opponent, over that cell's episodes. open = P(C) in round 1, the state training never showed. final = P(C) in round 5. mutual coop = share of episodes whose LAST round is jointly cooperative (agent C and the opponent/majority of co-players C) -- the absorption readout.}
+\label{tab:mr-outcomes}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrrr}
+\toprule
+Policy & opponent & open & final & mutual coop & episodes \\
+\midrule
+base & `full_contributor` & 0 & 0 & 0 & 20 \\
+ & `free_rider` & 0 & 0 & 0 & 20 \\
+ & `noisy_conditional` & 0 & 0 & 0 & 20 \\
+GRPO o3ratings final & `full_contributor` & 0 & 0 & 0 & 20 \\
+ & `free_rider` & 0 & 0 & 0 & 20 \\
+ & `noisy_conditional` & 0 & 0 & 0 & 20 \\
+\bottomrule
+\end{tabular}
+\end{table}

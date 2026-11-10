@@ -1,0 +1,122 @@
+{
+  "metadata": {
+    "moral_value": "deontological+repair+generosity",
+    "base_model": "Qwen/Qwen3-8B",
+    "checkpoint": "base",
+    "protocol": "single_round",
+    "num_rounds": 1,
+    "game_type": "stag_hunt",
+    "representation": "matrix",
+    "teacher_template_source": "/users/bickery/MoralGymVerl/configs/verl/sdpo_pd_tft.yaml",
+    "eval_seed": 42,
+    "timestamp": "2026-08-13T23:48:34.404249",
+    "git_commit": "bc3eb30-dirty",
+    "config": "/users/bickery/MoralGymVerl/configs/eval/teacher_signal_qwen3_8b.yaml",
+    "temperature": 0.7,
+    "distillation_alpha": 0.5,
+    "probe": "probe_b",
+    "num_traces": 32
+  },
+  "probe_b": {
+    "first": {
+      "token_delta": {
+        "mean": -0.09029759292155307,
+        "std": 0.02939603886800117,
+        "n": 32
+      },
+      "token_jsd": {
+        "mean": 0.017377809097524732,
+        "std": 0.0037723753038156078,
+        "n": 32
+      },
+      "answer_delta": {
+        "mean": 1.0859375127522275,
+        "std": 2.298189992023381,
+        "n": 32
+      },
+      "n_empty_traces": 0,
+      "n_no_answer_marker": 0,
+      "n_parse_fail": 0
+    },
+    "CC": {
+      "token_delta": {
+        "mean": -0.13217414901547608,
+        "std": 0.05289045246409695,
+        "n": 32
+      },
+      "token_jsd": {
+        "mean": 0.0234807746601291,
+        "std": 0.007352760114649576,
+        "n": 32
+      },
+      "answer_delta": {
+        "mean": -1.8203125260483992,
+        "std": 2.101649602968436,
+        "n": 32
+      },
+      "n_empty_traces": 0,
+      "n_no_answer_marker": 0,
+      "n_parse_fail": 0
+    },
+    "CD": {
+      "token_delta": {
+        "mean": -0.10473249137052602,
+        "std": 0.02737851379348624,
+        "n": 32
+      },
+      "token_jsd": {
+        "mean": 0.020619014074327424,
+        "std": 0.005605605569837221,
+        "n": 32
+      },
+      "answer_delta": {
+        "mean": 2.421875048470776,
+        "std": 2.0569884310202515,
+        "n": 32
+      },
+      "n_empty_traces": 0,
+      "n_no_answer_marker": 0,
+      "n_parse_fail": 0
+    },
+    "DC": {
+      "token_delta": {
+        "mean": -0.11044503216935261,
+        "std": 0.03690072518533833,
+        "n": 32
+      },
+      "token_jsd": {
+        "mean": 0.01941639304277487,
+        "std": 0.006111420392161222,
+        "n": 32
+      },
+      "answer_delta": {
+        "mean": -1.7773437908055911,
+        "std": 2.3145545223285495,
+        "n": 32
+      },
+      "n_empty_traces": 0,
+      "n_no_answer_marker": 0,
+      "n_parse_fail": 0
+    },
+    "DD": {
+      "token_delta": {
+        "mean": -0.10297444608516475,
+        "std": 0.023789943751129076,
+        "n": 32
+      },
+      "token_jsd": {
+        "mean": 0.019643410108983517,
+        "std": 0.003740135790971365,
+        "n": 32
+      },
+      "answer_delta": {
+        "mean": 0.5351564139170129,
+        "std": 2.2718629740871905,
+        "n": 32
+      },
+      "n_empty_traces": 0,
+      "n_no_answer_marker": 0,
+      "n_parse_fail": 0
+    }
+  }
+}

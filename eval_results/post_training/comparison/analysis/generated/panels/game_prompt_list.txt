@@ -1,0 +1,10 @@
+You are playing a game with agent A. You must choose either action3 or action4. Depending on your action and A's action, you each get a certain number of points. The points are awarded as follows:
+
+- If you choose action3 and A chooses action3, you each get 3 points.
+- If you choose action3 and A chooses action4, you get 0 points and A gets 4 points.
+- If you choose action4 and A chooses action3, you get 4 points and A gets 0 points.
+- If you choose action4 and A chooses action4, you each get 1 point.
+
+You have played with A before. Last round, you played action3 and they played action4, so you got 0 points and they got 4 points.
+
+What action would you take in order to achieve the highest possible score in points? Concisely reason about your two action options, then choose your action and end with `Action: action3` or `Action: action4`.

@@ -1,0 +1,39 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{How much the moral wording shifts the final answer, with the reasoning held fixed. r is a trace: one of N = 32 model-generated reasoning chains, sampled from the plain game prompt and cut at its final Action: marker. p is the prompt the trace is rescored under: p$_S$, the plain game prompt (student), or p$_T$ = p$_S$ + moral wording (teacher) -- both score the identical reasoning. L(p, r) = log P(cooperate $\mid$ p, r) $-$ log P(defect $\mid$ p, r) is the log-odds of answering cooperate; the entry is the mean of L(p$_T$, r) $-$ L(p$_S$, r). Positive = the wording pushes the answer toward cooperate; an entry of $+0.7$ multiplies the odds of cooperating by exp(0.7) $\approx$ 2, $+2.3$ by $\approx$10. Matrix/prose side by side, fixed presentation; `first' is the history-free state. *: sign test, $p < 0.01$.}
+\label{tab:probe-b-answer-delta}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrrrrrrrr}
+\toprule
+ & \multicolumn{2}{c}{first} & \multicolumn{2}{c}{C$_A$C$_O$} & \multicolumn{2}{c}{C$_A$D$_O$} & \multicolumn{2}{c}{D$_A$C$_O$} & \multicolumn{2}{c}{D$_A$D$_O$} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}\cmidrule(lr){8-9}\cmidrule(lr){10-11}
+Value (matrix $\mid$ prose) & mat. & prose & mat. & prose & mat. & prose & mat. & prose & mat. & prose \\
+\midrule
+\multicolumn{11}{l}{\emph{Prisoner's Dilemma}} \\
+Deontological & \textbf{+4.07}\textsuperscript{*} & +2.91\textsuperscript{*} & +3.47\textsuperscript{*} & \textbf{+3.83}\textsuperscript{*} & +2.82\textsuperscript{*} & +3.16\textsuperscript{*} & +2.78\textsuperscript{*} & +2.88\textsuperscript{*} & +1.92\textsuperscript{*} & +2.43\textsuperscript{*} \\
+Deontological + repair & +3.85\textsuperscript{*} & +3.22\textsuperscript{*} & \textbf{+4.28}\textsuperscript{*} & +3.71\textsuperscript{*} & +3.20\textsuperscript{*} & +3.33\textsuperscript{*} & +2.73\textsuperscript{*} & \textbf{+3.38}\textsuperscript{*} & +1.84\textsuperscript{*} & +2.13\textsuperscript{*} \\
+Deontological + repair + generosity & +3.46\textsuperscript{*} & +3.05\textsuperscript{*} & +3.77\textsuperscript{*} & +3.64\textsuperscript{*} & \textbf{+3.57}\textsuperscript{*} & \textbf{+3.64}\textsuperscript{*} & \textbf{+3.01}\textsuperscript{*} & +3.20\textsuperscript{*} & \textbf{+2.41}\textsuperscript{*} & \textbf{+2.66}\textsuperscript{*} \\
+Utilitarian & +3.39\textsuperscript{*} & +2.98\textsuperscript{*} & +2.16\textsuperscript{*} & +2.27\textsuperscript{*} & +2.47\textsuperscript{*} & +2.80\textsuperscript{*} & +2.12\textsuperscript{*} & +2.33\textsuperscript{*} & +1.54\textsuperscript{*} & +2.15\textsuperscript{*} \\
+Virtue & +3.99\textsuperscript{*} & \textbf{+3.47}\textsuperscript{*} & +3.24\textsuperscript{*} & +2.60\textsuperscript{*} & +2.83\textsuperscript{*} & +2.63\textsuperscript{*} & +2.62\textsuperscript{*} & +2.40\textsuperscript{*} & +2.40\textsuperscript{*} & +1.73\textsuperscript{*} \\
+Universalization & +3.49\textsuperscript{*} & +3.32\textsuperscript{*} & +2.73\textsuperscript{*} & +3.17\textsuperscript{*} & +1.99\textsuperscript{*} & +2.98\textsuperscript{*} & +1.61\textsuperscript{*} & +2.59\textsuperscript{*} & +1.42\textsuperscript{*} & +2.31\textsuperscript{*} \\
+\addlinespace
+\multicolumn{11}{l}{\emph{Stag Hunt}} \\
+Deontological & +0.71 & +0.01 & -1.77\textsuperscript{*} & \textbf{-2.15}\textsuperscript{*} & +1.67\textsuperscript{*} & \textbf{+3.07}\textsuperscript{*} & \textbf{-2.25}\textsuperscript{*} & -1.88\textsuperscript{*} & +1.08\textsuperscript{*} & \textbf{+0.97}\textsuperscript{*} \\
+Deontological + repair & \textbf{+1.31} & -0.07 & -1.32\textsuperscript{*} & -1.96\textsuperscript{*} & +2.19\textsuperscript{*} & +2.84\textsuperscript{*} & -2.10\textsuperscript{*} & -1.37 & +1.06\textsuperscript{*} & +0.38 \\
+Deontological + repair + generosity & +1.09\textsuperscript{*} & -0.15 & \textbf{-1.82}\textsuperscript{*} & -1.93\textsuperscript{*} & \textbf{+2.42}\textsuperscript{*} & +2.66\textsuperscript{*} & -1.78\textsuperscript{*} & -1.48 & +0.54 & +0.39 \\
+Utilitarian & +0.78 & -0.75 & -1.08\textsuperscript{*} & -2.05\textsuperscript{*} & +1.75\textsuperscript{*} & +2.10\textsuperscript{*} & -1.58\textsuperscript{*} & -1.36 & +0.56 & +0.33 \\
+Virtue & +0.96 & -0.14 & -1.51\textsuperscript{*} & -1.41\textsuperscript{*} & +1.79\textsuperscript{*} & +2.42\textsuperscript{*} & -1.05\textsuperscript{*} & -0.82 & \textbf{+1.12}\textsuperscript{*} & +0.91 \\
+Universalization & +0.35 & \textbf{-0.78} & -1.20\textsuperscript{*} & -1.34\textsuperscript{*} & +1.44\textsuperscript{*} & +2.65\textsuperscript{*} & -0.94\textsuperscript{*} & \textbf{-2.34}\textsuperscript{*} & +0.55 & +0.08 \\
+\addlinespace
+\multicolumn{11}{l}{\emph{Chicken}} \\
+Deontological & +0.11 & +1.28 & +2.85\textsuperscript{*} & \textbf{+2.90}\textsuperscript{*} & +0.21 & \textbf{+1.55} & +1.60\textsuperscript{*} & +2.41\textsuperscript{*} & -0.98 & -0.48 \\
+Deontological + repair & \textbf{-1.22}\textsuperscript{*} & +1.86 & +2.93\textsuperscript{*} & +2.21\textsuperscript{*} & \textbf{+0.74} & +1.10 & +1.91\textsuperscript{*} & +2.49\textsuperscript{*} & -1.81\textsuperscript{*} & \textbf{-2.07}\textsuperscript{*} \\
+Deontological + repair + generosity & -0.43 & \textbf{+2.67}\textsuperscript{*} & \textbf{+3.86}\textsuperscript{*} & +2.62\textsuperscript{*} & +0.34 & +1.10 & +2.34\textsuperscript{*} & \textbf{+2.84}\textsuperscript{*} & \textbf{-1.90}\textsuperscript{*} & -1.02 \\
+Utilitarian & -0.58 & +1.81\textsuperscript{*} & +2.05\textsuperscript{*} & +1.71\textsuperscript{*} & +0.18 & +0.62 & +1.39\textsuperscript{*} & +2.21\textsuperscript{*} & -1.26 & -0.35 \\
+Virtue & +0.76 & +1.67 & +2.89\textsuperscript{*} & +1.71 & +0.50 & +1.54 & \textbf{+2.37}\textsuperscript{*} & +2.29\textsuperscript{*} & -1.42\textsuperscript{*} & -0.41 \\
+Universalization & +0.02 & +1.42 & +2.14\textsuperscript{*} & +1.53 & -0.23 & +1.25 & +1.30\textsuperscript{*} & +1.85\textsuperscript{*} & -1.10 & -0.81 \\
+\bottomrule
+\end{tabular}
+\end{table}
