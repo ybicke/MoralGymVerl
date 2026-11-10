@@ -218,7 +218,18 @@ $PY $MF multiround-compare --name olmo3_7b_opening_s200 --analysis-dir $CMP \
     --cell "+ctx=$O/multi_round_incontext/cells/public_goods__deontological__decision_full__multi_round__base_3636216" \
     --cell "SDPO fabOpen=$O/multi_round_fabopen/cells/public_goods__none__decision_full__multi_round__olmo3_7b_sdpo_pd_deon_tft_200_seed1-global_step_200_3714299" \
     --cell "+ctx fabOpen=$O/multi_round_fabopen/cells/public_goods__deontological__decision_full__multi_round__base_3714299"
+# Gemma-2-9B live play (ACL app:gemma): SDPO and GRPO seed 1 at step 200
+# against base and base + principle in context.
+G=eval_results/transfer/gemma2_9b/pgg
+for spec in "SDPO GRPO|gemma2_9b_sdpo_grpo_seed1_s200" "SDPO|gemma2_9b_sdpo_seed1_s200"; do
+    IFS='|' read -r chans name <<< "$spec"
+    $PY $MF seed-multi --group $G/multi_round_sdpo_seed1 --group $G/multi_round_grpo_v2_seed1 \
+        --group $G/multi_round_incontext --step 200 --seed 1 --model gemma-2-9b-it \
+        --principle deontological $(printf -- '--channel %s ' $chans) \
+        --name $name --analysis-dir $CMP
+done
 cp $CMP/figures/pdf/multi_round_qwen3_8b_seeds_s200.pdf \
+   $CMP/figures/pdf/multi_round_gemma2_9b_sdpo{,_grpo}_seed1_s200.pdf \
    $CMP/figures/pdf/multi_round_qwen3_8b_sdpo_randlabels_seed1_s200.pdf \
    $CMP/figures/pdf/multi_round_qwen3_8b_thinking_vs_nothinking_seeds_s200.pdf \
    $CMP/figures/pdf/transfer_final_{olmo3_7b,gemma2_9b}_{sdpo,grpo}_seed1_s200.pdf \
