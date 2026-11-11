@@ -1,0 +1,29 @@
+# Robustness check of multi_round_n200 (Olmo-3-7B, cold opening, 200
+# episodes per co-player group): the same cells with 4096 instead of 2048
+# new tokens per answer. Base, SDPO seed 1 and GRPO seed 1 at step 200.
+#
+# At 2048 tokens the SDPO checkpoint does not reach its action line in 19% of
+# first rounds (114 of 600 answers cut off mid-reasoning; base 13, prompted
+# 29, GRPO 17), only in round 1 and mostly with the cold opening. This run
+# measures what those answers decide. Every other setting is unchanged, so
+# the main table keeps the 2048-token cells that match Qwen3-8B.
+#
+#   ~/venvs/moralgym/bin/python scripts/slurm/fir/submit_sweep.py \
+#       configs/eval/transfer/olmo3_7b/pgg/multi_round_n200_tok4096.yaml --no-pack --dry-run
+
+num_episodes: 200          # per co-player group; x3 x5 rounds = 3000 decisions/cell
+
+axes:
+  game: [public_goods]
+  representation: [decision_full]
+  moral_value: [none]
+  protocol: [multi_round]
+  checkpoint:
+    - base
+    - olmo3_7b_sdpo_pd_deon_tft_200_seed1/global_step_200
+    - olmo3_7b_grpo_pd_deon_tft_200_v2_seed1/global_step_200
+
+env:
+  RUN_PROBES: "off"
+  GAME_DESCRIPTION: "off"
+extra_args: ["--temperature", "0.7", "--max-new-tokens", "4096"]
