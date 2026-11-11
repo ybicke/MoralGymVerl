@@ -158,6 +158,9 @@ cp $PT/qwen3_8b/classic/multi_round/analysis/generated/numbers_MRPD.tex \
 # holds base and every seed, *_incontext_n200 the prompted model. Cold
 # opening -> \Seeds... / seed_transfer, fabricated opening -> \SeedsFab... /
 # seed_transfer_fabopen; Olmo-3 (one seed) -> \Olmo... / \OlmoFab...
+# Olmo-3 is read from the *_tok4096 groups (4096 new tokens per answer): at
+# the 2048 of the Qwen cells, up to 19% of its first-round answers are cut
+# off before the action line (SDPO, cold opening); Qwen3-8B has none.
 T=eval_results/transfer/qwen3_8b/pgg
 O=eval_results/transfer/olmo3_7b/pgg
 FAB="opened with a fabricated previous round"
@@ -173,10 +176,10 @@ $PY scripts/analysis/seed_numbers.py --model Qwen3-8B --step 200 $QSINGLE \
     --multi-group $T/multi_round_fabopen_n200 --multi-group $T/multi_round_fabopen_incontext_n200 \
     --prefix SeedsFab --table seed_transfer_fabopen --live-play "$FAB" --out $T/analysis
 $PY scripts/analysis/seed_numbers.py --model Olmo-3-7B-Instruct --step 200 $OSINGLE \
-    --multi-group $O/multi_round_n200 --multi-group $O/multi_round_incontext_n200 \
+    --multi-group $O/multi_round_n200_tok4096 --multi-group $O/multi_round_incontext_n200_tok4096 \
     --prefix Olmo --table seed_transfer_olmo3_7b --out $O/analysis
 $PY scripts/analysis/seed_numbers.py --model Olmo-3-7B-Instruct --step 200 $OSINGLE \
-    --multi-group $O/multi_round_fabopen_n200 --multi-group $O/multi_round_fabopen_incontext_n200 \
+    --multi-group $O/multi_round_fabopen_n200_tok4096 --multi-group $O/multi_round_fabopen_incontext_n200_tok4096 \
     --prefix OlmoFab --table seed_transfer_olmo3_7b_fabopen --live-play "$FAB" --out $O/analysis
 cp $T/analysis/generated/numbers_Seeds{,Fab}.tex $O/analysis/generated/numbers_Olmo{,Fab}.tex \
    ~/moralgym-report/generated/
@@ -195,7 +198,7 @@ for open in "" _fabopen; do
     $PY $MF seed-multi --group $T/multi_round${open}_n200 --group $T/multi_round${open}_incontext_n200 \
         --step 200 --model Qwen3-8B --principle deontological \
         --name qwen3_8b_seeds${open}_s200 --analysis-dir $CMP
-    $PY $MF seed-multi --group $O/multi_round${open}_n200 --group $O/multi_round${open}_incontext_n200 \
+    $PY $MF seed-multi --group $O/multi_round${open}_n200_tok4096 --group $O/multi_round${open}_incontext_n200_tok4096 \
         --step 200 --seed 1 --model Olmo-3-7B-Instruct --principle deontological \
         --name olmo3_7b_seed1${open}_s200 --analysis-dir $CMP
 done
@@ -237,11 +240,11 @@ $PY $MF seed-grid --group $T/single_round_sdpo_pdshch_seed1 --group $R --step 20
     --name qwen3_8b_sdpo_pdshch_seed1_s200 --analysis-dir $CMP
 O=eval_results/transfer/olmo3_7b/pgg
 $PY $MF multiround-compare --name olmo3_7b_opening_s200 --analysis-dir $CMP \
-    --cell "base=$O/multi_round_n200/cells/public_goods__none_3471103" \
-    --cell "SDPO=$O/multi_round_n200/cells/public_goods__none_3471104" \
-    --cell "+ctx=$O/multi_round_incontext_n200/cells/public_goods__deontological_3471107" \
-    --cell "SDPO fabOpen=$O/multi_round_fabopen_n200/cells/public_goods__none_3471110" \
-    --cell "+ctx fabOpen=$O/multi_round_fabopen_incontext_n200/cells/public_goods__deontological_3471112"
+    --cell "base=$O/multi_round_n200_tok4096/cells/public_goods__none_3474481" \
+    --cell "SDPO=$O/multi_round_n200_tok4096/cells/public_goods__none_3474482" \
+    --cell "+ctx=$O/multi_round_incontext_n200_tok4096/cells/public_goods__deontological_3474485" \
+    --cell "SDPO fabOpen=$O/multi_round_fabopen_n200_tok4096/cells/public_goods__none_3474487" \
+    --cell "+ctx fabOpen=$O/multi_round_fabopen_incontext_n200_tok4096/cells/public_goods__deontological_3474491"
 # Gemma-2-9B live play (ACL app:gemma): SDPO and GRPO seed 1 at step 200
 # against base and base + principle in context.
 G=eval_results/transfer/gemma2_9b/pgg

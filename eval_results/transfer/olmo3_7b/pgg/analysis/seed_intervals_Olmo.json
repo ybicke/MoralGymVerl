@@ -128,29 +128,29 @@
        "seed": null,
        "episodes": 200,
        "rate": 4.1,
-       "se": 1.31,
-       "lo": 1.53,
-       "hi": 6.67,
-       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200/cells/public_goods__none_3471103"
+       "se": 1.32,
+       "lo": 1.52,
+       "hi": 6.68,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200_tok4096/cells/public_goods__none_3474481"
       }
      ]
     },
     "Prompted": {
-     "Mean": 56,
+     "Mean": 64,
      "Std": 0,
-     "Min": 56,
-     "Max": 56,
-     "Lo": 50,
-     "Hi": 62,
+     "Min": 64,
+     "Max": 64,
+     "Lo": 59,
+     "Hi": 70,
      "cells": [
       {
        "seed": null,
        "episodes": 200,
-       "rate": 56.05,
-       "se": 3.0,
-       "lo": 50.16,
-       "hi": 61.94,
-       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_incontext_n200/cells/public_goods__deontological_3471107"
+       "rate": 64.25,
+       "se": 2.86,
+       "lo": 58.64,
+       "hi": 69.86,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_incontext_n200_tok4096/cells/public_goods__deontological_3474485"
       }
      ]
     },
@@ -159,36 +159,36 @@
      "Std": 0,
      "Min": 16,
      "Max": 16,
-     "Lo": 12,
+     "Lo": 11,
      "Hi": 21,
      "cells": [
       {
        "seed": 1,
        "episodes": 200,
-       "rate": 16.38,
-       "se": 2.32,
-       "lo": 11.83,
-       "hi": 20.92,
-       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200/cells/public_goods__none_3471105"
+       "rate": 15.9,
+       "se": 2.37,
+       "lo": 11.26,
+       "hi": 20.54,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200_tok4096/cells/public_goods__none_3474483"
       }
      ]
     },
     "Sdpo": {
-     "Mean": 23,
+     "Mean": 29,
      "Std": 0,
-     "Min": 23,
-     "Max": 23,
-     "Lo": 17,
-     "Hi": 28,
+     "Min": 29,
+     "Max": 29,
+     "Lo": 23,
+     "Hi": 35,
      "cells": [
       {
        "seed": 1,
        "episodes": 200,
-       "rate": 22.9,
-       "se": 2.76,
-       "lo": 17.48,
-       "hi": 28.32,
-       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200/cells/public_goods__none_3471104"
+       "rate": 28.67,
+       "se": 3.04,
+       "lo": 22.72,
+       "hi": 34.63,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200_tok4096/cells/public_goods__none_3474482"
       }
      ]
     }
@@ -196,32 +196,32 @@
    "versus": {
     "Grpo - Base": {
      "Diff": 12,
-     "Lo": 7,
+     "Lo": 6,
      "Hi": 17,
      "Seeds": 1
     },
     "Grpo - Prompted": {
-     "Diff": -40,
-     "Lo": -47,
-     "Hi": -32,
+     "Diff": -48,
+     "Lo": -56,
+     "Hi": -41,
      "Seeds": 1
     },
     "Sdpo - Base": {
-     "Diff": 19,
-     "Lo": 13,
-     "Hi": 25,
+     "Diff": 25,
+     "Lo": 18,
+     "Hi": 31,
      "Seeds": 1
     },
     "Sdpo - Prompted": {
-     "Diff": -33,
-     "Lo": -41,
-     "Hi": -25,
+     "Diff": -36,
+     "Lo": -44,
+     "Hi": -27,
      "Seeds": 1
     },
     "Sdpo - Grpo": {
-     "Diff": 7,
-     "Lo": -1,
-     "Hi": 14
+     "Diff": 13,
+     "Lo": 5,
+     "Hi": 20
     }
    }
   },
@@ -233,106 +233,106 @@
      "Min": 2,
      "Max": 2,
      "Lo": 1,
-     "Hi": 3,
+     "Hi": 4,
      "cells": [
       {
        "seed": null,
        "episodes": 200,
-       "rate": 2.05,
-       "se": 0.58,
-       "lo": 0.92,
-       "hi": 3.18,
-       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200/cells/public_goods__none_3471103"
+       "rate": 2.35,
+       "se": 0.64,
+       "lo": 1.1,
+       "hi": 3.6,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200_tok4096/cells/public_goods__none_3474481"
       }
      ]
     },
     "Prompted": {
-     "Mean": 22,
+     "Mean": 20,
      "Std": 0,
-     "Min": 22,
-     "Max": 22,
-     "Lo": 19,
-     "Hi": 25,
+     "Min": 20,
+     "Max": 20,
+     "Lo": 17,
+     "Hi": 23,
      "cells": [
       {
        "seed": null,
        "episodes": 200,
-       "rate": 21.88,
-       "se": 1.68,
-       "lo": 18.58,
-       "hi": 25.17,
-       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_incontext_n200/cells/public_goods__deontological_3471107"
+       "rate": 20.0,
+       "se": 1.55,
+       "lo": 16.96,
+       "hi": 23.04,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_incontext_n200_tok4096/cells/public_goods__deontological_3474485"
       }
      ]
     },
     "Grpo": {
-     "Mean": 3,
+     "Mean": 1,
      "Std": 0,
-     "Min": 3,
-     "Max": 3,
-     "Lo": 2,
-     "Hi": 4,
+     "Min": 1,
+     "Max": 1,
+     "Lo": 1,
+     "Hi": 2,
      "cells": [
       {
        "seed": 1,
        "episodes": 200,
-       "rate": 2.83,
-       "se": 0.66,
-       "lo": 1.54,
-       "hi": 4.11,
-       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200/cells/public_goods__none_3471105"
+       "rate": 1.4,
+       "se": 0.41,
+       "lo": 0.59,
+       "hi": 2.21,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200_tok4096/cells/public_goods__none_3474483"
       }
      ]
     },
     "Sdpo": {
-     "Mean": 6,
+     "Mean": 7,
      "Std": 0,
-     "Min": 6,
-     "Max": 6,
+     "Min": 7,
+     "Max": 7,
      "Lo": 4,
-     "Hi": 9,
+     "Hi": 10,
      "cells": [
       {
        "seed": 1,
        "episodes": 200,
-       "rate": 6.25,
-       "se": 1.28,
-       "lo": 3.73,
-       "hi": 8.77,
-       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200/cells/public_goods__none_3471104"
+       "rate": 7.12,
+       "se": 1.47,
+       "lo": 4.25,
+       "hi": 10.0,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200_tok4096/cells/public_goods__none_3474482"
       }
      ]
     }
    },
    "versus": {
     "Grpo - Base": {
-     "Diff": 1,
-     "Lo": -1,
-     "Hi": 2,
+     "Diff": -1,
+     "Lo": -2,
+     "Hi": 1,
      "Seeds": 0
     },
     "Grpo - Prompted": {
      "Diff": -19,
-     "Lo": -23,
-     "Hi": -16,
+     "Lo": -22,
+     "Hi": -15,
      "Seeds": 1
     },
     "Sdpo - Base": {
-     "Diff": 4,
-     "Lo": 1,
-     "Hi": 7,
+     "Diff": 5,
+     "Lo": 2,
+     "Hi": 8,
      "Seeds": 1
     },
     "Sdpo - Prompted": {
-     "Diff": -16,
-     "Lo": -20,
-     "Hi": -11,
+     "Diff": -13,
+     "Lo": -17,
+     "Hi": -9,
      "Seeds": 1
     },
     "Sdpo - Grpo": {
-     "Diff": 3,
-     "Lo": 1,
-     "Hi": 6
+     "Diff": 6,
+     "Lo": 3,
+     "Hi": 9
     }
    }
   },
@@ -349,30 +349,30 @@
       {
        "seed": null,
        "episodes": 200,
-       "rate": 2.1,
-       "se": 0.74,
-       "lo": 0.65,
-       "hi": 3.55,
-       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200/cells/public_goods__none_3471103"
+       "rate": 2.3,
+       "se": 0.75,
+       "lo": 0.82,
+       "hi": 3.78,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200_tok4096/cells/public_goods__none_3474481"
       }
      ]
     },
     "Prompted": {
-     "Mean": 37,
+     "Mean": 39,
      "Std": 0,
-     "Min": 37,
-     "Max": 37,
-     "Lo": 32,
-     "Hi": 42,
+     "Min": 39,
+     "Max": 39,
+     "Lo": 34,
+     "Hi": 43,
      "cells": [
       {
        "seed": null,
        "episodes": 200,
-       "rate": 37.39,
-       "se": 2.51,
-       "lo": 32.46,
-       "hi": 42.32,
-       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_incontext_n200/cells/public_goods__deontological_3471107"
+       "rate": 38.6,
+       "se": 2.42,
+       "lo": 33.85,
+       "hi": 43.35,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_incontext_n200_tok4096/cells/public_goods__deontological_3474485"
       }
      ]
     },
@@ -387,63 +387,63 @@
       {
        "seed": 1,
        "episodes": 200,
-       "rate": 8.7,
-       "se": 1.44,
-       "lo": 5.88,
-       "hi": 11.52,
-       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200/cells/public_goods__none_3471105"
+       "rate": 8.62,
+       "se": 1.47,
+       "lo": 5.74,
+       "hi": 11.51,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200_tok4096/cells/public_goods__none_3474483"
       }
      ]
     },
     "Sdpo": {
-     "Mean": 13,
+     "Mean": 14,
      "Std": 0,
-     "Min": 13,
-     "Max": 13,
+     "Min": 14,
+     "Max": 14,
      "Lo": 10,
-     "Hi": 17,
+     "Hi": 18,
      "cells": [
       {
        "seed": 1,
        "episodes": 200,
-       "rate": 13.3,
-       "se": 1.93,
-       "lo": 9.52,
-       "hi": 17.08,
-       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200/cells/public_goods__none_3471104"
+       "rate": 14.03,
+       "se": 2.06,
+       "lo": 9.98,
+       "hi": 18.07,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200_tok4096/cells/public_goods__none_3474482"
       }
      ]
     }
    },
    "versus": {
     "Grpo - Base": {
-     "Diff": 7,
+     "Diff": 6,
      "Lo": 3,
      "Hi": 10,
      "Seeds": 1
     },
     "Grpo - Prompted": {
-     "Diff": -29,
-     "Lo": -34,
-     "Hi": -23,
+     "Diff": -30,
+     "Lo": -36,
+     "Hi": -24,
      "Seeds": 1
     },
     "Sdpo - Base": {
-     "Diff": 11,
+     "Diff": 12,
      "Lo": 7,
-     "Hi": 15,
+     "Hi": 16,
      "Seeds": 1
     },
     "Sdpo - Prompted": {
-     "Diff": -24,
-     "Lo": -30,
+     "Diff": -25,
+     "Lo": -31,
      "Hi": -18,
      "Seeds": 1
     },
     "Sdpo - Grpo": {
      "Diff": 5,
      "Lo": 0,
-     "Hi": 9
+     "Hi": 10
     }
    }
   },
@@ -460,101 +460,101 @@
       {
        "seed": null,
        "episodes": 600,
-       "rate": 1.83,
-       "se": 0.55,
-       "lo": 0.76,
-       "hi": 2.91,
-       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200/cells/public_goods__none_3471103"
+       "rate": 2.0,
+       "se": 0.57,
+       "lo": 0.88,
+       "hi": 3.12,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200_tok4096/cells/public_goods__none_3474481"
       }
      ]
     },
     "Prompted": {
-     "Mean": 61,
+     "Mean": 63,
      "Std": 0,
-     "Min": 61,
-     "Max": 61,
-     "Lo": 57,
-     "Hi": 65,
+     "Min": 63,
+     "Max": 63,
+     "Lo": 59,
+     "Hi": 66,
      "cells": [
       {
        "seed": null,
        "episodes": 600,
-       "rate": 61.0,
-       "se": 1.99,
-       "lo": 57.1,
-       "hi": 64.9,
-       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_incontext_n200/cells/public_goods__deontological_3471107"
+       "rate": 62.5,
+       "se": 1.98,
+       "lo": 58.62,
+       "hi": 66.38,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_incontext_n200_tok4096/cells/public_goods__deontological_3474485"
       }
      ]
     },
     "Grpo": {
-     "Mean": 3,
+     "Mean": 4,
      "Std": 0,
-     "Min": 3,
-     "Max": 3,
-     "Lo": 1,
-     "Hi": 4,
+     "Min": 4,
+     "Max": 4,
+     "Lo": 3,
+     "Hi": 6,
      "cells": [
       {
        "seed": 1,
        "episodes": 600,
-       "rate": 2.5,
-       "se": 0.64,
-       "lo": 1.25,
-       "hi": 3.75,
-       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200/cells/public_goods__none_3471105"
+       "rate": 4.17,
+       "se": 0.82,
+       "lo": 2.57,
+       "hi": 5.77,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200_tok4096/cells/public_goods__none_3474483"
       }
      ]
     },
     "Sdpo": {
-     "Mean": 9,
+     "Mean": 14,
      "Std": 0,
-     "Min": 9,
-     "Max": 9,
-     "Lo": 6,
-     "Hi": 11,
+     "Min": 14,
+     "Max": 14,
+     "Lo": 11,
+     "Hi": 17,
      "cells": [
       {
        "seed": 1,
        "episodes": 600,
-       "rate": 8.5,
-       "se": 1.14,
-       "lo": 6.26,
-       "hi": 10.74,
-       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200/cells/public_goods__none_3471104"
+       "rate": 13.83,
+       "se": 1.41,
+       "lo": 11.08,
+       "hi": 16.59,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200_tok4096/cells/public_goods__none_3474482"
       }
      ]
     }
    },
    "versus": {
     "Grpo - Base": {
-     "Diff": 1,
-     "Lo": -1,
-     "Hi": 2,
-     "Seeds": 0
+     "Diff": 2,
+     "Lo": 0,
+     "Hi": 4,
+     "Seeds": 1
     },
     "Grpo - Prompted": {
-     "Diff": -59,
+     "Diff": -58,
      "Lo": -63,
      "Hi": -54,
      "Seeds": 1
     },
     "Sdpo - Base": {
-     "Diff": 7,
-     "Lo": 4,
-     "Hi": 9,
+     "Diff": 12,
+     "Lo": 9,
+     "Hi": 15,
      "Seeds": 1
     },
     "Sdpo - Prompted": {
-     "Diff": -53,
-     "Lo": -57,
-     "Hi": -48,
+     "Diff": -49,
+     "Lo": -53,
+     "Hi": -44,
      "Seeds": 1
     },
     "Sdpo - Grpo": {
-     "Diff": 6,
-     "Lo": 3,
-     "Hi": 9
+     "Diff": 10,
+     "Lo": 6,
+     "Hi": 13
     }
    }
   }
