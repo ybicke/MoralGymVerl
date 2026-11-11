@@ -1,0 +1,35 @@
+# Live play in the public-goods game, Qwen3-8B, paper grid at 200 episodes
+# per co-player group: base and the step-200 checkpoints (SDPO and GRPO v2, seeds 1-3).
+# 5 rounds, three co-player groups, no moral text, eval seed 42;
+# fabricated opening: round 1 follows a fabricated previous round, the state
+# every training prompt carries; 25 episodes per fabricated state.
+#
+# One protocol for every model and policy, with its prompted reference in
+# multi_round_fabopen_incontext_n200. 200 episodes put a cell's rate within about +-6
+# points, against +-12 to 20 at the 20 to 24 episodes of the earlier groups.
+#
+#   ~/venvs/moralgym/bin/python scripts/slurm/fir/submit_sweep.py \
+#       configs/eval/transfer/qwen3_8b/pgg/multi_round_fabopen_n200.yaml --no-pack --dry-run
+#   ~/venvs/moralgym/bin/python scripts/slurm/fir/submit_sweep.py \
+#       configs/eval/transfer/qwen3_8b/pgg/multi_round_fabopen_incontext_n200.yaml --no-pack --dry-run
+
+num_episodes: 200          # per co-player group; x3 x5 rounds = 3000 decisions/cell
+
+axes:
+  game: [public_goods]
+  representation: [decision_full]
+  moral_value: [none]
+  protocol: [multi_round]
+  checkpoint:
+    - base
+    - qwen3_8b_sdpo_pd_deon_tft_200_seed1/global_step_200
+    - qwen3_8b_sdpo_pd_deon_tft_300_seed2/global_step_200
+    - qwen3_8b_sdpo_pd_deon_tft_200_seed3/global_step_200
+    - qwen3_8b_grpo_pd_deon_tft_200_v2_seed1/global_step_200
+    - qwen3_8b_grpo_pd_deon_tft_200_v2_seed2/global_step_200
+    - qwen3_8b_grpo_pd_deon_tft_200_v2_seed3/global_step_200
+
+env:
+  RUN_PROBES: "off"
+  GAME_DESCRIPTION: "off"
+extra_args: ["--temperature", "0.7", "--game-design", "hist"]
