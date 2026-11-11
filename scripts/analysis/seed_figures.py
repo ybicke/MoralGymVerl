@@ -50,6 +50,7 @@ class Cell:
         self.tag = ""                      # set by load_cells(split_thinking)
         self.blocks = {o["opponent"]: o for o in opponents}
         self.first = opponents[0]
+        self.path: Optional[Path] = None   # run dir, set by load_cells
         m = CKPT_RE.search(meta.get("checkpoint") or "")
         if m is None:                      # untrained model
             self.channel, self.seed, self.step = "base", None, None
@@ -77,13 +78,15 @@ def load_cells(groups: List[Path], protocol: str, model: Optional[str] = None,
     by its enable_thinking flag so the two evaluation modes are drawn
     as separate channels."""
     cells = []
-    for d in discover_run_dirs(groups):
+    # a group named twice is one set of cells, not a duplicate
+    for d in dict.fromkeys(discover_run_dirs(groups)):
         beh = load_json(d, "behavioral.json")
         if beh is None or beh["metadata"].get("game_type") != "public_goods":
             continue
         if beh["metadata"].get("protocol") != protocol:
             continue
         c = Cell(beh["metadata"], beh["opponents"])
+        c.path = d
         if model and c.model != model:
             continue
         if seed is not None and c.channel != "base" and c.seed != seed:
@@ -100,15 +103,25 @@ def load_cells(groups: List[Path], protocol: str, model: Optional[str] = None,
     return cells
 
 
+def _unique(slot: Dict, key, cell: Cell, what: str) -> None:
+    """Store cell under key; two cells for one slot are an error, since
+    which one a figure or number used would depend on directory order."""
+    if key in slot:
+        raise SystemExit(f"duplicate cell for {what}:\n  {slot[key].path}\n  "
+                         f"{cell.path}\npass only one of them via --group")
+    slot[key] = cell
+
+
 def split(cells: List[Cell], steps: List[int], principle: str):
     """-> {tag: base cell}, {(moral_value, tag): ctx cell},
     {(channel, step): [seed cells]}; tag is "" unless the cells were
     loaded with split_thinking. Reference rows must share the
-    checkpoints' presentation."""
+    checkpoints' presentation. Exactly one cell per slot (_unique)."""
     runs = defaultdict(dict)
     for c in cells:
         if c.channel != "base" and c.value == "none" and c.step in steps:
-            runs[(c.channel, c.step)].setdefault(c.seed, c)   # one cell per seed
+            _unique(runs[(c.channel, c.step)], c.seed, c,
+                    f"{c.channel} step {c.step} seed {c.seed}")
     if not runs:
         raise SystemExit(f"no checkpoint cells at steps {steps}")
     rep = next(iter(runs.values()))[next(iter(next(iter(runs.values()))))].representation
@@ -116,9 +129,10 @@ def split(cells: List[Cell], steps: List[int], principle: str):
     for c in cells:
         if c.channel == "base" and c.representation == rep:
             if c.value == "none":
-                base.setdefault(c.tag, c)
+                _unique(base, c.tag, c, f"base {c.tag}".strip())
             elif c.value == principle:
-                ctx.setdefault((c.value, c.tag), c)
+                _unique(ctx, (c.value, c.tag), c,
+                        f"base + {principle} {c.tag}".strip())
     return base, ctx, {k: list(v.values()) for k, v in runs.items()}
 
 
