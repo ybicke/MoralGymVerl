@@ -23,8 +23,8 @@ its episode count instead. Intervals are clipped to [0, 1].
                              reference, in points, with its interval
                          \\<prefix>...<Row>Vs<Ref>Seeds            seeds whose own
                              difference interval excludes 0 on the side of Diff
-  tables/seed_transfer.tex
-  seed_intervals.json    every cell and comparison behind the macros
+  tables/<--table>.tex   (default seed_transfer)
+  seed_intervals[_<prefix>].json   every cell and comparison behind the macros
 
   python scripts/analysis/seed_numbers.py --model Qwen3-8B \\
       --step 200 --single-group ... --multi-group ... --out <dir>
@@ -77,17 +77,20 @@ class Sample:
     """One cell's rate for one quantity, with its standard error.
 
     strata: per stratum a list of (contributions, decisions) per episode.
-    The rate pools all decisions; the standard error is the stratified
-    one over per-episode rates, sqrt(sum_h w_h^2 s_h^2 / n_h) with w_h
-    the stratum's share of decisions."""
+    The rate is the mean of the per-episode rates, as the cell stores it
+    (metrics.py), and the standard error the stratified one,
+    sqrt(sum_h w_h^2 s_h^2 / n_h) with w_h the stratum's share of episodes.
+    Episodes without a decision (every answer unparseable) are left out,
+    again as in the cell."""
 
     def __init__(self, cell: Cell, strata: List[List[Tuple[int, int]]]):
         self.seed, self.path = cell.seed, str(cell.path)
-        self.n = sum(len(s) for s in strata)
-        total = sum(n for s in strata for _, n in s)
-        self.est = sum(c for s in strata for c, _ in s) / total
-        var = sum((sum(n for _, n in s) / total) ** 2
-                  * variance([c / n for c, n in s]) / len(s) for s in strata)
+        rates = [[c / n for c, n in s if n] for s in strata]
+        rates = [r for r in rates if r]
+        self.n = sum(len(r) for r in rates)
+        self.est = sum(sum(r) for r in rates) / self.n
+        var = sum((len(r) / self.n) ** 2 * (variance(r) if len(r) > 1 else 0.0)
+                  / len(r) for r in rates)
         if var > 0:
             self.se = math.sqrt(var)
             self.lo, self.hi = clip(*normal(self.est, self.se))
@@ -96,24 +99,34 @@ class Sample:
             self.se = (self.hi - self.lo) / (2 * Z)
 
 
-def strata(block: Dict, by_state: bool = False, first_round: bool = False):
+def strata(block: Dict, by_state: bool = False, first_round: bool = False,
+           legal_only: bool = True):
     """One block's episodes as (contributions, decisions) pairs, grouped by
     fabricated state if by_state, else one stratum.
 
+    legal_only counts parseable answers only, the cell's cooperation_rate
+    convention; per-round rates (per_round p_C, the figures) count every
+    answer, an unparseable one as not contributed, so round-1 samples pass
+    legal_only=False.
+
     Cells written before episodes recorded their fab_state get it from the
     balanced design, which cycles the states in order; either way the
-    grouping must reproduce the per-state rates the cell stores."""
+    grouping must reproduce the per-state rates the cell stores (p_C over
+    all answers)."""
     states = list(block.get("state_conditioning") or {})
-    groups = defaultdict(list)
+    groups, check = defaultdict(list), defaultdict(list)
     for i, e in enumerate(block["episode_moves"]):
         moves = e["agent"][:1] if first_round else e["agent"]
         key = None
         if by_state:
             key = ("({},{})".format(*e["fab_state"]) if "fab_state" in e
                    else states[i % len(states)])
-        groups[key].append((sum(m == "C" for m in moves), len(moves)))
+        c = sum(m == "C" for m in moves)
+        groups[key].append((c, sum(m in ("C", "D") for m in moves)
+                            if legal_only else len(moves)))
+        check[key].append((c, len(moves)))
     if by_state:
-        for k, g in groups.items():
+        for k, g in check.items():
             stored = block["state_conditioning"][k]
             rate = sum(c for c, _ in g) / sum(n for _, n in g)
             if len(g) != stored["n"] or abs(rate - stored["p_C"]) > 1e-9:
@@ -189,6 +202,12 @@ def main() -> None:
     ap.add_argument("--single-group", action="append", required=True)
     ap.add_argument("--multi-group", action="append", required=True)
     ap.add_argument("--prefix", default="Seeds")
+    ap.add_argument("--table", default="seed_transfer",
+                    help="table file and label name (tables/<name>.tex, "
+                         "tab:<name>); one per --prefix sharing an --out")
+    ap.add_argument("--live-play", default="",
+                    help="caption words after 'N rounds', e.g. 'opened with a "
+                         "fabricated previous round'")
     ap.add_argument("--out", required=True, help="dir for generated/ files")
     a = ap.parse_args()
 
@@ -207,18 +226,19 @@ def main() -> None:
     # cannot differ yet, so pool it over them
     quantities["MR{}RoundOne"] = rows(
         mcells, a.step, a.principle, lambda c: checked(
-            Sample(c, [s for o in opps for s in strata(c.blocks[o], first_round=True)]),
+            Sample(c, [s for o in opps for s in strata(
+                c.blocks[o], first_round=True, legal_only=False)]),
             sum(c.blocks[o]["per_round"]["round_1"]["p_C"] for o in opps) / len(opps)))
     single = quantities["SR{}"]
 
     # The numbers below describe ONE design; mixed sizes would mislabel it.
-    def design(samples_by_row, what) -> int:
-        sizes = {s.n for samples in samples_by_row.values() for s in samples}
+    def design(cells, what) -> int:
+        sizes = {b["num_episodes"] for c in cells for b in c.blocks.values()}
         if len(sizes) != 1:
             raise SystemExit(f"{what} cells differ in episode count: {sorted(sizes)}")
         return sizes.pop()
-    sr_eps = design(single, "single-round")
-    mr_eps = design(quantities[f"MR{{}}{camel(opps[0])}"], "multi-round")
+    sr_eps = design([c for c in scells if c.step in (None, a.step)], "single-round")
+    mr_eps = design([c for c in mcells if c.step in (None, a.step)], "multi-round")
     sr_states = len(scells[0].first["state_conditioning"])
     mr_rounds = len(mcells[0].first["per_round"])
 
@@ -255,8 +275,13 @@ def main() -> None:
     lines = ["% generated by scripts/analysis/seed_numbers.py -- do not edit"]
     lines += [rf"\newcommand{{\{k}}}{{{v}}}" for k, v in sorted(macros.items())]
     (gen / f"numbers_{p}.tex").write_text("\n".join(lines) + "\n")
-    (out / "seed_intervals.json").write_text(json.dumps(report, indent=1) + "\n")
+    intervals = out / ("seed_intervals.json" if p == "Seeds"
+                       else f"seed_intervals_{p}.json")
+    intervals.write_text(json.dumps(report, indent=1) + "\n")
 
+    live = f" ({a.live_play})" if a.live_play else ""
+    seeds = (rf"trained rows the mean over {n} seeds with the lowest and highest "
+             rf"seed in parentheses" if n > 1 else "as do the trained rows (one seed)")
     short = {"full_contributor": "Full", "free_rider": "Free", "noisy_conditional": "Noisy"}
     heads = " & ".join(short.get(o, o) for o in opps)
     tab = [
@@ -275,16 +300,15 @@ def main() -> None:
             rf"game after {a.step} training steps (protocols in "
             rf"Section~\ref{{sec:games:protocol}}). Single round pools "
             rf"{sr_eps} decisions over the {sr_states} fabricated states, "
-            rf"{mr_rounds} rounds pools all rounds of {mr_eps} episodes against "
+            rf"{mr_rounds} rounds{live} pools all rounds of {mr_eps} episodes against "
             rf"a full contributor, free rider or noisy conditional co-player. "
             rf"Only Prompted has the principle in the prompt. Base and Prompted "
             rf"give the rate with its {LEVEL}\% confidence interval over episodes "
-            rf"in brackets, trained rows the mean over {n} seeds with the lowest "
-            rf"and highest seed in parentheses.}}",
-            r"\label{tab:seed-transfer}", r"\end{table}"]
-    (gen / "tables" / "seed_transfer.tex").write_text("\n".join(tab) + "\n")
+            rf"in brackets, {seeds}.}}",
+            rf"\label{{tab:{a.table.replace('_', '-')}}}", r"\end{table}"]
+    (gen / "tables" / f"{a.table}.tex").write_text("\n".join(tab) + "\n")
     print(f"wrote {gen}/numbers_{p}.tex ({len(macros)} macros), "
-          f"{gen}/tables/seed_transfer.tex, {out}/seed_intervals.json")
+          f"{gen}/tables/{a.table}.tex, {intervals}")
 
 
 if __name__ == "__main__":

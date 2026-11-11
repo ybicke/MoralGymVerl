@@ -8,7 +8,7 @@
 #   cd ~/moralgym-report && git add -A && git commit -m "regen" && git push
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-PY=/usr/bin/python3.11
+PY=${PY:-/usr/bin/python3.11}      # Fir: PY=~/venvs/moralgym/bin/python
 MF="scripts/analysis/make_figures.py"
 
 RUNS=~/logs_verl/runs
@@ -154,16 +154,34 @@ cp $PT/qwen3_8b/classic/multi_round/analysis/generated/numbers_MRPD.tex \
 
 # Paper seed grid (Qwen3-8B, step 200, 3 seeds): PGG transfer macros
 # (\Seeds...) + table, the same cells as the seed-grid / seed-multi figures.
+# Live play is read from the 200-episode groups (2026-11-11) only: *_n200
+# holds base and every seed, *_incontext_n200 the prompted model. Cold
+# opening -> \Seeds... / seed_transfer, fabricated opening -> \SeedsFab... /
+# seed_transfer_fabopen; Olmo-3 (one seed) -> \Olmo... / \OlmoFab...
 T=eval_results/transfer/qwen3_8b/pgg
-$PY scripts/analysis/seed_numbers.py --model Qwen3-8B --step 200 \
-    --single-group $T/single_round_sdpo_seed1 --single-group $T/single_round_sdpo_seed2 \
+O=eval_results/transfer/olmo3_7b/pgg
+FAB="opened with a fabricated previous round"
+QSINGLE="--single-group $T/single_round_sdpo_seed1 --single-group $T/single_round_sdpo_seed2 \
     --single-group $T/single_round_grid --single-group $T/single_round_grpo_v2_seed1 \
-    --single-group eval_results/teacher_signal/qwen3_8b/pgg/single_turn_v3 \
-    --multi-group $T/multi_round --multi-group $T/multi_round_grid \
-    --multi-group $T/multi_round_incontext --multi-group $T/multi_round_sdpo_seed2 \
+    --single-group eval_results/teacher_signal/qwen3_8b/pgg/single_turn_v3"
+OSINGLE="--single-group $O/single_round_sdpo_seed1 --single-group $O/single_round_grpo_v2_seed1 \
+    --single-group eval_results/teacher_signal/olmo3_7b/pgg/deon_gate"
+$PY scripts/analysis/seed_numbers.py --model Qwen3-8B --step 200 $QSINGLE \
+    --multi-group $T/multi_round_n200 --multi-group $T/multi_round_incontext_n200 \
     --out $T/analysis
-cp $T/analysis/generated/numbers_Seeds.tex ~/moralgym-report/generated/
-cp $T/analysis/generated/tables/seed_transfer.tex ~/moralgym-report/generated/tables/
+$PY scripts/analysis/seed_numbers.py --model Qwen3-8B --step 200 $QSINGLE \
+    --multi-group $T/multi_round_fabopen_n200 --multi-group $T/multi_round_fabopen_incontext_n200 \
+    --prefix SeedsFab --table seed_transfer_fabopen --live-play "$FAB" --out $T/analysis
+$PY scripts/analysis/seed_numbers.py --model Olmo-3-7B-Instruct --step 200 $OSINGLE \
+    --multi-group $O/multi_round_n200 --multi-group $O/multi_round_incontext_n200 \
+    --prefix Olmo --table seed_transfer_olmo3_7b --out $O/analysis
+$PY scripts/analysis/seed_numbers.py --model Olmo-3-7B-Instruct --step 200 $OSINGLE \
+    --multi-group $O/multi_round_fabopen_n200 --multi-group $O/multi_round_fabopen_incontext_n200 \
+    --prefix OlmoFab --table seed_transfer_olmo3_7b_fabopen --live-play "$FAB" --out $O/analysis
+cp $T/analysis/generated/numbers_Seeds{,Fab}.tex $O/analysis/generated/numbers_Olmo{,Fab}.tex \
+   ~/moralgym-report/generated/
+cp $T/analysis/generated/tables/seed_transfer{,_fabopen}.tex \
+   $O/analysis/generated/tables/seed_transfer_olmo3_7b{,_fabopen}.tex ~/moralgym-report/generated/tables/
 echo "mirrored seed-grid macros + table"
 
 # ACL live-play figures (acl_main.tex): three-seed Qwen3-8B, the
@@ -171,10 +189,16 @@ echo "mirrored seed-grid macros + table"
 # live in several groups, so they are drawn from --group / --cell lists
 # and mirrored by hand (make_figures mirrors only what main.tex names).
 CMP=eval_results/transfer/comparison/analysis
-$PY $MF seed-multi --group $T/multi_round --group $T/multi_round_grid \
-    --group $T/multi_round_incontext --group $T/multi_round_sdpo_seed2 \
-    --step 200 --model Qwen3-8B --principle deontological \
-    --name qwen3_8b_seeds_s200 --analysis-dir $CMP
+# Both openings for both models at 200 episodes (2026-11-11): cold = round 1
+# without a previous round, fabopen = round 1 after a fabricated one.
+for open in "" _fabopen; do
+    $PY $MF seed-multi --group $T/multi_round${open}_n200 --group $T/multi_round${open}_incontext_n200 \
+        --step 200 --model Qwen3-8B --principle deontological \
+        --name qwen3_8b_seeds${open}_s200 --analysis-dir $CMP
+    $PY $MF seed-multi --group $O/multi_round${open}_n200 --group $O/multi_round${open}_incontext_n200 \
+        --step 200 --seed 1 --model Olmo-3-7B-Instruct --principle deontological \
+        --name olmo3_7b_seed1${open}_s200 --analysis-dir $CMP
+done
 $PY $MF seed-multi --group $T/multi_round --group $T/multi_round_incontext \
     --group $T/multi_round_sdpo_randlabels_seed1 \
     --step 200 --model Qwen3-8B --principle deontological \
@@ -213,11 +237,11 @@ $PY $MF seed-grid --group $T/single_round_sdpo_pdshch_seed1 --group $R --step 20
     --name qwen3_8b_sdpo_pdshch_seed1_s200 --analysis-dir $CMP
 O=eval_results/transfer/olmo3_7b/pgg
 $PY $MF multiround-compare --name olmo3_7b_opening_s200 --analysis-dir $CMP \
-    --cell "base=$O/multi_round_sdpo_seed1/cells/public_goods__none__decision_full__multi_round__base_3714301" \
-    --cell "SDPO=$O/multi_round_sdpo_seed1/cells/public_goods__none__decision_full__multi_round__olmo3_7b_sdpo_pd_deon_tft_200_seed1-global_step_200_3714301" \
-    --cell "+ctx=$O/multi_round_incontext/cells/public_goods__deontological__decision_full__multi_round__base_3636216" \
-    --cell "SDPO fabOpen=$O/multi_round_fabopen/cells/public_goods__none__decision_full__multi_round__olmo3_7b_sdpo_pd_deon_tft_200_seed1-global_step_200_3714299" \
-    --cell "+ctx fabOpen=$O/multi_round_fabopen/cells/public_goods__deontological__decision_full__multi_round__base_3714299"
+    --cell "base=$O/multi_round_n200/cells/public_goods__none_3471103" \
+    --cell "SDPO=$O/multi_round_n200/cells/public_goods__none_3471104" \
+    --cell "+ctx=$O/multi_round_incontext_n200/cells/public_goods__deontological_3471107" \
+    --cell "SDPO fabOpen=$O/multi_round_fabopen_n200/cells/public_goods__none_3471110" \
+    --cell "+ctx fabOpen=$O/multi_round_fabopen_incontext_n200/cells/public_goods__deontological_3471112"
 # Gemma-2-9B live play (ACL app:gemma): SDPO and GRPO seed 1 at step 200
 # against base and base + principle in context.
 G=eval_results/transfer/gemma2_9b/pgg
@@ -231,12 +255,16 @@ done
 # Mixed-game run in live play (ACL app:multigame): SDPO seed 1 at step 200
 # trained on PD only vs on PD + Stag Hunt + Chicken, against base and base
 # + principle in context. The game set keeps them apart (seed_figures.py).
-$PY $MF seed-multi --group $T/multi_round --group $T/multi_round_incontext \
-    --group $T/multi_round_sdpo_seed2 --group $T/multi_round_sdpo_pdshch_seed1 \
-    --step 200 --seed 1 --model Qwen3-8B --principle deontological --channel SDPO \
-    --name qwen3_8b_sdpo_pd_vs_pdshch_seed1_s200 --analysis-dir $CMP
-cp $CMP/figures/pdf/multi_round_qwen3_8b_seeds_s200.pdf \
-   $CMP/figures/pdf/multi_round_qwen3_8b_sdpo_pd_vs_pdshch_seed1_s200.pdf \
+# 200 episodes, both openings (2026-11-11).
+for open in "" _fabopen; do
+    $PY $MF seed-multi --group $T/multi_round${open}_n200 --group $T/multi_round${open}_incontext_n200 \
+        --group $T/multi_round${open}_sdpo_pdshch_seed1_n200 \
+        --step 200 --seed 1 --model Qwen3-8B --principle deontological --channel SDPO \
+        --name qwen3_8b_sdpo_pd_vs_pdshch_seed1${open}_s200 --analysis-dir $CMP
+done
+cp $CMP/figures/pdf/multi_round_qwen3_8b_seeds{,_fabopen}_s200.pdf \
+   $CMP/figures/pdf/multi_round_olmo3_7b_seed1{,_fabopen}_s200.pdf \
+   $CMP/figures/pdf/multi_round_qwen3_8b_sdpo_pd_vs_pdshch_seed1{,_fabopen}_s200.pdf \
    $CMP/figures/pdf/multi_round_gemma2_9b_sdpo{,_grpo}_seed1_s200.pdf \
    $CMP/figures/pdf/multi_round_qwen3_8b_sdpo_randlabels_seed1_s200.pdf \
    $CMP/figures/pdf/multi_round_qwen3_8b_thinking_vs_nothinking_seeds_s200.pdf \

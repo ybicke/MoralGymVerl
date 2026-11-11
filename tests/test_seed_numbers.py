@@ -79,3 +79,16 @@ def test_split_rejects_two_cells_for_one_seed():
         split(cells + [make_cell(1)], [200], "deontological")
     with pytest.raises(SystemExit, match="duplicate cell"):
         split(cells + [make_cell()], [200], "deontological")
+
+
+def test_unparseable_answers_follow_the_cell_conventions():
+    block = {"episode_moves": [{"agent": ["illegal", "C", "C", "D", "D"]},
+                               {"agent": ["C", "D", "D", "D", "D"]},
+                               {"agent": ["illegal"] * 5}]}
+    cell = make_cell()
+    # pooled rate: per episode over parseable answers, all-illegal episode dropped
+    s = sn.Sample(cell, sn.strata(block))
+    assert s.n == 2 and s.est == pytest.approx((2 / 4 + 1 / 5) / 2)
+    # round 1: every answer counts, an unparseable one as not contributed
+    r1 = sn.Sample(cell, sn.strata(block, first_round=True, legal_only=False))
+    assert r1.n == 3 and r1.est == pytest.approx(1 / 3)
