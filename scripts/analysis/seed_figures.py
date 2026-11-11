@@ -35,6 +35,7 @@ from figure_style import (  # noqa: E402
 from transfer_figures import OWN, OWN_STYLE, _k_axes, curve  # noqa: E402
 
 CKPT_RE = re.compile(r"/([^/]+?)(?:_seed(\d+))?/global_step_(\d+)/")
+GAME_SETS = {"pdshch": "PD+SH+CH"}       # training-game sets other than PD
 
 
 class Cell:
@@ -55,6 +56,10 @@ class Cell:
         else:
             f = m.group(1).split("_")
             self.channel = f"{f[2].upper()} {f[4]}" if len(f) >= 6 else f[0]
+            # Training-game set (pd, pdshch, ...): non-PD runs are their own
+            # channel so they never pool with the PD-only seeds.
+            if len(f) >= 6 and f[3] != "pd":
+                self.channel += f" {f[3]}"
             self.seed = int(m.group(2)) if m.group(2) else meta.get("training_seed")
             self.step = int(m.group(3))
 
@@ -140,6 +145,9 @@ def _style(key, runs) -> tuple:
     color = CHANNEL_COLORS.get(ch.split()[0], RUN_COLORS[1])
     steps = sorted(s for c, s in runs if c == ch)
     label = ch.split()[0] + (f" s{step}" if len(steps) > 1 else "")
+    games = GAME_SETS.get(ch.split()[2]) if len(ch.split()) > 2 else None
+    if games:                              # non-PD training games
+        color, label = RUN_COLORS[3], f"{label} {games}"
     from transfer_figures import shade
     if len(steps) > 1:
         color = shade(color, steps.index(step), len(steps))

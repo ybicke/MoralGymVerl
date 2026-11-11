@@ -228,7 +228,15 @@ for spec in "SDPO GRPO|gemma2_9b_sdpo_grpo_seed1_s200" "SDPO|gemma2_9b_sdpo_seed
         --principle deontological $(printf -- '--channel %s ' $chans) \
         --name $name --analysis-dir $CMP
 done
+# Mixed-game run in live play (ACL app:multigame): SDPO seed 1 at step 200
+# trained on PD only vs on PD + Stag Hunt + Chicken, against base and base
+# + principle in context. The game set keeps them apart (seed_figures.py).
+$PY $MF seed-multi --group $T/multi_round --group $T/multi_round_incontext \
+    --group $T/multi_round_sdpo_seed2 --group $T/multi_round_sdpo_pdshch_seed1 \
+    --step 200 --seed 1 --model Qwen3-8B --principle deontological --channel SDPO \
+    --name qwen3_8b_sdpo_pd_vs_pdshch_seed1_s200 --analysis-dir $CMP
 cp $CMP/figures/pdf/multi_round_qwen3_8b_seeds_s200.pdf \
+   $CMP/figures/pdf/multi_round_qwen3_8b_sdpo_pd_vs_pdshch_seed1_s200.pdf \
    $CMP/figures/pdf/multi_round_gemma2_9b_sdpo{,_grpo}_seed1_s200.pdf \
    $CMP/figures/pdf/multi_round_qwen3_8b_sdpo_randlabels_seed1_s200.pdf \
    $CMP/figures/pdf/multi_round_qwen3_8b_thinking_vs_nothinking_seeds_s200.pdf \
