@@ -158,550 +158,550 @@
      "Min": 0,
      "Max": 0,
      "Lo": 0,
-     "Hi": 16,
+     "Hi": 0,
      "cells": [
       {
        "seed": null,
-       "episodes": 20,
-       "rate": 0.0,
-       "se": 4.11,
+       "episodes": 200,
+       "rate": 0.1,
+       "se": 0.1,
        "lo": 0.0,
-       "hi": 16.11,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round/cells/public_goods__none__decision_full__multi_round__base_3714302"
+       "hi": 0.3,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469504"
       }
      ]
     },
     "Prompted": {
-     "Mean": 67,
+     "Mean": 71,
      "Std": 0,
-     "Min": 67,
-     "Max": 67,
-     "Lo": 47,
-     "Hi": 87,
+     "Min": 71,
+     "Max": 71,
+     "Lo": 65,
+     "Hi": 76,
      "cells": [
       {
        "seed": null,
-       "episodes": 20,
-       "rate": 67.0,
-       "se": 10.19,
-       "lo": 47.04,
-       "hi": 86.96,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_incontext/cells/public_goods__deontological__decision_full__multi_round__base_3631384"
+       "episodes": 200,
+       "rate": 70.6,
+       "se": 2.97,
+       "lo": 64.79,
+       "hi": 76.41,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_incontext_n200/cells/public_goods__deontological_3469511"
       }
      ]
     },
     "Grpo": {
-     "Mean": 8,
-     "Std": 7,
-     "Min": 0,
-     "Max": 14,
-     "Lo": 2,
-     "Hi": 15,
+     "Mean": 10,
+     "Std": 2,
+     "Min": 8,
+     "Max": 12,
+     "Lo": 8,
+     "Hi": 13,
      "cells": [
       {
        "seed": 1,
-       "episodes": 20,
-       "rate": 14.0,
-       "se": 6.66,
-       "lo": 0.94,
-       "hi": 27.06,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_grid/cells/public_goods__none__decision_full__multi_round__qwen3_8b_grpo_pd_deon_tft_200_v2_seed1-global_step_200_3714304"
+       "episodes": 200,
+       "rate": 10.9,
+       "se": 1.99,
+       "lo": 7.0,
+       "hi": 14.8,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469508"
       },
       {
        "seed": 2,
-       "episodes": 20,
-       "rate": 11.0,
-       "se": 6.24,
-       "lo": 0.0,
-       "hi": 23.22,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_grid/cells/public_goods__none__decision_full__multi_round__qwen3_8b_grpo_pd_deon_tft_200_v2_seed2-global_step_200_3714304"
+       "episodes": 200,
+       "rate": 12.1,
+       "se": 2.05,
+       "lo": 8.08,
+       "hi": 16.12,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469509"
       },
       {
        "seed": 3,
-       "episodes": 20,
-       "rate": 0.0,
-       "se": 4.11,
-       "lo": 0.0,
-       "hi": 16.11,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_grid/cells/public_goods__none__decision_full__multi_round__qwen3_8b_grpo_pd_deon_tft_200_v2_seed3-global_step_200_3714304"
+       "episodes": 200,
+       "rate": 8.3,
+       "se": 1.76,
+       "lo": 4.86,
+       "hi": 11.74,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469510"
       }
      ]
     },
     "Sdpo": {
-     "Mean": 90,
-     "Std": 7,
-     "Min": 84,
-     "Max": 97,
-     "Lo": 86,
-     "Hi": 95,
+     "Mean": 92,
+     "Std": 1,
+     "Min": 91,
+     "Max": 93,
+     "Lo": 91,
+     "Hi": 94,
      "cells": [
       {
        "seed": 1,
-       "episodes": 20,
-       "rate": 90.0,
-       "se": 2.71,
-       "lo": 84.68,
-       "hi": 95.32,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_sdpo_seed2/cells/public_goods__none__decision_full__multi_round__qwen3_8b_sdpo_pd_deon_tft_200_seed1-global_step_200_3714305"
+       "episodes": 200,
+       "rate": 91.3,
+       "se": 1.56,
+       "lo": 88.25,
+       "hi": 94.35,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469505"
       },
       {
        "seed": 2,
-       "episodes": 20,
-       "rate": 97.0,
-       "se": 1.64,
-       "lo": 93.79,
-       "hi": 100.0,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_sdpo_seed2/cells/public_goods__none__decision_full__multi_round__qwen3_8b_sdpo_pd_deon_tft_300_seed2-global_step_200_3714305"
+       "episodes": 200,
+       "rate": 93.0,
+       "se": 1.31,
+       "lo": 90.44,
+       "hi": 95.56,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469506"
       },
       {
        "seed": 3,
-       "episodes": 20,
-       "rate": 84.0,
-       "se": 5.73,
-       "lo": 72.77,
-       "hi": 95.23,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_grid/cells/public_goods__none__decision_full__multi_round__qwen3_8b_sdpo_pd_deon_tft_200_seed3-global_step_200_3714304"
+       "episodes": 200,
+       "rate": 92.5,
+       "se": 1.33,
+       "lo": 89.9,
+       "hi": 95.1,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469507"
       }
      ]
     }
    },
    "versus": {
     "Grpo - Base": {
-     "Diff": 8,
-     "Lo": -2,
-     "Hi": 19,
-     "Seeds": 0
+     "Diff": 10,
+     "Lo": 8,
+     "Hi": 13,
+     "Seeds": 3
     },
     "Grpo - Prompted": {
-     "Diff": -59,
-     "Lo": -80,
-     "Hi": -38,
+     "Diff": -60,
+     "Lo": -66,
+     "Hi": -54,
      "Seeds": 3
     },
     "Sdpo - Base": {
-     "Diff": 90,
-     "Lo": 81,
-     "Hi": 99,
+     "Diff": 92,
+     "Lo": 91,
+     "Hi": 94,
      "Seeds": 3
     },
     "Sdpo - Prompted": {
-     "Diff": 23,
-     "Lo": 3,
-     "Hi": 44,
-     "Seeds": 2
+     "Diff": 22,
+     "Lo": 16,
+     "Hi": 28,
+     "Seeds": 3
     },
     "Sdpo - Grpo": {
      "Diff": 82,
-     "Lo": 74,
-     "Hi": 90
+     "Lo": 79,
+     "Hi": 85
     }
    }
   },
   "MRFreeRider": {
    "rows": {
     "Base": {
-     "Mean": 8,
+     "Mean": 7,
      "Std": 0,
-     "Min": 8,
-     "Max": 8,
-     "Lo": 0,
-     "Hi": 17,
+     "Min": 7,
+     "Max": 7,
+     "Lo": 5,
+     "Hi": 10,
      "cells": [
       {
        "seed": null,
-       "episodes": 20,
-       "rate": 8.0,
-       "se": 4.68,
-       "lo": 0.0,
-       "hi": 17.17,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round/cells/public_goods__none__decision_full__multi_round__base_3714302"
+       "episodes": 200,
+       "rate": 7.3,
+       "se": 1.31,
+       "lo": 4.74,
+       "hi": 9.86,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469504"
       }
      ]
     },
     "Prompted": {
-     "Mean": 17,
+     "Mean": 27,
      "Std": 0,
-     "Min": 17,
-     "Max": 17,
-     "Lo": 7,
-     "Hi": 27,
+     "Min": 27,
+     "Max": 27,
+     "Lo": 23,
+     "Hi": 31,
      "cells": [
       {
        "seed": null,
-       "episodes": 20,
-       "rate": 17.0,
-       "se": 5.08,
-       "lo": 7.04,
-       "hi": 26.96,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_incontext/cells/public_goods__deontological__decision_full__multi_round__base_3631384"
+       "episodes": 200,
+       "rate": 27.1,
+       "se": 2.01,
+       "lo": 23.16,
+       "hi": 31.04,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_incontext_n200/cells/public_goods__deontological_3469511"
       }
      ]
     },
     "Grpo": {
-     "Mean": 7,
-     "Std": 6,
-     "Min": 2,
-     "Max": 14,
-     "Lo": 2,
-     "Hi": 11,
+     "Mean": 4,
+     "Std": 1,
+     "Min": 3,
+     "Max": 5,
+     "Lo": 3,
+     "Hi": 5,
      "cells": [
       {
        "seed": 1,
-       "episodes": 20,
-       "rate": 14.0,
-       "se": 6.51,
-       "lo": 1.25,
-       "hi": 26.75,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_grid/cells/public_goods__none__decision_full__multi_round__qwen3_8b_grpo_pd_deon_tft_200_v2_seed1-global_step_200_3714304"
+       "episodes": 200,
+       "rate": 3.3,
+       "se": 0.87,
+       "lo": 1.59,
+       "hi": 5.01,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469508"
       },
       {
        "seed": 2,
-       "episodes": 20,
-       "rate": 2.0,
-       "se": 1.38,
-       "lo": 0.0,
-       "hi": 4.7,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_grid/cells/public_goods__none__decision_full__multi_round__qwen3_8b_grpo_pd_deon_tft_200_v2_seed2-global_step_200_3714304"
+       "episodes": 200,
+       "rate": 5.2,
+       "se": 1.0,
+       "lo": 3.23,
+       "hi": 7.17,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469509"
       },
       {
        "seed": 3,
-       "episodes": 20,
-       "rate": 4.0,
-       "se": 2.34,
-       "lo": 0.0,
-       "hi": 8.59,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_grid/cells/public_goods__none__decision_full__multi_round__qwen3_8b_grpo_pd_deon_tft_200_v2_seed3-global_step_200_3714304"
+       "episodes": 200,
+       "rate": 4.1,
+       "se": 0.95,
+       "lo": 2.23,
+       "hi": 5.97,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469510"
       }
      ]
     },
     "Sdpo": {
-     "Mean": 37,
-     "Std": 9,
-     "Min": 26,
-     "Max": 44,
-     "Lo": 27,
-     "Hi": 47,
+     "Mean": 38,
+     "Std": 4,
+     "Min": 34,
+     "Max": 42,
+     "Lo": 35,
+     "Hi": 41,
      "cells": [
       {
        "seed": 1,
-       "episodes": 20,
-       "rate": 44.0,
-       "se": 8.16,
-       "lo": 28.01,
-       "hi": 59.99,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_sdpo_seed2/cells/public_goods__none__decision_full__multi_round__qwen3_8b_sdpo_pd_deon_tft_200_seed1-global_step_200_3714305"
+       "episodes": 200,
+       "rate": 33.9,
+       "se": 2.48,
+       "lo": 29.03,
+       "hi": 38.77,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469505"
       },
       {
        "seed": 2,
-       "episodes": 20,
-       "rate": 40.0,
-       "se": 10.26,
-       "lo": 19.89,
-       "hi": 60.11,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_sdpo_seed2/cells/public_goods__none__decision_full__multi_round__qwen3_8b_sdpo_pd_deon_tft_300_seed2-global_step_200_3714305"
+       "episodes": 200,
+       "rate": 38.3,
+       "se": 2.65,
+       "lo": 33.1,
+       "hi": 43.5,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469506"
       },
       {
        "seed": 3,
-       "episodes": 20,
-       "rate": 26.0,
-       "se": 7.41,
-       "lo": 11.47,
-       "hi": 40.53,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_grid/cells/public_goods__none__decision_full__multi_round__qwen3_8b_sdpo_pd_deon_tft_200_seed3-global_step_200_3714304"
+       "episodes": 200,
+       "rate": 41.6,
+       "se": 2.8,
+       "lo": 36.11,
+       "hi": 47.09,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469507"
       }
      ]
     }
    },
    "versus": {
     "Grpo - Base": {
-     "Diff": -1,
-     "Lo": -12,
-     "Hi": 9,
-     "Seeds": 0
-    },
-    "Grpo - Prompted": {
-     "Diff": -10,
-     "Lo": -21,
-     "Hi": 1,
+     "Diff": -3,
+     "Lo": -6,
+     "Hi": 0,
      "Seeds": 2
     },
+    "Grpo - Prompted": {
+     "Diff": -23,
+     "Lo": -27,
+     "Hi": -19,
+     "Seeds": 3
+    },
     "Sdpo - Base": {
-     "Diff": 29,
-     "Lo": 15,
-     "Hi": 42,
+     "Diff": 31,
+     "Lo": 27,
+     "Hi": 35,
      "Seeds": 3
     },
     "Sdpo - Prompted": {
-     "Diff": 20,
+     "Diff": 11,
      "Lo": 6,
-     "Hi": 34,
-     "Seeds": 2
+     "Hi": 16,
+     "Seeds": 3
     },
     "Sdpo - Grpo": {
-     "Diff": 30,
-     "Lo": 19,
-     "Hi": 41
+     "Diff": 34,
+     "Lo": 31,
+     "Hi": 37
     }
    }
   },
   "MRNoisyConditional": {
    "rows": {
     "Base": {
-     "Mean": 4,
+     "Mean": 2,
      "Std": 0,
-     "Min": 4,
-     "Max": 4,
-     "Lo": 0,
-     "Hi": 9,
+     "Min": 2,
+     "Max": 2,
+     "Lo": 1,
+     "Hi": 4,
      "cells": [
       {
        "seed": null,
-       "episodes": 20,
-       "rate": 4.0,
-       "se": 2.34,
-       "lo": 0.0,
-       "hi": 8.59,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round/cells/public_goods__none__decision_full__multi_round__base_3714302"
+       "episodes": 200,
+       "rate": 2.4,
+       "se": 0.58,
+       "lo": 1.27,
+       "hi": 3.53,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469504"
       }
      ]
     },
     "Prompted": {
-     "Mean": 62,
+     "Mean": 60,
      "Std": 0,
-     "Min": 62,
-     "Max": 62,
-     "Lo": 43,
-     "Hi": 81,
+     "Min": 60,
+     "Max": 60,
+     "Lo": 54,
+     "Hi": 66,
      "cells": [
       {
        "seed": null,
-       "episodes": 20,
-       "rate": 62.0,
-       "se": 9.61,
-       "lo": 43.16,
-       "hi": 80.84,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_incontext/cells/public_goods__deontological__decision_full__multi_round__base_3631384"
+       "episodes": 200,
+       "rate": 60.1,
+       "se": 2.95,
+       "lo": 54.33,
+       "hi": 65.87,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_incontext_n200/cells/public_goods__deontological_3469511"
       }
      ]
     },
     "Grpo": {
-     "Mean": 8,
-     "Std": 7,
-     "Min": 3,
-     "Max": 16,
-     "Lo": 3,
-     "Hi": 13,
+     "Mean": 6,
+     "Std": 1,
+     "Min": 5,
+     "Max": 7,
+     "Lo": 4,
+     "Hi": 7,
      "cells": [
       {
        "seed": 1,
-       "episodes": 20,
-       "rate": 5.0,
-       "se": 3.52,
-       "lo": 0.0,
-       "hi": 11.89,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_grid/cells/public_goods__none__decision_full__multi_round__qwen3_8b_grpo_pd_deon_tft_200_v2_seed1-global_step_200_3714304"
+       "episodes": 200,
+       "rate": 4.8,
+       "se": 1.18,
+       "lo": 2.49,
+       "hi": 7.11,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469508"
       },
       {
        "seed": 2,
-       "episodes": 20,
-       "rate": 16.0,
-       "se": 7.05,
-       "lo": 2.18,
-       "hi": 29.82,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_grid/cells/public_goods__none__decision_full__multi_round__qwen3_8b_grpo_pd_deon_tft_200_v2_seed2-global_step_200_3714304"
+       "episodes": 200,
+       "rate": 7.2,
+       "se": 1.33,
+       "lo": 4.59,
+       "hi": 9.81,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469509"
       },
       {
        "seed": 3,
-       "episodes": 20,
-       "rate": 3.0,
-       "se": 1.64,
-       "lo": 0.0,
-       "hi": 6.21,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_grid/cells/public_goods__none__decision_full__multi_round__qwen3_8b_grpo_pd_deon_tft_200_v2_seed3-global_step_200_3714304"
+       "episodes": 200,
+       "rate": 5.1,
+       "se": 1.2,
+       "lo": 2.74,
+       "hi": 7.46,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469510"
       }
      ]
     },
     "Sdpo": {
-     "Mean": 74,
-     "Std": 4,
-     "Min": 71,
-     "Max": 78,
-     "Lo": 64,
-     "Hi": 84,
+     "Mean": 80,
+     "Std": 3,
+     "Min": 77,
+     "Max": 84,
+     "Lo": 77,
+     "Hi": 83,
      "cells": [
       {
        "seed": 1,
-       "episodes": 20,
-       "rate": 74.0,
-       "se": 9.53,
-       "lo": 55.33,
-       "hi": 92.67,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_sdpo_seed2/cells/public_goods__none__decision_full__multi_round__qwen3_8b_sdpo_pd_deon_tft_200_seed1-global_step_200_3714305"
+       "episodes": 200,
+       "rate": 83.6,
+       "se": 2.18,
+       "lo": 79.33,
+       "hi": 87.87,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469505"
       },
       {
        "seed": 2,
-       "episodes": 20,
-       "rate": 78.0,
-       "se": 7.38,
-       "lo": 63.53,
-       "hi": 92.47,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_sdpo_seed2/cells/public_goods__none__decision_full__multi_round__qwen3_8b_sdpo_pd_deon_tft_300_seed2-global_step_200_3714305"
+       "episodes": 200,
+       "rate": 78.6,
+       "se": 2.42,
+       "lo": 73.86,
+       "hi": 83.34,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469506"
       },
       {
        "seed": 3,
-       "episodes": 20,
-       "rate": 71.0,
-       "se": 9.23,
-       "lo": 52.91,
-       "hi": 89.09,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_grid/cells/public_goods__none__decision_full__multi_round__qwen3_8b_sdpo_pd_deon_tft_200_seed3-global_step_200_3714304"
+       "episodes": 200,
+       "rate": 77.3,
+       "se": 2.5,
+       "lo": 72.39,
+       "hi": 82.21,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469507"
       }
      ]
     }
    },
    "versus": {
     "Grpo - Base": {
-     "Diff": 4,
-     "Lo": -3,
-     "Hi": 11,
-     "Seeds": 0
+     "Diff": 3,
+     "Lo": 1,
+     "Hi": 5,
+     "Seeds": 2
     },
     "Grpo - Prompted": {
      "Diff": -54,
-     "Lo": -74,
-     "Hi": -34,
+     "Lo": -60,
+     "Hi": -48,
      "Seeds": 3
     },
     "Sdpo - Base": {
-     "Diff": 70,
-     "Lo": 59,
-     "Hi": 81,
+     "Diff": 77,
+     "Lo": 75,
+     "Hi": 80,
      "Seeds": 3
     },
     "Sdpo - Prompted": {
-     "Diff": 12,
-     "Lo": -9,
-     "Hi": 34,
-     "Seeds": 0
+     "Diff": 20,
+     "Lo": 13,
+     "Hi": 26,
+     "Seeds": 3
     },
     "Sdpo - Grpo": {
-     "Diff": 66,
-     "Lo": 55,
-     "Hi": 78
+     "Diff": 74,
+     "Lo": 71,
+     "Hi": 77
     }
    }
   },
   "MRRoundOne": {
    "rows": {
     "Base": {
-     "Mean": 0,
+     "Mean": 1,
      "Std": 0,
-     "Min": 0,
-     "Max": 0,
+     "Min": 1,
+     "Max": 1,
      "Lo": 0,
-     "Hi": 6,
+     "Hi": 2,
      "cells": [
       {
        "seed": null,
-       "episodes": 60,
-       "rate": 0.0,
-       "se": 1.54,
-       "lo": 0.0,
-       "hi": 6.02,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round/cells/public_goods__none__decision_full__multi_round__base_3714302"
+       "episodes": 600,
+       "rate": 0.83,
+       "se": 0.37,
+       "lo": 0.11,
+       "hi": 1.56,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469504"
       }
      ]
     },
     "Prompted": {
-     "Mean": 65,
+     "Mean": 66,
      "Std": 0,
-     "Min": 65,
-     "Max": 65,
-     "Lo": 53,
-     "Hi": 77,
+     "Min": 66,
+     "Max": 66,
+     "Lo": 63,
+     "Hi": 70,
      "cells": [
       {
        "seed": null,
-       "episodes": 60,
-       "rate": 65.0,
-       "se": 6.29,
-       "lo": 52.66,
-       "hi": 77.34,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_incontext/cells/public_goods__deontological__decision_full__multi_round__base_3631384"
+       "episodes": 600,
+       "rate": 66.33,
+       "se": 1.92,
+       "lo": 62.56,
+       "hi": 70.1,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_incontext_n200/cells/public_goods__deontological_3469511"
       }
      ]
     },
     "Grpo": {
-     "Mean": 6,
-     "Std": 5,
-     "Min": 3,
-     "Max": 12,
-     "Lo": 3,
-     "Hi": 10,
+     "Mean": 7,
+     "Std": 1,
+     "Min": 6,
+     "Max": 8,
+     "Lo": 5,
+     "Hi": 8,
      "cells": [
       {
        "seed": 1,
-       "episodes": 60,
-       "rate": 3.33,
-       "se": 2.36,
-       "lo": 0.0,
-       "hi": 7.95,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_grid/cells/public_goods__none__decision_full__multi_round__qwen3_8b_grpo_pd_deon_tft_200_v2_seed1-global_step_200_3714304"
+       "episodes": 600,
+       "rate": 5.67,
+       "se": 0.94,
+       "lo": 3.81,
+       "hi": 7.52,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469508"
       },
       {
        "seed": 2,
-       "episodes": 60,
-       "rate": 11.67,
-       "se": 4.24,
-       "lo": 3.36,
-       "hi": 19.98,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_grid/cells/public_goods__none__decision_full__multi_round__qwen3_8b_grpo_pd_deon_tft_200_v2_seed2-global_step_200_3714304"
+       "episodes": 600,
+       "rate": 7.67,
+       "se": 1.09,
+       "lo": 5.53,
+       "hi": 9.8,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469509"
       },
       {
        "seed": 3,
-       "episodes": 60,
-       "rate": 3.33,
-       "se": 2.36,
-       "lo": 0.0,
-       "hi": 7.95,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_grid/cells/public_goods__none__decision_full__multi_round__qwen3_8b_grpo_pd_deon_tft_200_v2_seed3-global_step_200_3714304"
+       "episodes": 600,
+       "rate": 6.33,
+       "se": 1.0,
+       "lo": 4.38,
+       "hi": 8.29,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469510"
       }
      ]
     },
     "Sdpo": {
-     "Mean": 68,
-     "Std": 5,
-     "Min": 62,
-     "Max": 72,
-     "Lo": 61,
-     "Hi": 75,
+     "Mean": 76,
+     "Std": 1,
+     "Min": 75,
+     "Max": 77,
+     "Lo": 74,
+     "Hi": 78,
      "cells": [
       {
        "seed": 1,
-       "episodes": 60,
-       "rate": 71.67,
-       "se": 5.74,
-       "lo": 60.43,
-       "hi": 82.91,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_sdpo_seed2/cells/public_goods__none__decision_full__multi_round__qwen3_8b_sdpo_pd_deon_tft_200_seed1-global_step_200_3714305"
+       "episodes": 600,
+       "rate": 76.0,
+       "se": 1.75,
+       "lo": 72.58,
+       "hi": 79.42,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469505"
       },
       {
        "seed": 2,
-       "episodes": 60,
-       "rate": 70.0,
-       "se": 5.9,
-       "lo": 58.44,
-       "hi": 81.56,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_sdpo_seed2/cells/public_goods__none__decision_full__multi_round__qwen3_8b_sdpo_pd_deon_tft_300_seed2-global_step_200_3714305"
+       "episodes": 600,
+       "rate": 76.67,
+       "se": 1.73,
+       "lo": 73.27,
+       "hi": 80.06,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469506"
       },
       {
        "seed": 3,
-       "episodes": 60,
-       "rate": 61.67,
-       "se": 6.39,
-       "lo": 49.15,
-       "hi": 74.18,
-       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_grid/cells/public_goods__none__decision_full__multi_round__qwen3_8b_sdpo_pd_deon_tft_200_seed3-global_step_200_3714304"
+       "episodes": 600,
+       "rate": 75.17,
+       "se": 1.77,
+       "lo": 71.71,
+       "hi": 78.63,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_n200/cells/public_goods__none_3469507"
       }
      ]
     }
@@ -709,32 +709,32 @@
    "versus": {
     "Grpo - Base": {
      "Diff": 6,
-     "Lo": 1,
-     "Hi": 11,
-     "Seeds": 1
+     "Lo": 4,
+     "Hi": 7,
+     "Seeds": 3
     },
     "Grpo - Prompted": {
-     "Diff": -59,
-     "Lo": -72,
-     "Hi": -46,
+     "Diff": -60,
+     "Lo": -64,
+     "Hi": -56,
      "Seeds": 3
     },
     "Sdpo - Base": {
-     "Diff": 68,
-     "Lo": 60,
-     "Hi": 75,
+     "Diff": 75,
+     "Lo": 73,
+     "Hi": 77,
      "Seeds": 3
     },
     "Sdpo - Prompted": {
-     "Diff": 3,
-     "Lo": -11,
-     "Hi": 17,
-     "Seeds": 0
+     "Diff": 10,
+     "Lo": 5,
+     "Hi": 14,
+     "Seeds": 3
     },
     "Sdpo - Grpo": {
-     "Diff": 62,
-     "Lo": 54,
-     "Hi": 69
+     "Diff": 69,
+     "Lo": 67,
+     "Hi": 72
     }
    }
   }

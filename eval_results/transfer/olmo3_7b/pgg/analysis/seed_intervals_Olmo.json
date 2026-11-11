@@ -1,0 +1,562 @@
+{
+ "interval": "normal over episodes, Wilson without spread",
+ "level": 95,
+ "step": 200,
+ "quantities": {
+  "SR": {
+   "rows": {
+    "Base": {
+     "Mean": 3,
+     "Std": 0,
+     "Min": 3,
+     "Max": 3,
+     "Lo": 1,
+     "Hi": 5,
+     "cells": [
+      {
+       "seed": null,
+       "episodes": 383,
+       "rate": 3.13,
+       "se": 0.88,
+       "lo": 1.4,
+       "hi": 4.86,
+       "path": "eval_results/teacher_signal/olmo3_7b/pgg/deon_gate/cells/public_goods__none__decision_full__single_round_3560756"
+      }
+     ]
+    },
+    "Prompted": {
+     "Mean": 62,
+     "Std": 0,
+     "Min": 62,
+     "Max": 62,
+     "Lo": 59,
+     "Hi": 65,
+     "cells": [
+      {
+       "seed": null,
+       "episodes": 386,
+       "rate": 61.92,
+       "se": 1.7,
+       "lo": 58.59,
+       "hi": 65.25,
+       "path": "eval_results/teacher_signal/olmo3_7b/pgg/deon_gate/cells/public_goods__deontological__decision_full__single_round_3560756"
+      }
+     ]
+    },
+    "Grpo": {
+     "Mean": 7,
+     "Std": 0,
+     "Min": 7,
+     "Max": 7,
+     "Lo": 4,
+     "Hi": 9,
+     "cells": [
+      {
+       "seed": 1,
+       "episodes": 379,
+       "rate": 6.86,
+       "se": 1.24,
+       "lo": 4.44,
+       "hi": 9.28,
+       "path": "eval_results/transfer/olmo3_7b/pgg/single_round_grpo_v2_seed1/cells/public_goods__none__decision_full__single_round__olmo3_7b_grpo_pd_deon_tft_200_v2_seed1-global_step_200_3719948"
+      }
+     ]
+    },
+    "Sdpo": {
+     "Mean": 58,
+     "Std": 0,
+     "Min": 58,
+     "Max": 58,
+     "Lo": 55,
+     "Hi": 62,
+     "cells": [
+      {
+       "seed": 1,
+       "episodes": 391,
+       "rate": 58.31,
+       "se": 1.71,
+       "lo": 54.96,
+       "hi": 61.66,
+       "path": "eval_results/transfer/olmo3_7b/pgg/single_round_sdpo_seed1/cells/public_goods__none__decision_full__single_round__olmo3_7b_sdpo_pd_deon_tft_200_seed1-global_step_200_3719948"
+      }
+     ]
+    }
+   },
+   "versus": {
+    "Grpo - Base": {
+     "Diff": 4,
+     "Lo": 1,
+     "Hi": 7,
+     "Seeds": 1
+    },
+    "Grpo - Prompted": {
+     "Diff": -55,
+     "Lo": -59,
+     "Hi": -51,
+     "Seeds": 1
+    },
+    "Sdpo - Base": {
+     "Diff": 55,
+     "Lo": 51,
+     "Hi": 59,
+     "Seeds": 1
+    },
+    "Sdpo - Prompted": {
+     "Diff": -4,
+     "Lo": -8,
+     "Hi": 1,
+     "Seeds": 0
+    },
+    "Sdpo - Grpo": {
+     "Diff": 51,
+     "Lo": 47,
+     "Hi": 56
+    }
+   }
+  },
+  "MRFullContributor": {
+   "rows": {
+    "Base": {
+     "Mean": 4,
+     "Std": 0,
+     "Min": 4,
+     "Max": 4,
+     "Lo": 2,
+     "Hi": 7,
+     "cells": [
+      {
+       "seed": null,
+       "episodes": 200,
+       "rate": 4.1,
+       "se": 1.31,
+       "lo": 1.53,
+       "hi": 6.67,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200/cells/public_goods__none_3471103"
+      }
+     ]
+    },
+    "Prompted": {
+     "Mean": 56,
+     "Std": 0,
+     "Min": 56,
+     "Max": 56,
+     "Lo": 50,
+     "Hi": 62,
+     "cells": [
+      {
+       "seed": null,
+       "episodes": 200,
+       "rate": 56.05,
+       "se": 3.0,
+       "lo": 50.16,
+       "hi": 61.94,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_incontext_n200/cells/public_goods__deontological_3471107"
+      }
+     ]
+    },
+    "Grpo": {
+     "Mean": 16,
+     "Std": 0,
+     "Min": 16,
+     "Max": 16,
+     "Lo": 12,
+     "Hi": 21,
+     "cells": [
+      {
+       "seed": 1,
+       "episodes": 200,
+       "rate": 16.38,
+       "se": 2.32,
+       "lo": 11.83,
+       "hi": 20.92,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200/cells/public_goods__none_3471105"
+      }
+     ]
+    },
+    "Sdpo": {
+     "Mean": 23,
+     "Std": 0,
+     "Min": 23,
+     "Max": 23,
+     "Lo": 17,
+     "Hi": 28,
+     "cells": [
+      {
+       "seed": 1,
+       "episodes": 200,
+       "rate": 22.9,
+       "se": 2.76,
+       "lo": 17.48,
+       "hi": 28.32,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200/cells/public_goods__none_3471104"
+      }
+     ]
+    }
+   },
+   "versus": {
+    "Grpo - Base": {
+     "Diff": 12,
+     "Lo": 7,
+     "Hi": 17,
+     "Seeds": 1
+    },
+    "Grpo - Prompted": {
+     "Diff": -40,
+     "Lo": -47,
+     "Hi": -32,
+     "Seeds": 1
+    },
+    "Sdpo - Base": {
+     "Diff": 19,
+     "Lo": 13,
+     "Hi": 25,
+     "Seeds": 1
+    },
+    "Sdpo - Prompted": {
+     "Diff": -33,
+     "Lo": -41,
+     "Hi": -25,
+     "Seeds": 1
+    },
+    "Sdpo - Grpo": {
+     "Diff": 7,
+     "Lo": -1,
+     "Hi": 14
+    }
+   }
+  },
+  "MRFreeRider": {
+   "rows": {
+    "Base": {
+     "Mean": 2,
+     "Std": 0,
+     "Min": 2,
+     "Max": 2,
+     "Lo": 1,
+     "Hi": 3,
+     "cells": [
+      {
+       "seed": null,
+       "episodes": 200,
+       "rate": 2.05,
+       "se": 0.58,
+       "lo": 0.92,
+       "hi": 3.18,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200/cells/public_goods__none_3471103"
+      }
+     ]
+    },
+    "Prompted": {
+     "Mean": 22,
+     "Std": 0,
+     "Min": 22,
+     "Max": 22,
+     "Lo": 19,
+     "Hi": 25,
+     "cells": [
+      {
+       "seed": null,
+       "episodes": 200,
+       "rate": 21.88,
+       "se": 1.68,
+       "lo": 18.58,
+       "hi": 25.17,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_incontext_n200/cells/public_goods__deontological_3471107"
+      }
+     ]
+    },
+    "Grpo": {
+     "Mean": 3,
+     "Std": 0,
+     "Min": 3,
+     "Max": 3,
+     "Lo": 2,
+     "Hi": 4,
+     "cells": [
+      {
+       "seed": 1,
+       "episodes": 200,
+       "rate": 2.83,
+       "se": 0.66,
+       "lo": 1.54,
+       "hi": 4.11,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200/cells/public_goods__none_3471105"
+      }
+     ]
+    },
+    "Sdpo": {
+     "Mean": 6,
+     "Std": 0,
+     "Min": 6,
+     "Max": 6,
+     "Lo": 4,
+     "Hi": 9,
+     "cells": [
+      {
+       "seed": 1,
+       "episodes": 200,
+       "rate": 6.25,
+       "se": 1.28,
+       "lo": 3.73,
+       "hi": 8.77,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200/cells/public_goods__none_3471104"
+      }
+     ]
+    }
+   },
+   "versus": {
+    "Grpo - Base": {
+     "Diff": 1,
+     "Lo": -1,
+     "Hi": 2,
+     "Seeds": 0
+    },
+    "Grpo - Prompted": {
+     "Diff": -19,
+     "Lo": -23,
+     "Hi": -16,
+     "Seeds": 1
+    },
+    "Sdpo - Base": {
+     "Diff": 4,
+     "Lo": 1,
+     "Hi": 7,
+     "Seeds": 1
+    },
+    "Sdpo - Prompted": {
+     "Diff": -16,
+     "Lo": -20,
+     "Hi": -11,
+     "Seeds": 1
+    },
+    "Sdpo - Grpo": {
+     "Diff": 3,
+     "Lo": 1,
+     "Hi": 6
+    }
+   }
+  },
+  "MRNoisyConditional": {
+   "rows": {
+    "Base": {
+     "Mean": 2,
+     "Std": 0,
+     "Min": 2,
+     "Max": 2,
+     "Lo": 1,
+     "Hi": 4,
+     "cells": [
+      {
+       "seed": null,
+       "episodes": 200,
+       "rate": 2.1,
+       "se": 0.74,
+       "lo": 0.65,
+       "hi": 3.55,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200/cells/public_goods__none_3471103"
+      }
+     ]
+    },
+    "Prompted": {
+     "Mean": 37,
+     "Std": 0,
+     "Min": 37,
+     "Max": 37,
+     "Lo": 32,
+     "Hi": 42,
+     "cells": [
+      {
+       "seed": null,
+       "episodes": 200,
+       "rate": 37.39,
+       "se": 2.51,
+       "lo": 32.46,
+       "hi": 42.32,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_incontext_n200/cells/public_goods__deontological_3471107"
+      }
+     ]
+    },
+    "Grpo": {
+     "Mean": 9,
+     "Std": 0,
+     "Min": 9,
+     "Max": 9,
+     "Lo": 6,
+     "Hi": 12,
+     "cells": [
+      {
+       "seed": 1,
+       "episodes": 200,
+       "rate": 8.7,
+       "se": 1.44,
+       "lo": 5.88,
+       "hi": 11.52,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200/cells/public_goods__none_3471105"
+      }
+     ]
+    },
+    "Sdpo": {
+     "Mean": 13,
+     "Std": 0,
+     "Min": 13,
+     "Max": 13,
+     "Lo": 10,
+     "Hi": 17,
+     "cells": [
+      {
+       "seed": 1,
+       "episodes": 200,
+       "rate": 13.3,
+       "se": 1.93,
+       "lo": 9.52,
+       "hi": 17.08,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200/cells/public_goods__none_3471104"
+      }
+     ]
+    }
+   },
+   "versus": {
+    "Grpo - Base": {
+     "Diff": 7,
+     "Lo": 3,
+     "Hi": 10,
+     "Seeds": 1
+    },
+    "Grpo - Prompted": {
+     "Diff": -29,
+     "Lo": -34,
+     "Hi": -23,
+     "Seeds": 1
+    },
+    "Sdpo - Base": {
+     "Diff": 11,
+     "Lo": 7,
+     "Hi": 15,
+     "Seeds": 1
+    },
+    "Sdpo - Prompted": {
+     "Diff": -24,
+     "Lo": -30,
+     "Hi": -18,
+     "Seeds": 1
+    },
+    "Sdpo - Grpo": {
+     "Diff": 5,
+     "Lo": 0,
+     "Hi": 9
+    }
+   }
+  },
+  "MRRoundOne": {
+   "rows": {
+    "Base": {
+     "Mean": 2,
+     "Std": 0,
+     "Min": 2,
+     "Max": 2,
+     "Lo": 1,
+     "Hi": 3,
+     "cells": [
+      {
+       "seed": null,
+       "episodes": 600,
+       "rate": 1.83,
+       "se": 0.55,
+       "lo": 0.76,
+       "hi": 2.91,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200/cells/public_goods__none_3471103"
+      }
+     ]
+    },
+    "Prompted": {
+     "Mean": 61,
+     "Std": 0,
+     "Min": 61,
+     "Max": 61,
+     "Lo": 57,
+     "Hi": 65,
+     "cells": [
+      {
+       "seed": null,
+       "episodes": 600,
+       "rate": 61.0,
+       "se": 1.99,
+       "lo": 57.1,
+       "hi": 64.9,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_incontext_n200/cells/public_goods__deontological_3471107"
+      }
+     ]
+    },
+    "Grpo": {
+     "Mean": 3,
+     "Std": 0,
+     "Min": 3,
+     "Max": 3,
+     "Lo": 1,
+     "Hi": 4,
+     "cells": [
+      {
+       "seed": 1,
+       "episodes": 600,
+       "rate": 2.5,
+       "se": 0.64,
+       "lo": 1.25,
+       "hi": 3.75,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200/cells/public_goods__none_3471105"
+      }
+     ]
+    },
+    "Sdpo": {
+     "Mean": 9,
+     "Std": 0,
+     "Min": 9,
+     "Max": 9,
+     "Lo": 6,
+     "Hi": 11,
+     "cells": [
+      {
+       "seed": 1,
+       "episodes": 600,
+       "rate": 8.5,
+       "se": 1.14,
+       "lo": 6.26,
+       "hi": 10.74,
+       "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_n200/cells/public_goods__none_3471104"
+      }
+     ]
+    }
+   },
+   "versus": {
+    "Grpo - Base": {
+     "Diff": 1,
+     "Lo": -1,
+     "Hi": 2,
+     "Seeds": 0
+    },
+    "Grpo - Prompted": {
+     "Diff": -59,
+     "Lo": -63,
+     "Hi": -54,
+     "Seeds": 1
+    },
+    "Sdpo - Base": {
+     "Diff": 7,
+     "Lo": 4,
+     "Hi": 9,
+     "Seeds": 1
+    },
+    "Sdpo - Prompted": {
+     "Diff": -53,
+     "Lo": -57,
+     "Hi": -48,
+     "Seeds": 1
+    },
+    "Sdpo - Grpo": {
+     "Diff": 6,
+     "Lo": 3,
+     "Hi": 9
+    }
+   }
+  }
+ }
+}

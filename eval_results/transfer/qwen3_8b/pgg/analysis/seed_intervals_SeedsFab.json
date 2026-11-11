@@ -1,0 +1,742 @@
+{
+ "interval": "normal over episodes, Wilson without spread",
+ "level": 95,
+ "step": 200,
+ "quantities": {
+  "SR": {
+   "rows": {
+    "Base": {
+     "Mean": 1,
+     "Std": 0,
+     "Min": 1,
+     "Max": 1,
+     "Lo": 0,
+     "Hi": 2,
+     "cells": [
+      {
+       "seed": null,
+       "episodes": 400,
+       "rate": 1.0,
+       "se": 0.5,
+       "lo": 0.03,
+       "hi": 1.97,
+       "path": "eval_results/teacher_signal/qwen3_8b/pgg/single_turn_v3/cells/public_goods__none__decision_full__single_round_3185343"
+      }
+     ]
+    },
+    "Prompted": {
+     "Mean": 51,
+     "Std": 0,
+     "Min": 51,
+     "Max": 51,
+     "Lo": 47,
+     "Hi": 55,
+     "cells": [
+      {
+       "seed": null,
+       "episodes": 400,
+       "rate": 50.75,
+       "se": 2.03,
+       "lo": 46.78,
+       "hi": 54.72,
+       "path": "eval_results/teacher_signal/qwen3_8b/pgg/single_turn_v3/cells/public_goods__deontological__decision_full__single_round_3185343"
+      }
+     ]
+    },
+    "Grpo": {
+     "Mean": 3,
+     "Std": 1,
+     "Min": 2,
+     "Max": 4,
+     "Lo": 2,
+     "Hi": 4,
+     "cells": [
+      {
+       "seed": 1,
+       "episodes": 400,
+       "rate": 4.0,
+       "se": 0.89,
+       "lo": 2.25,
+       "hi": 5.75,
+       "path": "eval_results/transfer/qwen3_8b/pgg/single_round_grpo_v2_seed1/cells/public_goods__none__decision_full__single_round__qwen3_8b_grpo_pd_deon_tft_200_v2_seed1-global_step_200_3719945"
+      },
+      {
+       "seed": 2,
+       "episodes": 400,
+       "rate": 4.0,
+       "se": 0.86,
+       "lo": 2.32,
+       "hi": 5.68,
+       "path": "eval_results/transfer/qwen3_8b/pgg/single_round_grid/cells/public_goods__none__decision_full__single_round__qwen3_8b_grpo_pd_deon_tft_200_v2_seed2-global_step_200_3719944"
+      },
+      {
+       "seed": 3,
+       "episodes": 400,
+       "rate": 2.25,
+       "se": 0.73,
+       "lo": 0.82,
+       "hi": 3.68,
+       "path": "eval_results/transfer/qwen3_8b/pgg/single_round_grid/cells/public_goods__none__decision_full__single_round__qwen3_8b_grpo_pd_deon_tft_200_v2_seed3-global_step_200_3719944"
+      }
+     ]
+    },
+    "Sdpo": {
+     "Mean": 63,
+     "Std": 2,
+     "Min": 62,
+     "Max": 65,
+     "Lo": 61,
+     "Hi": 65,
+     "cells": [
+      {
+       "seed": 1,
+       "episodes": 400,
+       "rate": 64.5,
+       "se": 1.89,
+       "lo": 60.8,
+       "hi": 68.2,
+       "path": "eval_results/transfer/qwen3_8b/pgg/single_round_sdpo_seed1/cells/public_goods__none__decision_full__single_round__qwen3_8b_sdpo_pd_deon_tft_200_seed1-global_step_200_3719946"
+      },
+      {
+       "seed": 2,
+       "episodes": 400,
+       "rate": 61.5,
+       "se": 1.88,
+       "lo": 57.82,
+       "hi": 65.18,
+       "path": "eval_results/transfer/qwen3_8b/pgg/single_round_sdpo_seed2/cells/public_goods__none__decision_full__single_round__qwen3_8b_sdpo_pd_deon_tft_300_seed2-global_step_200_3719947"
+      },
+      {
+       "seed": 3,
+       "episodes": 400,
+       "rate": 64.0,
+       "se": 1.88,
+       "lo": 60.31,
+       "hi": 67.69,
+       "path": "eval_results/transfer/qwen3_8b/pgg/single_round_grid/cells/public_goods__none__decision_full__single_round__qwen3_8b_sdpo_pd_deon_tft_200_seed3-global_step_200_3719944"
+      }
+     ]
+    }
+   },
+   "versus": {
+    "Grpo - Base": {
+     "Diff": 2,
+     "Lo": 1,
+     "Hi": 4,
+     "Seeds": 2
+    },
+    "Grpo - Prompted": {
+     "Diff": -47,
+     "Lo": -51,
+     "Hi": -43,
+     "Seeds": 3
+    },
+    "Sdpo - Base": {
+     "Diff": 62,
+     "Lo": 60,
+     "Hi": 65,
+     "Seeds": 3
+    },
+    "Sdpo - Prompted": {
+     "Diff": 13,
+     "Lo": 8,
+     "Hi": 17,
+     "Seeds": 3
+    },
+    "Sdpo - Grpo": {
+     "Diff": 60,
+     "Lo": 58,
+     "Hi": 62
+    }
+   }
+  },
+  "MRFullContributor": {
+   "rows": {
+    "Base": {
+     "Mean": 1,
+     "Std": 0,
+     "Min": 1,
+     "Max": 1,
+     "Lo": 0,
+     "Hi": 2,
+     "cells": [
+      {
+       "seed": null,
+       "episodes": 200,
+       "rate": 0.9,
+       "se": 0.55,
+       "lo": 0.0,
+       "hi": 1.99,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469512"
+      }
+     ]
+    },
+    "Prompted": {
+     "Mean": 63,
+     "Std": 0,
+     "Min": 63,
+     "Max": 63,
+     "Lo": 57,
+     "Hi": 69,
+     "cells": [
+      {
+       "seed": null,
+       "episodes": 200,
+       "rate": 63.1,
+       "se": 3.22,
+       "lo": 56.79,
+       "hi": 69.41,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_incontext_n200/cells/public_goods__deontological_3469519"
+      }
+     ]
+    },
+    "Grpo": {
+     "Mean": 7,
+     "Std": 2,
+     "Min": 5,
+     "Max": 9,
+     "Lo": 5,
+     "Hi": 9,
+     "cells": [
+      {
+       "seed": 1,
+       "episodes": 200,
+       "rate": 7.9,
+       "se": 1.81,
+       "lo": 4.35,
+       "hi": 11.45,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469516"
+      },
+      {
+       "seed": 2,
+       "episodes": 200,
+       "rate": 8.7,
+       "se": 1.93,
+       "lo": 4.92,
+       "hi": 12.48,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469517"
+      },
+      {
+       "seed": 3,
+       "episodes": 200,
+       "rate": 4.6,
+       "se": 1.36,
+       "lo": 1.94,
+       "hi": 7.26,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469518"
+      }
+     ]
+    },
+    "Sdpo": {
+     "Mean": 86,
+     "Std": 3,
+     "Min": 83,
+     "Max": 88,
+     "Lo": 84,
+     "Hi": 88,
+     "cells": [
+      {
+       "seed": 1,
+       "episodes": 200,
+       "rate": 88.1,
+       "se": 1.74,
+       "lo": 84.7,
+       "hi": 91.5,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469513"
+      },
+      {
+       "seed": 2,
+       "episodes": 200,
+       "rate": 87.1,
+       "se": 1.74,
+       "lo": 83.7,
+       "hi": 90.5,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469514"
+      },
+      {
+       "seed": 3,
+       "episodes": 200,
+       "rate": 83.2,
+       "se": 2.17,
+       "lo": 78.95,
+       "hi": 87.45,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469515"
+      }
+     ]
+    }
+   },
+   "versus": {
+    "Grpo - Base": {
+     "Diff": 6,
+     "Lo": 4,
+     "Hi": 8,
+     "Seeds": 3
+    },
+    "Grpo - Prompted": {
+     "Diff": -56,
+     "Lo": -63,
+     "Hi": -49,
+     "Seeds": 3
+    },
+    "Sdpo - Base": {
+     "Diff": 85,
+     "Lo": 83,
+     "Hi": 88,
+     "Seeds": 3
+    },
+    "Sdpo - Prompted": {
+     "Diff": 23,
+     "Lo": 16,
+     "Hi": 30,
+     "Seeds": 3
+    },
+    "Sdpo - Grpo": {
+     "Diff": 79,
+     "Lo": 76,
+     "Hi": 82
+    }
+   }
+  },
+  "MRFreeRider": {
+   "rows": {
+    "Base": {
+     "Mean": 7,
+     "Std": 0,
+     "Min": 7,
+     "Max": 7,
+     "Lo": 4,
+     "Hi": 9,
+     "cells": [
+      {
+       "seed": null,
+       "episodes": 200,
+       "rate": 6.7,
+       "se": 1.29,
+       "lo": 4.18,
+       "hi": 9.22,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469512"
+      }
+     ]
+    },
+    "Prompted": {
+     "Mean": 19,
+     "Std": 0,
+     "Min": 19,
+     "Max": 19,
+     "Lo": 15,
+     "Hi": 23,
+     "cells": [
+      {
+       "seed": null,
+       "episodes": 200,
+       "rate": 18.8,
+       "se": 2.01,
+       "lo": 14.86,
+       "hi": 22.74,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_incontext_n200/cells/public_goods__deontological_3469519"
+      }
+     ]
+    },
+    "Grpo": {
+     "Mean": 3,
+     "Std": 1,
+     "Min": 3,
+     "Max": 4,
+     "Lo": 2,
+     "Hi": 4,
+     "cells": [
+      {
+       "seed": 1,
+       "episodes": 200,
+       "rate": 3.0,
+       "se": 0.66,
+       "lo": 1.7,
+       "hi": 4.3,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469516"
+      },
+      {
+       "seed": 2,
+       "episodes": 200,
+       "rate": 3.9,
+       "se": 0.94,
+       "lo": 2.06,
+       "hi": 5.74,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469517"
+      },
+      {
+       "seed": 3,
+       "episodes": 200,
+       "rate": 2.8,
+       "se": 0.78,
+       "lo": 1.28,
+       "hi": 4.32,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469518"
+      }
+     ]
+    },
+    "Sdpo": {
+     "Mean": 35,
+     "Std": 3,
+     "Min": 33,
+     "Max": 38,
+     "Lo": 32,
+     "Hi": 38,
+     "cells": [
+      {
+       "seed": 1,
+       "episodes": 200,
+       "rate": 32.6,
+       "se": 2.69,
+       "lo": 27.32,
+       "hi": 37.88,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469513"
+      },
+      {
+       "seed": 2,
+       "episodes": 200,
+       "rate": 38.1,
+       "se": 2.92,
+       "lo": 32.37,
+       "hi": 43.83,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469514"
+      },
+      {
+       "seed": 3,
+       "episodes": 200,
+       "rate": 34.6,
+       "se": 2.78,
+       "lo": 29.15,
+       "hi": 40.05,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469515"
+      }
+     ]
+    }
+   },
+   "versus": {
+    "Grpo - Base": {
+     "Diff": -3,
+     "Lo": -6,
+     "Hi": -1,
+     "Seeds": 2
+    },
+    "Grpo - Prompted": {
+     "Diff": -16,
+     "Lo": -20,
+     "Hi": -12,
+     "Seeds": 3
+    },
+    "Sdpo - Base": {
+     "Diff": 28,
+     "Lo": 24,
+     "Hi": 32,
+     "Seeds": 3
+    },
+    "Sdpo - Prompted": {
+     "Diff": 16,
+     "Lo": 11,
+     "Hi": 21,
+     "Seeds": 3
+    },
+    "Sdpo - Grpo": {
+     "Diff": 32,
+     "Lo": 29,
+     "Hi": 35
+    }
+   }
+  },
+  "MRNoisyConditional": {
+   "rows": {
+    "Base": {
+     "Mean": 2,
+     "Std": 0,
+     "Min": 2,
+     "Max": 2,
+     "Lo": 1,
+     "Hi": 3,
+     "cells": [
+      {
+       "seed": null,
+       "episodes": 200,
+       "rate": 2.0,
+       "se": 0.62,
+       "lo": 0.79,
+       "hi": 3.21,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469512"
+      }
+     ]
+    },
+    "Prompted": {
+     "Mean": 40,
+     "Std": 0,
+     "Min": 40,
+     "Max": 40,
+     "Lo": 34,
+     "Hi": 46,
+     "cells": [
+      {
+       "seed": null,
+       "episodes": 200,
+       "rate": 40.2,
+       "se": 3.18,
+       "lo": 33.97,
+       "hi": 46.43,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_incontext_n200/cells/public_goods__deontological_3469519"
+      }
+     ]
+    },
+    "Grpo": {
+     "Mean": 4,
+     "Std": 1,
+     "Min": 2,
+     "Max": 5,
+     "Lo": 3,
+     "Hi": 5,
+     "cells": [
+      {
+       "seed": 1,
+       "episodes": 200,
+       "rate": 2.3,
+       "se": 0.65,
+       "lo": 1.02,
+       "hi": 3.58,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469516"
+      },
+      {
+       "seed": 2,
+       "episodes": 200,
+       "rate": 5.2,
+       "se": 1.25,
+       "lo": 2.76,
+       "hi": 7.64,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469517"
+      },
+      {
+       "seed": 3,
+       "episodes": 200,
+       "rate": 4.0,
+       "se": 1.15,
+       "lo": 1.74,
+       "hi": 6.26,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469518"
+      }
+     ]
+    },
+    "Sdpo": {
+     "Mean": 62,
+     "Std": 5,
+     "Min": 57,
+     "Max": 65,
+     "Lo": 58,
+     "Hi": 66,
+     "cells": [
+      {
+       "seed": 1,
+       "episodes": 200,
+       "rate": 64.9,
+       "se": 3.15,
+       "lo": 58.73,
+       "hi": 71.07,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469513"
+      },
+      {
+       "seed": 2,
+       "episodes": 200,
+       "rate": 64.3,
+       "se": 3.05,
+       "lo": 58.32,
+       "hi": 70.28,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469514"
+      },
+      {
+       "seed": 3,
+       "episodes": 200,
+       "rate": 56.7,
+       "se": 3.22,
+       "lo": 50.4,
+       "hi": 63.0,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469515"
+      }
+     ]
+    }
+   },
+   "versus": {
+    "Grpo - Base": {
+     "Diff": 2,
+     "Lo": 0,
+     "Hi": 4,
+     "Seeds": 1
+    },
+    "Grpo - Prompted": {
+     "Diff": -36,
+     "Lo": -43,
+     "Hi": -30,
+     "Seeds": 3
+    },
+    "Sdpo - Base": {
+     "Diff": 60,
+     "Lo": 56,
+     "Hi": 64,
+     "Seeds": 3
+    },
+    "Sdpo - Prompted": {
+     "Diff": 22,
+     "Lo": 15,
+     "Hi": 29,
+     "Seeds": 3
+    },
+    "Sdpo - Grpo": {
+     "Diff": 58,
+     "Lo": 54,
+     "Hi": 62
+    }
+   }
+  },
+  "MRRoundOne": {
+   "rows": {
+    "Base": {
+     "Mean": 2,
+     "Std": 0,
+     "Min": 2,
+     "Max": 2,
+     "Lo": 1,
+     "Hi": 3,
+     "cells": [
+      {
+       "seed": null,
+       "episodes": 600,
+       "rate": 2.17,
+       "se": 0.6,
+       "lo": 1.0,
+       "hi": 3.33,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469512"
+      }
+     ]
+    },
+    "Prompted": {
+     "Mean": 50,
+     "Std": 0,
+     "Min": 50,
+     "Max": 50,
+     "Lo": 46,
+     "Hi": 54,
+     "cells": [
+      {
+       "seed": null,
+       "episodes": 600,
+       "rate": 50.0,
+       "se": 2.05,
+       "lo": 45.99,
+       "hi": 54.01,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_incontext_n200/cells/public_goods__deontological_3469519"
+      }
+     ]
+    },
+    "Grpo": {
+     "Mean": 4,
+     "Std": 2,
+     "Min": 3,
+     "Max": 6,
+     "Lo": 3,
+     "Hi": 5,
+     "cells": [
+      {
+       "seed": 1,
+       "episodes": 600,
+       "rate": 4.33,
+       "se": 0.83,
+       "lo": 2.7,
+       "hi": 5.96,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469516"
+      },
+      {
+       "seed": 2,
+       "episodes": 600,
+       "rate": 6.0,
+       "se": 0.97,
+       "lo": 4.1,
+       "hi": 7.9,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469517"
+      },
+      {
+       "seed": 3,
+       "episodes": 600,
+       "rate": 2.83,
+       "se": 0.68,
+       "lo": 1.51,
+       "hi": 4.16,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469518"
+      }
+     ]
+    },
+    "Sdpo": {
+     "Mean": 63,
+     "Std": 1,
+     "Min": 62,
+     "Max": 64,
+     "Lo": 61,
+     "Hi": 65,
+     "cells": [
+      {
+       "seed": 1,
+       "episodes": 600,
+       "rate": 64.17,
+       "se": 1.96,
+       "lo": 60.32,
+       "hi": 68.01,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469513"
+      },
+      {
+       "seed": 2,
+       "episodes": 600,
+       "rate": 63.5,
+       "se": 1.97,
+       "lo": 59.64,
+       "hi": 67.36,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469514"
+      },
+      {
+       "seed": 3,
+       "episodes": 600,
+       "rate": 61.5,
+       "se": 1.99,
+       "lo": 57.6,
+       "hi": 65.4,
+       "path": "eval_results/transfer/qwen3_8b/pgg/multi_round_fabopen_n200/cells/public_goods__none_3469515"
+      }
+     ]
+    }
+   },
+   "versus": {
+    "Grpo - Base": {
+     "Diff": 2,
+     "Lo": 1,
+     "Hi": 4,
+     "Seeds": 2
+    },
+    "Grpo - Prompted": {
+     "Diff": -46,
+     "Lo": -50,
+     "Hi": -41,
+     "Seeds": 3
+    },
+    "Sdpo - Base": {
+     "Diff": 61,
+     "Lo": 58,
+     "Hi": 63,
+     "Seeds": 3
+    },
+    "Sdpo - Prompted": {
+     "Diff": 13,
+     "Lo": 8,
+     "Hi": 18,
+     "Seeds": 3
+    },
+    "Sdpo - Grpo": {
+     "Diff": 59,
+     "Lo": 56,
+     "Hi": 61
+    }
+   }
+  }
+ }
+}

@@ -8,12 +8,12 @@
 \cmidrule(lr){3-5}
  & round & Full & Free & Noisy \\
 \midrule
-Base & 1{\scriptsize\,[0,2]} & 0{\scriptsize\,[0,16]} & 8{\scriptsize\,[0,17]} & 4{\scriptsize\,[0,9]} \\
-Prompted & 51{\scriptsize\,[47,55]} & 67{\scriptsize\,[47,87]} & 17{\scriptsize\,[7,27]} & 62{\scriptsize\,[43,81]} \\
-GRPO & 3{\scriptsize\,(2--4)} & 8{\scriptsize\,(0--14)} & 7{\scriptsize\,(2--14)} & 8{\scriptsize\,(3--16)} \\
-SDPO & 63{\scriptsize\,(62--65)} & 90{\scriptsize\,(84--97)} & 37{\scriptsize\,(26--44)} & 74{\scriptsize\,(71--78)} \\
+Base & 1{\scriptsize\,[0,2]} & 0{\scriptsize\,[0,0]} & 7{\scriptsize\,[5,10]} & 2{\scriptsize\,[1,4]} \\
+Prompted & 51{\scriptsize\,[47,55]} & 71{\scriptsize\,[65,76]} & 27{\scriptsize\,[23,31]} & 60{\scriptsize\,[54,66]} \\
+GRPO & 3{\scriptsize\,(2--4)} & 10{\scriptsize\,(8--12)} & 4{\scriptsize\,(3--5)} & 6{\scriptsize\,(5--7)} \\
+SDPO & 63{\scriptsize\,(62--65)} & 92{\scriptsize\,(91--93)} & 38{\scriptsize\,(34--42)} & 80{\scriptsize\,(77--84)} \\
 \bottomrule
 \end{tabular}
-\caption{Contribution rate (\%) of Qwen3-8B in the public-goods game after 200 training steps (protocols in Section~\ref{sec:games:protocol}). Single round pools 400 decisions over the 8 fabricated states, 5 rounds pools all rounds of 20 episodes against a full contributor, free rider or noisy conditional co-player. Only Prompted has the principle in the prompt. Base and Prompted give the rate with its 95\% confidence interval over episodes in brackets, trained rows the mean over 3 seeds with the lowest and highest seed in parentheses.}
+\caption{Contribution rate (\%) of Qwen3-8B in the public-goods game after 200 training steps (protocols in Section~\ref{sec:games:protocol}). Single round pools 400 decisions over the 8 fabricated states, 5 rounds pools all rounds of 200 episodes against a full contributor, free rider or noisy conditional co-player. Only Prompted has the principle in the prompt. Base and Prompted give the rate with its 95\% confidence interval over episodes in brackets, trained rows the mean over 3 seeds with the lowest and highest seed in parentheses.}
 \label{tab:seed-transfer}
 \end{table}
