@@ -1,0 +1,21 @@
+# multi_round_fabopen_incontext_n200 (Olmo-3-7B, fabricated opening, 200 episodes
+# per co-player group) with 4096 instead of 2048 new tokens per answer; see
+# multi_round_incontext_n200_tok4096 for the reason. With the fabricated opening
+# fewer answers are cut off at 2048 tokens (SDPO 21 of 600 first rounds).
+#
+#   ~/venvs/moralgym/bin/python scripts/slurm/fir/submit_sweep.py \
+#       configs/eval/transfer/olmo3_7b/pgg/multi_round_fabopen_incontext_n200_tok4096.yaml --no-pack --dry-run
+
+num_episodes: 200          # per co-player group; x3 x5 rounds = 3000 decisions/cell
+
+axes:
+  game: [public_goods]
+  representation: [decision_full]
+  moral_value: [deontological]
+  protocol: [multi_round]
+  checkpoint: [base]
+
+env:
+  RUN_PROBES: "off"
+  GAME_DESCRIPTION: "off"
+extra_args: ["--temperature", "0.7", "--max-new-tokens", "4096", "--game-design", "hist"]
