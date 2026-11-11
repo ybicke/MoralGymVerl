@@ -49,11 +49,15 @@ def load_fir_env() -> None:
 
 
 def sbatch_resource_args(kind: str) -> List[str]:
+    """Resource flags for one sbatch. TIME=<walltime> in the environment
+    overrides the launcher's #SBATCH --time for this submit (as in
+    train_verl.sh): a request of 3 h or less queues in the shortest tier."""
     env = os.environ
+    time = [f"--time={env['TIME']}"] if env.get("TIME") else []
     if kind == "node":
         return [*env["FIR_SBATCH_NODE_ARGS"].split(),
                 f"--mem={env['FIR_NODE_MEM']}",
-                f"--cpus-per-task={env['FIR_PACK_CPUS_PER_CELL']}"]
+                f"--cpus-per-task={env['FIR_PACK_CPUS_PER_CELL']}", *time]
     if kind == "gpu":
-        return env["FIR_SBATCH_GPU_ARGS"].split()
+        return [*env["FIR_SBATCH_GPU_ARGS"].split(), *time]
     raise ValueError(kind)

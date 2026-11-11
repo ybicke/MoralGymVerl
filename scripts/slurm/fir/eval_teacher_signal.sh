@@ -63,7 +63,11 @@ export STORE_BASE="${MORALGYM_STORE_ROOT:-}"
 export PYTHONPATH="${SDPO_DIR:-${HOME}/SDPO}:${PROJECT_ROOT}/src"
 # One srun step inside the Apptainer container, on the job's GPU.
 # shellcheck disable=SC2086
-in_container() { srun --gpus-per-task=1 ${FIR_CONTAINER_EXEC} "$@"; }
+# The step inherits the job's GPU (as in train_job.sh). An untyped
+# --gpus-per-task on the srun is rejected inside a job submitted with the
+# typed --gpus-per-node=h100:1: "Invalid GRES specification (with and without
+# type identification)" (jobs 3469418-24, 2026-11-11).
+in_container() { srun ${FIR_CONTAINER_EXEC} "$@"; }
 
 GAME="${1:?Usage: eval_teacher_signal.sh <game> <moral_value> [num_episodes]}"
 MORAL_VALUE="${2:?Usage: eval_teacher_signal.sh <game> <moral_value> [num_episodes]}"
