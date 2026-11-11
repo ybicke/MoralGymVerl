@@ -1,0 +1,24 @@
+# Olmo-3-7B training seeds 2 and 3 (SDPO and GRPO v2, step 200), single
+# round. Same settings as single_round_sdpo_seed1 and single_round_grpo_v2_seed1.
+#
+#   ~/venvs/moralgym/bin/python scripts/slurm/fir/submit_sweep.py \
+#       configs/eval/transfer/olmo3_7b/pgg/single_round_seeds23.yaml --no-pack --dry-run
+
+num_episodes: 400          # 50 per fabricated (own_prev, k) state
+
+axes:
+  game: [public_goods]
+  representation: [decision_full]
+  moral_value: [none]
+  protocol: [single_round]
+  checkpoint:
+    - olmo3_7b_sdpo_pd_deon_tft_200_seed2/global_step_200
+    - olmo3_7b_sdpo_pd_deon_tft_200_seed3/global_step_200
+    - olmo3_7b_grpo_pd_deon_tft_200_v2_seed2/global_step_200
+    - olmo3_7b_grpo_pd_deon_tft_200_v2_seed3/global_step_200
+
+env:
+  RUN_PROBES: "off"
+  RUN_PROBE_B_EPISODE: "off"
+  GAME_DESCRIPTION: "off"
+extra_args: ["--temperature", "0.7"]

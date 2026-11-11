@@ -1,0 +1,24 @@
+# Olmo-3-7B training seeds 2 and 3 (SDPO and GRPO v2, step 200), fabricated
+# opening, 200 episodes per co-player group, 4096 new tokens per answer.
+# Same settings as multi_round_fabopen_n200_tok4096 (base and seed 1).
+#
+#   ~/venvs/moralgym/bin/python scripts/slurm/fir/submit_sweep.py \
+#       configs/eval/transfer/olmo3_7b/pgg/multi_round_fabopen_seeds23_n200_tok4096.yaml --no-pack --dry-run
+
+num_episodes: 200          # per co-player group; x3 x5 rounds = 3000 decisions/cell
+
+axes:
+  game: [public_goods]
+  representation: [decision_full]
+  moral_value: [none]
+  protocol: [multi_round]
+  checkpoint:
+    - olmo3_7b_sdpo_pd_deon_tft_200_seed2/global_step_200
+    - olmo3_7b_sdpo_pd_deon_tft_200_seed3/global_step_200
+    - olmo3_7b_grpo_pd_deon_tft_200_v2_seed2/global_step_200
+    - olmo3_7b_grpo_pd_deon_tft_200_v2_seed3/global_step_200
+
+env:
+  RUN_PROBES: "off"
+  GAME_DESCRIPTION: "off"
+extra_args: ["--temperature", "0.7", "--max-new-tokens", "4096", "--game-design", "hist"]
