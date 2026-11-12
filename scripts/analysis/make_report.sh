@@ -157,7 +157,7 @@ cp $PT/qwen3_8b/classic/multi_round/analysis/generated/numbers_MRPD.tex \
 # Live play is read from the 200-episode groups (2026-11-11) only: *_n200
 # holds base and every seed, *_incontext_n200 the prompted model. Cold
 # opening -> \Seeds... / seed_transfer, fabricated opening -> \SeedsFab... /
-# seed_transfer_fabopen; Olmo-3 (one seed) -> \Olmo... / \OlmoFab...
+# seed_transfer_fabopen; Olmo-3 (3 seeds; *_seeds23_* hold seeds 2 and 3) -> \Olmo... / \OlmoFab...
 # Olmo-3 is read from the *_tok4096 groups (4096 new tokens per answer): at
 # the 2048 of the Qwen cells, up to 19% of its first-round answers are cut
 # off before the action line (SDPO, cold opening); Qwen3-8B has none.
@@ -168,6 +168,7 @@ QSINGLE="--single-group $T/single_round_sdpo_seed1 --single-group $T/single_roun
     --single-group $T/single_round_grid --single-group $T/single_round_grpo_v2_seed1 \
     --single-group eval_results/teacher_signal/qwen3_8b/pgg/single_turn_v3"
 OSINGLE="--single-group $O/single_round_sdpo_seed1 --single-group $O/single_round_grpo_v2_seed1 \
+    --single-group $O/single_round_seeds23 \
     --single-group eval_results/teacher_signal/olmo3_7b/pgg/deon_gate"
 $PY scripts/analysis/seed_numbers.py --model Qwen3-8B --step 200 $QSINGLE \
     --multi-group $T/multi_round_n200 --multi-group $T/multi_round_incontext_n200 \
@@ -177,9 +178,11 @@ $PY scripts/analysis/seed_numbers.py --model Qwen3-8B --step 200 $QSINGLE \
     --prefix SeedsFab --table seed_transfer_fabopen --live-play "$FAB" --out $T/analysis
 $PY scripts/analysis/seed_numbers.py --model Olmo-3-7B-Instruct --step 200 $OSINGLE \
     --multi-group $O/multi_round_n200_tok4096 --multi-group $O/multi_round_incontext_n200_tok4096 \
+    --multi-group $O/multi_round_seeds23_n200_tok4096 \
     --prefix Olmo --table seed_transfer_olmo3_7b --out $O/analysis
 $PY scripts/analysis/seed_numbers.py --model Olmo-3-7B-Instruct --step 200 $OSINGLE \
     --multi-group $O/multi_round_fabopen_n200_tok4096 --multi-group $O/multi_round_fabopen_incontext_n200_tok4096 \
+    --multi-group $O/multi_round_fabopen_seeds23_n200_tok4096 \
     --prefix OlmoFab --table seed_transfer_olmo3_7b_fabopen --live-play "$FAB" --out $O/analysis
 cp $T/analysis/generated/numbers_Seeds{,Fab}.tex $O/analysis/generated/numbers_Olmo{,Fab}.tex \
    ~/moralgym-report/generated/
@@ -199,8 +202,9 @@ for open in "" _fabopen; do
         --step 200 --model Qwen3-8B --principle deontological \
         --name qwen3_8b_seeds${open}_s200 --analysis-dir $CMP
     $PY $MF seed-multi --group $O/multi_round${open}_n200_tok4096 --group $O/multi_round${open}_incontext_n200_tok4096 \
-        --step 200 --seed 1 --model Olmo-3-7B-Instruct --principle deontological \
-        --name olmo3_7b_seed1${open}_s200 --analysis-dir $CMP
+        --group $O/multi_round${open}_seeds23_n200_tok4096 \
+        --step 200 --model Olmo-3-7B-Instruct --principle deontological \
+        --name olmo3_7b_seeds${open}_s200 --analysis-dir $CMP
 done
 $PY $MF seed-multi --group $T/multi_round --group $T/multi_round_incontext \
     --group $T/multi_round_sdpo_randlabels_seed1 \
@@ -266,7 +270,7 @@ for open in "" _fabopen; do
         --name qwen3_8b_sdpo_pd_vs_pdshch_seed1${open}_s200 --analysis-dir $CMP
 done
 cp $CMP/figures/pdf/multi_round_qwen3_8b_seeds{,_fabopen}_s200.pdf \
-   $CMP/figures/pdf/multi_round_olmo3_7b_seed1{,_fabopen}_s200.pdf \
+   $CMP/figures/pdf/multi_round_olmo3_7b_seeds{,_fabopen}_s200.pdf \
    $CMP/figures/pdf/multi_round_qwen3_8b_sdpo_pd_vs_pdshch_seed1{,_fabopen}_s200.pdf \
    $CMP/figures/pdf/multi_round_gemma2_9b_sdpo{,_grpo}_seed1_s200.pdf \
    $CMP/figures/pdf/multi_round_qwen3_8b_sdpo_randlabels_seed1_s200.pdf \

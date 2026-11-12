@@ -10,10 +10,10 @@
 \midrule
 Base & 3{\scriptsize\,[1,5]} & 6{\scriptsize\,[3,9]} & 3{\scriptsize\,[1,5]} & 3{\scriptsize\,[1,4]} \\
 Prompted & 62{\scriptsize\,[59,65]} & 73{\scriptsize\,[68,78]} & 24{\scriptsize\,[20,27]} & 39{\scriptsize\,[34,44]} \\
-GRPO & 7{\scriptsize\,[4,9]} & 17{\scriptsize\,[12,22]} & 3{\scriptsize\,[2,4]} & 3{\scriptsize\,[1,5]} \\
-SDPO & 58{\scriptsize\,[55,62]} & 78{\scriptsize\,[74,83]} & 25{\scriptsize\,[20,29]} & 51{\scriptsize\,[44,57]} \\
+GRPO & 8{\scriptsize\,(7--8)} & 22{\scriptsize\,(17--25)} & 3{\scriptsize\,(3--3)} & 6{\scriptsize\,(3--9)} \\
+SDPO & 58{\scriptsize\,(56--58)} & 78{\scriptsize\,(78--79)} & 25{\scriptsize\,(23--27)} & 54{\scriptsize\,(51--58)} \\
 \bottomrule
 \end{tabular}
-\caption{Contribution rate (\%) of Olmo-3-7B-Instruct in the public-goods game after 200 training steps (protocols in Section~\ref{sec:games:protocol}). Single round pools 400 decisions over the 8 fabricated states, 5 rounds (opened with a fabricated previous round) pools all rounds of 200 episodes against a full contributor, free rider or noisy conditional co-player. Only Prompted has the principle in the prompt. Base and Prompted give the rate with its 95\% confidence interval over episodes in brackets, as do the trained rows (one seed).}
+\caption{Contribution rate (\%) of Olmo-3-7B-Instruct in the public-goods game after 200 training steps (protocols in Section~\ref{sec:games:protocol}). Single round pools 400 decisions over the 8 fabricated states, 5 rounds (opened with a fabricated previous round) pools all rounds of 200 episodes against a full contributor, free rider or noisy conditional co-player. Only Prompted has the principle in the prompt. Base and Prompted give the rate with its 95\% confidence interval over episodes in brackets, trained rows the mean over 3 seeds with the lowest and highest seed in parentheses.}
 \label{tab:seed-transfer-olmo3-7b-fabopen}
 \end{table}
