@@ -104,7 +104,7 @@ node and the rest inside the container (no GPU needed):
 
 ```bash
 PYTHONPATH=src:scripts/analysis ~/venvs/moralgym/bin/python -m pytest tests/ \
-    --ignore=tests/test_behavioral_metadata.py --ignore=tests/test_distillation_jsd.py \
+    --ignore=tests/test_batched_eval.py --ignore=tests/test_behavioral_metadata.py --ignore=tests/test_distillation_jsd.py \
     --ignore=tests/test_evaluate_integration.py --ignore=tests/test_probe_episode.py \
     --deselect tests/test_teacher_context.py::test_hint_refused_under_randomized_labels
 module load apptainer/1.3.5
