@@ -190,6 +190,14 @@ cp $T/analysis/generated/tables/seed_transfer{,_fabopen}.tex \
    $O/analysis/generated/tables/seed_transfer_olmo3_7b{,_fabopen}.tex ~/moralgym-report/generated/tables/
 echo "mirrored seed-grid macros + table"
 
+# ACL single-round figure (acl_main.tex Figure transfer-single): the
+# three-seed Qwen3-8B cells of the seed table, 95% t bands over seeds.
+$PY $MF seed-grid $(echo $QSINGLE | sed 's/--single-group/--group/g') \
+    --step 200 --model Qwen3-8B --principle deontological \
+    --name qwen3_8b_seeds_s200 --analysis-dir eval_results/transfer/comparison/analysis
+cp eval_results/transfer/comparison/analysis/figures/pdf/transfer_final_qwen3_8b_seeds_s200.pdf \
+   ~/moralgym-report/figures/ && echo "mirrored ACL single-round figure"
+
 # ACL live-play figures (acl_main.tex): three-seed Qwen3-8B, the
 # random-labels seed, and the Olmo-3 cold vs fabricated opening. Cells
 # live in several groups, so they are drawn from --group / --cell lists

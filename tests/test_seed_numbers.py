@@ -108,3 +108,12 @@ def test_trained_row_interval_is_student_t_over_seed_rates():
     half = 4.302653 * 0.1 / 3 ** 0.5  # t_{2, 0.975}
     assert (st["Mean"], st["Lo"], st["Hi"]) == (50, sn.pct(0.5 - half), sn.pct(0.5 + half))
     assert sn.cell(seeds) == f"50{{\\scriptsize\\,[{st['Lo']},{st['Hi']}]}}"
+
+
+def test_figure_band_matches_table_interval():
+    from seed_figures import seed_band
+    m, lo, hi = seed_band([40.0, 50.0, 60.0])
+    half = 4.302653 * 10 / 3 ** 0.5
+    assert m == 50 and lo == pytest.approx(50 - half, abs=1e-4) and hi == pytest.approx(50 + half, abs=1e-4)
+    assert seed_band([98.0, 99.0, 100.0])[2] == 100   # clipped
+    assert seed_band([30.0]) == (30.0, 30.0, 30.0)     # one seed: no band

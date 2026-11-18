@@ -248,8 +248,10 @@ def parse_labeled(entries: List[str]) -> List[tuple]:
 def fig_training_seeds(args, out_dir: Path) -> None:
     """Per-state training curves pooled over seeds: one panel per label
     (--run label=run-dir, repeat a label once per seed). Line = mean over
-    seeds of each run's window mean, band = min-max over seeds, the same
-    convention as the seed transfer figures."""
+    seeds of each run's window mean, band = 95% Student-t interval over
+    seeds (seed_figures.seed_band), the same convention as the seed transfer
+    figures and tables."""
+    from seed_figures import seed_band
     by_label: Dict[str, list] = defaultdict(list)
     for label, run_dir in parse_labeled(args.run):
         by_label[label].append(load_group_props(run_dir, args.window))
@@ -273,8 +275,8 @@ def fig_training_seeds(args, out_dir: Path) -> None:
                         for r in runs if r[w]["props"][st]]
                 if len(vals) < len(runs):
                     continue
-                xs.append(mid[w]); mean.append(sum(vals) / len(vals))
-                lo.append(min(vals)); hi.append(max(vals))
+                m, l, h = seed_band(vals)
+                xs.append(mid[w]); mean.append(m); lo.append(l); hi.append(h)
             ax.plot(xs, mean, color=STATE_COLORS[st], linewidth=1.2)
             ax.fill_between(xs, lo, hi, color=STATE_COLORS[st], alpha=0.18,
                             linewidth=0)

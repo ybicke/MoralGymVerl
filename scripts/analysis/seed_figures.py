@@ -3,7 +3,8 @@
 The per-run figures in transfer_figures.py key on one run name, so three
 seeds of one config appear as three runs. Here cells are pooled by
 CHANNEL (algo + arm, the run name without model, steps and seed) and
-drawn as mean with a min-max band over seeds. Base and in-context rows
+drawn as mean with a 95% Student-t band over seeds (seed_band), the
+interval of the seed tables (seed_numbers.py). Base and in-context rows
 come from the same groups (checkpoint: base cells of the given model).
 
   seed-grid  left: pooled P(C) at one step, bars = base / base+ctx /
@@ -27,6 +28,7 @@ from typing import Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import matplotlib.pyplot as plt  # noqa: E402
+from scipy.stats import t as student_t  # noqa: E402
 from eval_cells import discover_run_dirs, load_json  # noqa: E402
 from figure_style import (  # noqa: E402
     ACCENT, CHANNEL_COLORS, INK_MUTED, REF_BASE, REF_CONTEXT, RUN_COLORS, WIDTHS,
@@ -136,13 +138,26 @@ def split(cells: List[Cell], steps: List[int], principle: str):
     return base, ctx, {k: list(v.values()) for k, v in runs.items()}
 
 
+def seed_band(vals: List[float], level: float = 95, lo: float = 0,
+              hi: float = 100):
+    """Mean and Student-t interval over seed values, clipped to [lo, hi]:
+    mean +- t_{S-1} * sd / sqrt(S), the trained-row interval of the seed
+    tables. One value gives no interval (lower = upper = mean)."""
+    n = len(vals)
+    m = sum(vals) / n
+    if n < 2:
+        return m, m, m
+    sd = (sum((v - m) ** 2 for v in vals) / (n - 1)) ** 0.5
+    half = student_t.ppf(0.5 + level / 200, n - 1) * sd / n ** 0.5
+    return m, max(lo, m - half), min(hi, m + half)
+
+
 def band(ax, xs, series: List[List[float]], color, **line):
-    """Mean line with a min-max band over the replicate series."""
-    n = len(series)
-    mean = [sum(s[i] for s in series) / n for i in range(len(xs))]
-    if n > 1:
-        ax.fill_between(xs, [min(s[i] for s in series) for i in range(len(xs))],
-                        [max(s[i] for s in series) for i in range(len(xs))],
+    """Mean line with a 95% Student-t band over the replicate series."""
+    stats = [seed_band([s[i] for s in series]) for i in range(len(xs))]
+    mean = [m for m, _, _ in stats]
+    if len(series) > 1:
+        ax.fill_between(xs, [l for _, l, _ in stats], [h for _, _, h in stats],
                         color=color, alpha=0.18, lw=0)
     ax.plot(xs, mean, color=color, **line)
     return mean
@@ -181,7 +196,7 @@ def _end(ys: List[float]) -> float:
 def fig_seed_grid(cells: List[Cell], steps: List[int], principle: str,
                   out_dir: Path, name: str, title: Optional[str] = None) -> List[Path]:
     """The transfer_final form, pooled over seeds: one panel per model,
-    P(C) vs k_O, own previous move C solid / D dashed, band = min-max."""
+    P(C) vs k_O, own previous move C solid / D dashed, band = 95% t over seeds."""
     base, ctx, runs = split(cells, steps, principle)
     base = next(iter(base.values()), None)
     fig, ax = plt.subplots(figsize=(WIDTHS["column"], 2.3))
