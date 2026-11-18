@@ -81,14 +81,30 @@ def test_split_rejects_two_cells_for_one_seed():
         split(cells + [make_cell()], [200], "deontological")
 
 
-def test_unparseable_answers_follow_the_cell_conventions():
+def test_unparseable_answers_count_as_not_contributed():
     block = {"episode_moves": [{"agent": ["illegal", "C", "C", "D", "D"]},
                                {"agent": ["C", "D", "D", "D", "D"]},
-                               {"agent": ["illegal"] * 5}]}
+                               {"agent": ["illegal"] * 5}],
+             "per_round": {f"round_{r}": {} for r in range(1, 6)}}
+    for r in range(5):  # stored per-round rates over all answers
+        moves = [e["agent"][r] for e in block["episode_moves"]]
+        block["per_round"][f"round_{r + 1}"] = {"p_C": moves.count("C") / 3, "n": 3}
     cell = make_cell()
-    # pooled rate: per episode over parseable answers, all-illegal episode dropped
+    # every episode and every answer counts; unparseable = not contributed
     s = sn.Sample(cell, sn.strata(block))
-    assert s.n == 2 and s.est == pytest.approx((2 / 4 + 1 / 5) / 2)
-    # round 1: every answer counts, an unparseable one as not contributed
-    r1 = sn.Sample(cell, sn.strata(block, first_round=True, legal_only=False))
+    assert s.n == 3 and s.est == pytest.approx((2 / 5 + 1 / 5 + 0) / 3)
+    # and reproduces the stored all-answers rate
+    assert sn.checked(s, sn.all_answers_rate(block)) is s
+    r1 = sn.Sample(cell, sn.strata(block, first_round=True))
     assert r1.n == 3 and r1.est == pytest.approx(1 / 3)
+    assert sn.all_answers_rate(block, first_round=True) == pytest.approx(1 / 3)
+
+
+def test_trained_row_interval_is_student_t_over_seed_rates():
+    # seed rates 0.4, 0.5, 0.6 -> mean 0.5, sd 0.1, half width 4.303 * 0.1 / sqrt(3)
+    seeds = [sample(make_cell(s, moves=["CCCCC"] * k + ["DDDDD"] * (10 - k)))
+             for s, k in ((1, 4), (2, 5), (3, 6))]
+    st = sn.stats(seeds)
+    half = 4.302653 * 0.1 / 3 ** 0.5  # t_{2, 0.975}
+    assert (st["Mean"], st["Lo"], st["Hi"]) == (50, sn.pct(0.5 - half), sn.pct(0.5 + half))
+    assert sn.cell(seeds) == f"50{{\\scriptsize\\,[{st['Lo']},{st['Hi']}]}}"

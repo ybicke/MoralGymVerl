@@ -1,5 +1,5 @@
 {
- "interval": "normal over episodes, Wilson without spread",
+ "interval": "single cells: normal over episodes (Wilson without spread); trained rows: Student t over seed rates",
  "level": 95,
  "step": 200,
  "quantities": {
@@ -15,36 +15,36 @@
      "cells": [
       {
        "seed": null,
-       "episodes": 383,
-       "rate": 3.13,
-       "se": 0.88,
-       "lo": 1.4,
-       "hi": 4.86,
+       "episodes": 400,
+       "rate": 3.0,
+       "se": 0.85,
+       "lo": 1.34,
+       "hi": 4.66,
        "path": "eval_results/teacher_signal/olmo3_7b/pgg/deon_gate/cells/public_goods__none__decision_full__single_round_3560756"
       }
      ]
     },
     "Prompted": {
-     "Mean": 62,
+     "Mean": 60,
      "Std": 0,
-     "Min": 62,
-     "Max": 62,
-     "Lo": 59,
-     "Hi": 65,
+     "Min": 60,
+     "Max": 60,
+     "Lo": 56,
+     "Hi": 63,
      "cells": [
       {
        "seed": null,
-       "episodes": 386,
-       "rate": 61.92,
-       "se": 1.7,
-       "lo": 58.59,
-       "hi": 65.25,
+       "episodes": 400,
+       "rate": 59.75,
+       "se": 1.71,
+       "lo": 56.39,
+       "hi": 63.11,
        "path": "eval_results/teacher_signal/olmo3_7b/pgg/deon_gate/cells/public_goods__deontological__decision_full__single_round_3560756"
       }
      ]
     },
     "Grpo": {
-     "Mean": 8,
+     "Mean": 7,
      "Std": 1,
      "Min": 7,
      "Max": 8,
@@ -53,66 +53,66 @@
      "cells": [
       {
        "seed": 1,
-       "episodes": 379,
-       "rate": 6.86,
-       "se": 1.24,
-       "lo": 4.44,
-       "hi": 9.28,
+       "episodes": 400,
+       "rate": 6.5,
+       "se": 1.18,
+       "lo": 4.19,
+       "hi": 8.81,
        "path": "eval_results/transfer/olmo3_7b/pgg/single_round_grpo_v2_seed1/cells/public_goods__none__decision_full__single_round__olmo3_7b_grpo_pd_deon_tft_200_v2_seed1-global_step_200_3719948"
       },
       {
        "seed": 2,
-       "episodes": 378,
-       "rate": 7.94,
-       "se": 1.32,
-       "lo": 5.35,
-       "hi": 10.53,
+       "episodes": 400,
+       "rate": 7.5,
+       "se": 1.25,
+       "lo": 5.05,
+       "hi": 9.95,
        "path": "eval_results/transfer/olmo3_7b/pgg/single_round_seeds23/cells/public_goods__none_3508111"
       },
       {
        "seed": 3,
-       "episodes": 369,
-       "rate": 8.13,
-       "se": 1.32,
-       "lo": 5.54,
-       "hi": 10.72,
+       "episodes": 400,
+       "rate": 7.5,
+       "se": 1.23,
+       "lo": 5.09,
+       "hi": 9.91,
        "path": "eval_results/transfer/olmo3_7b/pgg/single_round_seeds23/cells/public_goods__none_3508112"
       }
      ]
     },
     "Sdpo": {
-     "Mean": 58,
+     "Mean": 56,
      "Std": 1,
-     "Min": 56,
-     "Max": 58,
-     "Lo": 56,
-     "Hi": 60,
+     "Min": 55,
+     "Max": 57,
+     "Lo": 53,
+     "Hi": 59,
      "cells": [
       {
        "seed": 1,
-       "episodes": 391,
-       "rate": 58.31,
-       "se": 1.71,
-       "lo": 54.96,
-       "hi": 61.66,
+       "episodes": 400,
+       "rate": 57.0,
+       "se": 1.73,
+       "lo": 53.61,
+       "hi": 60.39,
        "path": "eval_results/transfer/olmo3_7b/pgg/single_round_sdpo_seed1/cells/public_goods__none__decision_full__single_round__olmo3_7b_sdpo_pd_deon_tft_200_seed1-global_step_200_3719948"
       },
       {
        "seed": 2,
-       "episodes": 388,
-       "rate": 57.99,
-       "se": 1.69,
-       "lo": 54.68,
-       "hi": 61.3,
+       "episodes": 400,
+       "rate": 56.25,
+       "se": 1.7,
+       "lo": 52.92,
+       "hi": 59.58,
        "path": "eval_results/transfer/olmo3_7b/pgg/single_round_seeds23/cells/public_goods__none_3508109"
       },
       {
        "seed": 3,
-       "episodes": 388,
-       "rate": 56.44,
-       "se": 1.76,
-       "lo": 52.99,
-       "hi": 59.9,
+       "episodes": 400,
+       "rate": 54.75,
+       "se": 1.77,
+       "lo": 51.29,
+       "hi": 58.21,
        "path": "eval_results/transfer/olmo3_7b/pgg/single_round_seeds23/cells/public_goods__none_3508110"
       }
      ]
@@ -120,21 +120,21 @@
    },
    "versus": {
     "Grpo - Base": {
-     "Diff": 5,
+     "Diff": 4,
      "Lo": 2,
-     "Hi": 7,
+     "Hi": 6,
      "Seeds": 3
     },
     "Grpo - Prompted": {
-     "Diff": -54,
-     "Lo": -58,
-     "Hi": -51,
+     "Diff": -53,
+     "Lo": -56,
+     "Hi": -49,
      "Seeds": 3
     },
     "Sdpo - Base": {
-     "Diff": 54,
-     "Lo": 52,
-     "Hi": 57,
+     "Diff": 53,
+     "Lo": 50,
+     "Hi": 56,
      "Seeds": 3
     },
     "Sdpo - Prompted": {
@@ -144,9 +144,9 @@
      "Seeds": 1
     },
     "Sdpo - Grpo": {
-     "Diff": 50,
-     "Lo": 48,
-     "Hi": 52
+     "Diff": 49,
+     "Lo": 46,
+     "Hi": 51
     }
    }
   },
@@ -163,10 +163,10 @@
       {
        "seed": null,
        "episodes": 200,
-       "rate": 5.7,
-       "se": 1.55,
-       "lo": 2.66,
-       "hi": 8.74,
+       "rate": 5.6,
+       "se": 1.52,
+       "lo": 2.62,
+       "hi": 8.58,
        "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_fabopen_n200_tok4096/cells/public_goods__none_3474486"
       }
      ]
@@ -195,34 +195,34 @@
      "Std": 4,
      "Min": 17,
      "Max": 25,
-     "Lo": 19,
-     "Hi": 25,
+     "Lo": 11,
+     "Hi": 33,
      "cells": [
       {
        "seed": 1,
        "episodes": 200,
-       "rate": 16.68,
+       "rate": 16.6,
        "se": 2.46,
-       "lo": 11.85,
-       "hi": 21.5,
+       "lo": 11.79,
+       "hi": 21.41,
        "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_fabopen_n200_tok4096/cells/public_goods__none_3474488"
       },
       {
        "seed": 2,
        "episodes": 200,
-       "rate": 24.87,
+       "rate": 24.8,
        "se": 2.85,
-       "lo": 19.28,
-       "hi": 30.47,
+       "lo": 19.22,
+       "hi": 30.38,
        "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_fabopen_seeds23_n200_tok4096/cells/public_goods__none_3508120"
       },
       {
        "seed": 3,
        "episodes": 200,
-       "rate": 23.97,
+       "rate": 23.9,
        "se": 2.77,
-       "lo": 18.54,
-       "hi": 29.41,
+       "lo": 18.48,
+       "hi": 29.32,
        "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_fabopen_seeds23_n200_tok4096/cells/public_goods__none_3508121"
       }
      ]
@@ -232,8 +232,8 @@
      "Std": 0,
      "Min": 78,
      "Max": 79,
-     "Lo": 75,
-     "Hi": 81,
+     "Lo": 77,
+     "Hi": 79,
      "cells": [
       {
        "seed": 1,
@@ -280,7 +280,7 @@
     },
     "Sdpo - Base": {
      "Diff": 73,
-     "Lo": 68,
+     "Lo": 69,
      "Hi": 77,
      "Seeds": 3
     },
@@ -310,10 +310,10 @@
       {
        "seed": null,
        "episodes": 200,
-       "rate": 2.93,
+       "rate": 2.9,
        "se": 0.86,
-       "lo": 1.24,
-       "hi": 4.61,
+       "lo": 1.22,
+       "hi": 4.58,
        "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_fabopen_n200_tok4096/cells/public_goods__none_3474486"
       }
      ]
@@ -348,10 +348,10 @@
       {
        "seed": 1,
        "episodes": 200,
-       "rate": 2.75,
-       "se": 0.57,
-       "lo": 1.63,
-       "hi": 3.87,
+       "rate": 2.7,
+       "se": 0.56,
+       "lo": 1.6,
+       "hi": 3.8,
        "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_fabopen_n200_tok4096/cells/public_goods__none_3474488"
       },
       {
@@ -366,10 +366,10 @@
       {
        "seed": 3,
        "episodes": 200,
-       "rate": 3.32,
-       "se": 0.6,
-       "lo": 2.15,
-       "hi": 4.49,
+       "rate": 3.2,
+       "se": 0.57,
+       "lo": 2.07,
+       "hi": 4.33,
        "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_fabopen_seeds23_n200_tok4096/cells/public_goods__none_3508121"
       }
      ]
@@ -379,8 +379,8 @@
      "Std": 2,
      "Min": 23,
      "Max": 27,
-     "Lo": 22,
-     "Hi": 28,
+     "Lo": 21,
+     "Hi": 29,
      "cells": [
       {
        "seed": 1,
@@ -476,10 +476,10 @@
       {
        "seed": null,
        "episodes": 200,
-       "rate": 38.95,
-       "se": 2.69,
-       "lo": 33.69,
-       "hi": 44.21,
+       "rate": 38.8,
+       "se": 2.68,
+       "lo": 33.55,
+       "hi": 44.05,
        "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_fabopen_incontext_n200_tok4096/cells/public_goods__deontological_3474491"
       }
      ]
@@ -489,16 +489,16 @@
      "Std": 3,
      "Min": 3,
      "Max": 9,
-     "Lo": 5,
-     "Hi": 8,
+     "Lo": 0,
+     "Hi": 14,
      "cells": [
       {
        "seed": 1,
        "episodes": 200,
-       "rate": 3.05,
-       "se": 0.92,
-       "lo": 1.25,
-       "hi": 4.85,
+       "rate": 3.0,
+       "se": 0.91,
+       "lo": 1.23,
+       "hi": 4.77,
        "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_fabopen_n200_tok4096/cells/public_goods__none_3474488"
       },
       {
@@ -523,19 +523,19 @@
     },
     "Sdpo": {
      "Mean": 54,
-     "Std": 3,
+     "Std": 4,
      "Min": 51,
-     "Max": 58,
-     "Lo": 50,
-     "Hi": 57,
+     "Max": 57,
+     "Lo": 45,
+     "Hi": 62,
      "cells": [
       {
        "seed": 1,
        "episodes": 200,
-       "rate": 50.72,
+       "rate": 50.7,
        "se": 3.35,
-       "lo": 44.16,
-       "hi": 57.29,
+       "lo": 44.13,
+       "hi": 57.27,
        "path": "eval_results/transfer/olmo3_7b/pgg/multi_round_fabopen_n200_tok4096/cells/public_goods__none_3474487"
       },
       {
@@ -636,8 +636,8 @@
      "Std": 2,
      "Min": 7,
      "Max": 11,
-     "Lo": 8,
-     "Hi": 10,
+     "Lo": 3,
+     "Hi": 15,
      "cells": [
       {
        "seed": 1,
@@ -673,7 +673,7 @@
      "Std": 1,
      "Min": 56,
      "Max": 59,
-     "Lo": 55,
+     "Lo": 54,
      "Hi": 60,
      "cells": [
       {

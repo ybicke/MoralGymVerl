@@ -1,5 +1,5 @@
 {
- "interval": "normal over episodes, Wilson without spread",
+ "interval": "single cells: normal over episodes (Wilson without spread); trained rows: Student t over seed rates",
  "level": 95,
  "step": 200,
  "quantities": {
@@ -48,8 +48,8 @@
      "Std": 1,
      "Min": 2,
      "Max": 4,
-     "Lo": 2,
-     "Hi": 4,
+     "Lo": 1,
+     "Hi": 6,
      "cells": [
       {
        "seed": 1,
@@ -85,8 +85,8 @@
      "Std": 2,
      "Min": 62,
      "Max": 65,
-     "Lo": 61,
-     "Hi": 65,
+     "Lo": 59,
+     "Hi": 67,
      "cells": [
       {
        "seed": 1,
@@ -195,8 +195,8 @@
      "Std": 2,
      "Min": 8,
      "Max": 12,
-     "Lo": 8,
-     "Hi": 13,
+     "Lo": 6,
+     "Hi": 15,
      "cells": [
       {
        "seed": 1,
@@ -232,7 +232,7 @@
      "Std": 1,
      "Min": 91,
      "Max": 93,
-     "Lo": 91,
+     "Lo": 90,
      "Hi": 94,
      "cells": [
       {
@@ -342,8 +342,8 @@
      "Std": 1,
      "Min": 3,
      "Max": 5,
-     "Lo": 3,
-     "Hi": 5,
+     "Lo": 2,
+     "Hi": 7,
      "cells": [
       {
        "seed": 1,
@@ -379,8 +379,8 @@
      "Std": 4,
      "Min": 34,
      "Max": 42,
-     "Lo": 35,
-     "Hi": 41,
+     "Lo": 28,
+     "Hi": 48,
      "cells": [
       {
        "seed": 1,
@@ -489,8 +489,8 @@
      "Std": 1,
      "Min": 5,
      "Max": 7,
-     "Lo": 4,
-     "Hi": 7,
+     "Lo": 2,
+     "Hi": 9,
      "cells": [
       {
        "seed": 1,
@@ -526,8 +526,8 @@
      "Std": 3,
      "Min": 77,
      "Max": 84,
-     "Lo": 77,
-     "Hi": 83,
+     "Lo": 72,
+     "Hi": 88,
      "cells": [
       {
        "seed": 1,
@@ -636,8 +636,8 @@
      "Std": 1,
      "Min": 6,
      "Max": 8,
-     "Lo": 5,
-     "Hi": 8,
+     "Lo": 4,
+     "Hi": 9,
      "cells": [
       {
        "seed": 1,

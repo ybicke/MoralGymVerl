@@ -9,11 +9,11 @@
  & round & Full & Free & Noisy \\
 \midrule
 Base & 3{\scriptsize\,[1,5]} & 6{\scriptsize\,[3,9]} & 3{\scriptsize\,[1,5]} & 3{\scriptsize\,[1,4]} \\
-Prompted & 62{\scriptsize\,[59,65]} & 73{\scriptsize\,[68,78]} & 24{\scriptsize\,[20,27]} & 39{\scriptsize\,[34,44]} \\
-GRPO & 8{\scriptsize\,(7--8)} & 22{\scriptsize\,(17--25)} & 3{\scriptsize\,(3--3)} & 6{\scriptsize\,(3--9)} \\
-SDPO & 58{\scriptsize\,(56--58)} & 78{\scriptsize\,(78--79)} & 25{\scriptsize\,(23--27)} & 54{\scriptsize\,(51--58)} \\
+Prompted & 60{\scriptsize\,[56,63]} & 73{\scriptsize\,[68,78]} & 24{\scriptsize\,[20,27]} & 39{\scriptsize\,[34,44]} \\
+GRPO & 7{\scriptsize\,[6,9]} & 22{\scriptsize\,[11,33]} & 3{\scriptsize\,[2,4]} & 6{\scriptsize\,[0,14]} \\
+SDPO & 56{\scriptsize\,[53,59]} & 78{\scriptsize\,[77,79]} & 25{\scriptsize\,[21,29]} & 54{\scriptsize\,[45,62]} \\
 \bottomrule
 \end{tabular}
-\caption{Contribution rate (\%) of Olmo-3-7B-Instruct in the public-goods game after 200 training steps (protocols in Section~\ref{sec:games:protocol}). Single round pools 400 decisions over the 8 fabricated states, 5 rounds (opened with a fabricated previous round) pools all rounds of 200 episodes against a full contributor, free rider or noisy conditional co-player. Only Prompted has the principle in the prompt. Base and Prompted give the rate with its 95\% confidence interval over episodes in brackets, trained rows the mean over 3 seeds with the lowest and highest seed in parentheses.}
+\caption{Contribution rate (\%) of Olmo-3-7B-Instruct in the public-goods game after 200 training steps (protocols in Section~\ref{sec:games:protocol}). Single round pools 400 decisions over the 8 fabricated states, 5 rounds (opened with a fabricated previous round) pools all rounds of 200 episodes against a full contributor, free rider or noisy conditional co-player. Only Prompted has the principle in the prompt; an unparsable answer counts as not contributing. Brackets give 95\% confidence intervals: Base and Prompted the rate with its interval over episodes (each episode one unit), trained rows the mean over 3 training seeds with the 95\% Student-$t$ interval over seeds, which includes the variation between training runs.}
 \label{tab:seed-transfer-olmo3-7b-fabopen}
 \end{table}

@@ -10,9 +10,12 @@ the EPISODE as the unit, never the decision: the rounds of one live-play
 episode are dependent, so each episode enters as its own contribution
 rate. Single-round cells are stratified by fabricated state (the
 balanced design is fixed); round 1 pooled over co-players by co-player.
-For a trained row the interval is that of the mean over its seeds and
-carries evaluation noise only; the spread between training seeds is the
-min-max. Where the episodes of a cell do not vary (a rate of 0 or 1)
+For a trained row the interval is two-stage: each seed's rate is one
+value, and the interval is the Student-t interval over the seeds,
+mean +- t_{S-1} * sd(seed rates) / sqrt(S). The spread of the seed rates
+contains both the between-seed and the evaluation variance, so this is the
+interval of the training method, not of these checkpoints. The min-max
+over seeds is kept as macros. Where the episodes of a cell do not vary (a rate of 0 or 1)
 the standard error would be 0, so the cell gets a Wilson interval on
 its episode count instead. Intervals are clipped to [0, 1].
 
@@ -40,6 +43,8 @@ from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from statistics import mean, stdev, variance
 from typing import Dict, List, Tuple
+
+from scipy.stats import t as student_t
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from seed_figures import Cell, load_cells, split  # noqa: E402
@@ -80,8 +85,8 @@ class Sample:
     The rate is the mean of the per-episode rates, as the cell stores it
     (metrics.py), and the standard error the stratified one,
     sqrt(sum_h w_h^2 s_h^2 / n_h) with w_h the stratum's share of episodes.
-    Episodes without a decision (every answer unparseable) are left out,
-    again as in the cell."""
+    Every answer counts; an unparseable one counts as not contributed
+    (see strata)."""
 
     def __init__(self, cell: Cell, strata: List[List[Tuple[int, int]]]):
         self.seed, self.path = cell.seed, str(cell.path)
@@ -99,15 +104,16 @@ class Sample:
             self.se = (self.hi - self.lo) / (2 * Z)
 
 
-def strata(block: Dict, by_state: bool = False, first_round: bool = False,
-           legal_only: bool = True):
+def strata(block: Dict, by_state: bool = False, first_round: bool = False):
     """One block's episodes as (contributions, decisions) pairs, grouped by
     fabricated state if by_state, else one stratum.
 
-    legal_only counts parseable answers only, the cell's cooperation_rate
-    convention; per-round rates (per_round p_C, the figures) count every
-    answer, an unparseable one as not contributed, so round-1 samples pass
-    legal_only=False.
+    Every answer is a decision, and an unparseable one counts as not
+    contributed: the rule of the per-round rates and figures (per_round p_C)
+    and the conservative one, since a policy cannot gain from failing to
+    answer and policies that fail more often are not compared on a filtered
+    subset of their answers. (The cell's own cooperation_rate drops
+    unparseable answers instead; it is not used here.)
 
     Cells written before episodes recorded their fab_state get it from the
     balanced design, which cycles the states in order; either way the
@@ -122,16 +128,22 @@ def strata(block: Dict, by_state: bool = False, first_round: bool = False,
             key = ("({},{})".format(*e["fab_state"]) if "fab_state" in e
                    else states[i % len(states)])
         c = sum(m == "C" for m in moves)
-        groups[key].append((c, sum(m in ("C", "D") for m in moves)
-                            if legal_only else len(moves)))
-        check[key].append((c, len(moves)))
+        groups[key].append((c, len(moves)))
     if by_state:
-        for k, g in check.items():
+        for k, g in groups.items():
             stored = block["state_conditioning"][k]
             rate = sum(c for c, _ in g) / sum(n for _, n in g)
             if len(g) != stored["n"] or abs(rate - stored["p_C"]) > 1e-9:
                 raise SystemExit(f"episodes do not reproduce state {k} of the cell")
     return list(groups.values())
+
+
+def all_answers_rate(block: Dict, first_round: bool = False) -> float:
+    """The cell's stored contribution rate over all answers (per_round p_C,
+    unparseable = not contributed), pooled over rounds."""
+    rounds = ([block["per_round"]["round_1"]] if first_round
+              else list(block["per_round"].values()))
+    return sum(r["p_C"] * r["n"] for r in rounds) / sum(r["n"] for r in rounds)
 
 
 def checked(sample: Sample, stored: float) -> Sample:
@@ -157,15 +169,20 @@ def rows(cells, step, principle, sample) -> Dict[str, List[Sample]]:
 
 
 def row(samples: List[Sample]) -> Tuple[float, float]:
-    """Mean over the row's cells and its standard error (cells independent)."""
+    """Mean over the row's cells and its evaluation-only standard error
+    (cells independent); used for the Vs differences, not the row interval."""
     return (mean(s.est for s in samples),
             math.sqrt(sum(s.se ** 2 for s in samples)) / len(samples))
 
 
 def stats(samples: List[Sample]) -> Dict[str, int]:
     vals = [s.est for s in samples]
-    lo, hi = ((samples[0].lo, samples[0].hi) if len(samples) == 1
-              else clip(*normal(*row(samples))))
+    if len(samples) == 1:          # fixed model: interval over episodes
+        lo, hi = samples[0].lo, samples[0].hi
+    else:                          # trained: Student-t over the seed rates
+        t = student_t.ppf(0.5 + LEVEL / 200, len(vals) - 1)
+        half = t * stdev(vals) / math.sqrt(len(vals))
+        lo, hi = clip(mean(vals) - half, mean(vals) + half)
     return {"Mean": pct(mean(vals)), "Std": pct(stdev(vals) if len(vals) > 1 else 0.0),
             "Min": pct(min(vals)), "Max": pct(max(vals)), "Lo": pct(lo), "Hi": pct(hi)}
 
@@ -185,12 +202,10 @@ def versus(samples: List[Sample], ref: List[Sample]) -> Dict[str, int]:
 
 
 def cell(samples: List[Sample]) -> str:
-    """Table entry: rate [interval] for a single cell, mean (min--max over
-    seeds) for a trained row."""
+    """Table entry: rate [95% interval]; over episodes for a single cell,
+    over seeds (Student t) for a trained row."""
     st = stats(samples)
-    if len(samples) == 1:
-        return f"{st['Mean']}{{\\scriptsize\\,[{st['Lo']},{st['Hi']}]}}"
-    return f"{st['Mean']}{{\\scriptsize\\,({st['Min']}--{st['Max']})}}"
+    return f"{st['Mean']}{{\\scriptsize\\,[{st['Lo']},{st['Hi']}]}}"
 
 
 def main() -> None:
@@ -217,18 +232,18 @@ def main() -> None:
     quantities = {"SR{}": rows(
         scells, a.step, a.principle, lambda c: checked(
             Sample(c, strata(c.first, by_state=True)),
-            c.first["cooperation_rate"]))}
+            all_answers_rate(c.first)))}
     for o in opps:
         quantities[f"MR{{}}{camel(o)}"] = rows(
             mcells, a.step, a.principle, lambda c, o=o: checked(
-                Sample(c, strata(c.blocks[o])), c.blocks[o]["cooperation_rate"]))
+                Sample(c, strata(c.blocks[o])), all_answers_rate(c.blocks[o])))
     # round 1 has no previous round (absent from training); co-players
     # cannot differ yet, so pool it over them
     quantities["MR{}RoundOne"] = rows(
         mcells, a.step, a.principle, lambda c: checked(
             Sample(c, [s for o in opps for s in strata(
-                c.blocks[o], first_round=True, legal_only=False)]),
-            sum(c.blocks[o]["per_round"]["round_1"]["p_C"] for o in opps) / len(opps)))
+                c.blocks[o], first_round=True)]),
+            sum(all_answers_rate(c.blocks[o], first_round=True) for o in opps) / len(opps)))
     single = quantities["SR{}"]
 
     # The numbers below describe ONE design; mixed sizes would mislabel it.
@@ -245,7 +260,8 @@ def main() -> None:
     p = a.prefix
     n = len(single["Sdpo"])
     macros = {f"{p}Step": str(a.step), f"{p}N": str(n)}
-    report = {"interval": "normal over episodes, Wilson without spread", "level": LEVEL, "step": a.step, "quantities": {}}
+    report = {"interval": "single cells: normal over episodes (Wilson without "
+              "spread); trained rows: Student t over seed rates", "level": LEVEL, "step": a.step, "quantities": {}}
     for q, by_row in quantities.items():
         entry = report["quantities"][q.format("")] = {"rows": {}, "versus": {}}
         for r, _ in ROWS:
@@ -280,8 +296,10 @@ def main() -> None:
     intervals.write_text(json.dumps(report, indent=1) + "\n")
 
     live = f" ({a.live_play})" if a.live_play else ""
-    seeds = (rf"trained rows the mean over {n} seeds with the lowest and highest "
-             rf"seed in parentheses" if n > 1 else "as do the trained rows (one seed)")
+    seeds = (rf"trained rows the mean over {n} training seeds with the "
+             rf"{LEVEL}\% Student-$t$ interval over seeds, which includes the "
+             rf"variation between training runs" if n > 1
+             else "as do the trained rows (one seed)")
     short = {"full_contributor": "Full", "free_rider": "Free", "noisy_conditional": "Noisy"}
     heads = " & ".join(short.get(o, o) for o in opps)
     tab = [
@@ -302,9 +320,10 @@ def main() -> None:
             rf"{sr_eps} decisions over the {sr_states} fabricated states, "
             rf"{mr_rounds} rounds{live} pools all rounds of {mr_eps} episodes against "
             rf"a full contributor, free rider or noisy conditional co-player. "
-            rf"Only Prompted has the principle in the prompt. Base and Prompted "
-            rf"give the rate with its {LEVEL}\% confidence interval over episodes "
-            rf"in brackets, {seeds}.}}",
+            rf"Only Prompted has the principle in the prompt; an unparsable "
+            rf"answer counts as not contributing. Brackets give "
+            rf"{LEVEL}\% confidence intervals: Base and Prompted the rate with "
+            rf"its interval over episodes (each episode one unit), {seeds}.}}",
             rf"\label{{tab:{a.table.replace('_', '-')}}}", r"\end{table}"]
     (gen / "tables" / f"{a.table}.tex").write_text("\n".join(tab) + "\n")
     print(f"wrote {gen}/numbers_{p}.tex ({len(macros)} macros), "

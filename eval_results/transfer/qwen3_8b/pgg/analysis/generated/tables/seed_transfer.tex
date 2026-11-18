@@ -10,10 +10,10 @@
 \midrule
 Base & 1{\scriptsize\,[0,2]} & 0{\scriptsize\,[0,0]} & 7{\scriptsize\,[5,10]} & 2{\scriptsize\,[1,4]} \\
 Prompted & 51{\scriptsize\,[47,55]} & 71{\scriptsize\,[65,76]} & 27{\scriptsize\,[23,31]} & 60{\scriptsize\,[54,66]} \\
-GRPO & 3{\scriptsize\,(2--4)} & 10{\scriptsize\,(8--12)} & 4{\scriptsize\,(3--5)} & 6{\scriptsize\,(5--7)} \\
-SDPO & 63{\scriptsize\,(62--65)} & 92{\scriptsize\,(91--93)} & 38{\scriptsize\,(34--42)} & 80{\scriptsize\,(77--84)} \\
+GRPO & 3{\scriptsize\,[1,6]} & 10{\scriptsize\,[6,15]} & 4{\scriptsize\,[2,7]} & 6{\scriptsize\,[2,9]} \\
+SDPO & 63{\scriptsize\,[59,67]} & 92{\scriptsize\,[90,94]} & 38{\scriptsize\,[28,48]} & 80{\scriptsize\,[72,88]} \\
 \bottomrule
 \end{tabular}
-\caption{Contribution rate (\%) of Qwen3-8B in the public-goods game after 200 training steps (protocols in Section~\ref{sec:games:protocol}). Single round pools 400 decisions over the 8 fabricated states, 5 rounds pools all rounds of 200 episodes against a full contributor, free rider or noisy conditional co-player. Only Prompted has the principle in the prompt. Base and Prompted give the rate with its 95\% confidence interval over episodes in brackets, trained rows the mean over 3 seeds with the lowest and highest seed in parentheses.}
+\caption{Contribution rate (\%) of Qwen3-8B in the public-goods game after 200 training steps (protocols in Section~\ref{sec:games:protocol}). Single round pools 400 decisions over the 8 fabricated states, 5 rounds pools all rounds of 200 episodes against a full contributor, free rider or noisy conditional co-player. Only Prompted has the principle in the prompt; an unparsable answer counts as not contributing. Brackets give 95\% confidence intervals: Base and Prompted the rate with its interval over episodes (each episode one unit), trained rows the mean over 3 training seeds with the 95\% Student-$t$ interval over seeds, which includes the variation between training runs.}
 \label{tab:seed-transfer}
 \end{table}
