@@ -250,7 +250,17 @@ def fig_training_seeds(args, out_dir: Path) -> None:
     (--run label=run-dir, repeat a label once per seed). Line = mean over
     seeds of each run's window mean, band = 95% Student-t interval over
     seeds (seed_figures.seed_band), the same convention as the seed transfer
-    figures and tables."""
+    figures and tables.
+
+    The training data differ from the evaluation: a window holds about 20
+    prompts per state (random state draws) with 16 rollouts each from a
+    policy that changes over the window, rollouts of one prompt are
+    correlated, and sampling is at T 1.0 with randomized presentations.
+    The band stays a valid pointwise interval of the method's curve, since
+    each seed enters with one value per window and its sampling noise is
+    part of the spread between seeds. It is pointwise, not simultaneous over
+    windows, and adjacent windows of one run are correlated, so differences
+    between windows are not independent comparisons."""
     from seed_figures import seed_band
     by_label: Dict[str, list] = defaultdict(list)
     for label, run_dir in parse_labeled(args.run):
