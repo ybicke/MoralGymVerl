@@ -121,7 +121,7 @@ case "${GPUS}" in
     mig1) GRES="nvidia_h100_80gb_hbm3_1g.10gb:1"; CPUS=1; MEM="${MEM:-32G}";  N_GPUS=1 ;;
     mig2) GRES="nvidia_h100_80gb_hbm3_2g.20gb:1"; CPUS=3; MEM="${MEM:-64G}";  N_GPUS=1 ;;
     mig3) GRES="nvidia_h100_80gb_hbm3_3g.40gb:1"; CPUS=6; MEM="${MEM:-120G}"; N_GPUS=1 ;;
-    [1-4]) GRES="h100:${GPUS}"; CPUS=$(( GPUS * FIR_NODE_CPUS / FIR_NODE_GPUS )); MEM="${MEM:-$(( GPUS * 250 ))G}"; N_GPUS="${GPUS}" ;;
+    [1-4]) GRES="h100:${GPUS}"; CPUS=$(( GPUS * FIR_NODE_CPUS / FIR_NODE_GPUS )); MEM="${MEM:-$(( GPUS * FIR_MEM_PER_GPU_GB ))G}"; N_GPUS="${GPUS}" ;;
     *) echo "ERROR: GPUS must be 1-4 or mig1|mig2|mig3, got '${GPUS}'" >&2; exit 1 ;;
 esac
 EXTRA_ARGS="trainer.n_gpus_per_node=${N_GPUS} ${EXTRA_ARGS}"
@@ -203,6 +203,7 @@ PYEOF
 
 if [ -n "${DRY_RUN:-}" ]; then
     echo "DRY_RUN resolution:"
+    echo "  cluster: ${MORALGYM_CLUSTER}"
     echo "  config:  configs/training/${CONFIG_NAME}.yaml"
     echo "  gpus:    ${GRES} (${CPUS} cores, ${MEM})"
     echo "  run:     ${RUN_NAME}"
@@ -267,7 +268,7 @@ export MORALGYM_DIR SDPO_DIR MORALGYM_CKPT_ROOT MORALGYM_STORE_ROOT="${MORALGYM_
 export MORALGYM_RUN_NAME="${RUN_NAME}" MORALGYM_GROUP="${DATASET_CONFIG}" MORALGYM_DATASET_DIR="${DATASET_DIR}"
 
 # ── 7. Submit ────────────────────────────────────────────────────────────────
-echo "Submitting: ${RUN_NAME} (Fir)"
+echo "Submitting: ${RUN_NAME} (${MORALGYM_CLUSTER})"
 echo "  config:  configs/training/${CONFIG_NAME}.yaml"
 echo "  dataset: ${DATASET_DIR}"
 echo ""

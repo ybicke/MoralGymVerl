@@ -23,6 +23,18 @@ optional `SDPO_DIR`). The Fir files are copies of the Clariden launchers with
 the cluster parts swapped; the header of each says so. When a Clariden
 launcher changes, port the change here.
 
+## Rorqual
+
+The same launchers run on Rorqual (Calcul Québec): same 4x H100 nodes, same
+Slurm setup and MIG slices. `fir_env.sh` / `fir_env.py` load
+`scripts/slurm/fir/<cluster>.env`, with the cluster taken from
+`MORALGYM_CLUSTER`, else the Alliance-set `CC_CLUSTER` (so it is automatic
+on either cluster), else `fir`. `rorqual.env` differs in node size: 64
+cores and 500 GB RAM per node, so 16 cores and 120 GB per GPU. Accounts
+there carry a suffix (`SLURM_ACCOUNT=rrg-zhijing_gpu` in `cluster.env`;
+`--account=def-zhijing_cpu` for the setup build). Heterogeneous jobs are
+accepted on Rorqual (checked with `sbatch --test-only`).
+
 ## What differs on Fir
 
 - **Fast smokes**: MIG slices start within minutes while full H100s can queue

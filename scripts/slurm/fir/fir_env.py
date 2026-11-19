@@ -2,7 +2,8 @@
 
 load_fir_env(): scripts/slurm/cluster.env (KEY=VALUE, no override of
 variables already set; SLURM_ACCOUNT -> SBATCH_ACCOUNT, as the Clariden
-submit scripts do) then scripts/slurm/fir/fir.env into os.environ.
+submit scripts do) then scripts/slurm/fir/<cluster>.env into os.environ,
+cluster = MORALGYM_CLUSTER, else CC_CLUSTER, else fir (as fir_env.sh).
 sbatch_resource_args(kind): Fir resource flags for a "node" (whole node)
 or "gpu" (one cell) job, spliced between "sbatch" and the launcher.
 """
@@ -45,7 +46,12 @@ def load_fir_env() -> None:
         os.environ.setdefault("SBATCH_ACCOUNT", os.environ["SLURM_ACCOUNT"])
     os.environ.setdefault("HF_HOME", os.path.join(
         os.environ.get("SCRATCH", os.environ["HOME"]), ".cache/huggingface"))
-    _read_kv(FIR_DIR / "fir.env", override=True)
+    cluster = os.environ.get("MORALGYM_CLUSTER") or os.environ.get("CC_CLUSTER") or "fir"
+    os.environ["MORALGYM_CLUSTER"] = cluster
+    env_file = FIR_DIR / f"{cluster}.env"
+    if not env_file.is_file():
+        raise FileNotFoundError(f"no settings for cluster {cluster!r}: {env_file}")
+    _read_kv(env_file, override=True)
 
 
 def sbatch_resource_args(kind: str) -> List[str]:
