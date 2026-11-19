@@ -1,0 +1,22 @@
+# =============================================================================
+# GRPO with an LLM judge on the principle — Qwen3-8B (row 2 of
+# ~/moralgym-report/notes/judge_grpo_design.tex).
+#
+# Trainer = the paper's GRPO baseline, qwen3_8b_grpo_pd_deon_tft_200_v2
+# (lr 1e-5 and warmup 10 as in the SDPO arm, KL 0.04), unchanged. The only
+# change is the reward: dataset grpo_pd_judge-principle_tft carries a judge
+# block, and MoralGymRewardManager (instead of verl's per-sample naive
+# manager) scores the whole batch with one concurrent call to the judge.
+#
+# Needs a running judge server; submit with
+#   JUDGE=1 SEED=1 bash scripts/slurm/fir/train_verl.sh qwen3_8b_grpo_pd_judge-principle_tft_200
+# =============================================================================
+defaults:
+  - qwen3_8b_grpo_pd_deon_tft_200_v2
+  - _self_
+
+reward_manager:
+  source: importlib
+  name: MoralGymRewardManager
+  module:
+    path: ${vars.moralgym_dir}/src/moralgym_verl/training/reward_manager.py

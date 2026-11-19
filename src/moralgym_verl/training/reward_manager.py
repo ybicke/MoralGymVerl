@@ -68,6 +68,13 @@ class MoralGymRewardManager(AbstractRewardManager):
         reward_tensor = torch.zeros_like(data.batch["responses"], dtype=torch.float32)
         reward_extra_info = defaultdict(list)
         num_printed = 0
+        # Filled per sample, then (judge arms only) rescored as one batch.
+        scores: list[dict[str, Any]] = []
+        states: list[dict[str, Any]] = []
+        responses: list[str] = []
+        lengths: list[int] = []
+        gts: list[str] = []
+        turn_scores_all: list[Any] = []
 
         for i in range(len(data)):
             data_item = data[i]
@@ -78,6 +85,7 @@ class MoralGymRewardManager(AbstractRewardManager):
             ground_truth = data_item.non_tensor_batch["reward_model"]["ground_truth"]
             turn_scores = data_item.non_tensor_batch.get("turn_scores")
 
+            response_str = ""
             if turn_scores is not None and len(turn_scores) > 0:
                 # Multi-turn: GameInteraction already computed per-round rewards
                 total = float(sum(turn_scores))
@@ -98,6 +106,25 @@ class MoralGymRewardManager(AbstractRewardManager):
                 if not isinstance(score, dict):
                     score = {"score": float(score), "feedback": ""}
 
+            scores.append(score)
+            states.append(json.loads(ground_truth))
+            responses.append(response_str)
+            lengths.append(int(valid_response_length))
+            gts.append(ground_truth)
+            turn_scores_all.append(turn_scores)
+
+        # Judge arms (dataset `judge:` block): one batched call to the judge
+        # replaces the game score with the judge's score. Single-round only.
+        if states and "judge" in states[0]:
+            if any(t is not None and len(t) > 0 for t in turn_scores_all):
+                raise ValueError("judge reward is implemented for single-round data only")
+            from moralgym_verl.training.judge import apply_judge
+            scores = apply_judge(scores, states, responses)
+
+        for i, score in enumerate(scores):
+            valid_response_length = lengths[i]
+            ground_truth = gts[i]
+            turn_scores = turn_scores_all[i]
             for key, value in score.items():
                 reward_extra_info[key].append(value)
             reward_tensor[i, valid_response_length - 1] = score["score"]

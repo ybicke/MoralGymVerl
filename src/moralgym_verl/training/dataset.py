@@ -144,6 +144,13 @@ def _sample_config_from_yaml(
         "feedback_mode": cfg.get("teacher", {}).get("feedback", "critique"),
         "moral_value": cfg.get("teacher", {}).get("moral_value", "none"),
     }
+    # Judge reward (GRPO/SDPO judge arms, training/judge.py): the block rides
+    # in the state so the reward manager finds it. Validated here so a typo
+    # fails at submit time, not on the cluster.
+    if cfg.get("judge"):
+        from moralgym_verl.training.judge import JudgeConfig
+        JudgeConfig.from_dict(cfg["judge"])
+        state["judge"] = dict(cfg["judge"])
 
     return config, state
 

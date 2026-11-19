@@ -1,0 +1,55 @@
+# GRPO dataset, judge on the principle (row 2 of
+# ~/moralgym-report/notes/judge_grpo_design.tex): the judge-reward twin of
+# sdpo_pd_deon_tft. (consumed by moralgym_verl.training.dataset, NOT by
+# verl/Hydra.)
+#
+# Same game, opponent, prompt design and randomization as sdpo_pd_deon_tft,
+# so at one seed both arms train on byte-identical prompts. The arms differ
+# only in how the principle reaches training: there as text in SDPO's
+# teacher context, here through a judge that reads the same text and scores
+# each rollout (training/judge.py). The judge score is the whole reward; the
+# game payoff is only logged (game_score), as in the SDPO arm. Unparseable
+# actions keep the illegal-action penalty, as in every arm.
+game:
+  type: prisoners_dilemma
+  payoffs: {T: 4, R: 3, P: 1, S: 0}
+  num_rounds: 1
+  sample_payoffs: false
+
+opponent:
+  types: [tit_for_tat]
+  distribution: [1.0]
+
+reward:
+  # Logged only (game_score): the judge replaces it in the reward.
+  game_reward: normalized
+  intrinsic: none
+  lambda: 0.0
+  illegal_penalty: -6
+
+# Kept identical to sdpo_pd_deon_tft so the prompts and state match; GRPO
+# ignores the feedback string.
+teacher:
+  feedback: principle
+  moral_value: deontological
+
+judge:
+  # Frozen base model with the principle, served by
+  # scripts/slurm/fir/judge_server.sh; address from MORALGYM_JUDGE_URL.
+  model: Qwen/Qwen3-8B
+  moral_value: deontological   # the same text as teacher.moral_value
+  # yesno | scale; thinking on/off. Set from the offline comparison
+  # (scripts/analysis/judge_offline.py); yesno without thinking is the
+  # default when there is no clear winner.
+  scoring: yesno
+  thinking: false
+
+prompt:
+  game_design: hist
+  hist_coop_bias: 0.5
+  representation: list
+  reasoning: true
+  randomize_labels: false
+  randomize_layout: true
+  randomize_label_order: true
+  randomize_role: true
