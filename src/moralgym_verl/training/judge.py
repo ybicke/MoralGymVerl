@@ -160,14 +160,25 @@ def game_prompt_from_state(state: dict[str, Any]) -> str:
     return build_prompt(config, state["agent_history"], state["opp_history"])
 
 
+def judge_prompt_from_text(
+    game: str, response: str, moral_value: str, scoring: str = "yesno"
+) -> str:
+    """The judge prompt for a given game prompt text (offline evaluation
+    on saved traces, scripts/analysis/judge_offline.py)."""
+    return JUDGE_TEMPLATE.format(
+        principle=get_moral_value(moral_value),
+        game=game,
+        response=response.strip(),
+        question=QUESTIONS[scoring],
+    )
+
+
 def build_judge_prompt(
     state: dict[str, Any], response: str, moral_value: str, scoring: str = "yesno"
 ) -> str:
-    return JUDGE_TEMPLATE.format(
-        principle=get_moral_value(moral_value),
-        game=game_prompt_from_state(state),
-        response=response.strip(),
-        question=QUESTIONS[scoring],
+    """The judge prompt for a training rollout, from its stored state."""
+    return judge_prompt_from_text(
+        game_prompt_from_state(state), response, moral_value, scoring
     )
 
 
@@ -278,12 +289,17 @@ def judge_scores(
     """Score a batch of rollouts concurrently. Returns a score in [0, 1] per
     rollout, or None where the judge gave no answer token. Raises
     JudgeUnavailable if the server is down."""
+    prompts = [build_judge_prompt(s, r, cfg.moral_value, cfg.scoring)
+               for s, r in zip(states, responses)]
+    return score_prompts(cfg, prompts)
+
+
+def score_prompts(cfg: JudgeConfig, prompts: list[str]) -> list[float | None]:
+    """Score ready-made judge prompts concurrently (see judge_scores)."""
     if not cfg.endpoint:
         raise JudgeUnavailable(
             "no judge endpoint: set judge.endpoint or MORALGYM_JUDGE_URL"
         )
-    prompts = [build_judge_prompt(s, r, cfg.moral_value, cfg.scoring)
-               for s, r in zip(states, responses)]
     with ThreadPoolExecutor(max_workers=cfg.max_concurrency) as pool:
         return list(pool.map(lambda p: _score_one(cfg, p), prompts))
 
