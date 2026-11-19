@@ -28,7 +28,10 @@
 # and FSDP ranks; GPUS=mig3 = one 40 GB MIG slice, the fast debug path), TIME (12:00:00), MEM (250G per GPU, 1000G = the whole
 # node), DATASET_CONFIG (derived, also names the W&B group),
 # DATASET_SEED (42), SEED (unset; replicate N of the config, see step 1),
-# DRY_RUN (stop after name/phase checks; no dataset generation, no sbatch).
+# DRY_RUN (stop after name/phase checks; no dataset generation, no sbatch),
+# JUDGE=1 (LLM-judge reward: the dataset has a `judge:` block; submits a
+# heterogeneous job, component 0 = training, component 1 = one GPU for the
+# judge server, started by train_job.sh; full GPUs only, no MIG).
 #
 #   SEED=1 bash train_verl.sh qwen3_8b_grpo_pd_deon_tft_200
 #   -> run qwen3_8b_grpo_pd_deon_tft_200_seed1, every RNG below seeded 1
@@ -189,6 +192,15 @@ if (rounds > 1) != bool(mt):
         f"(+ MoralGymRewardManager)"
     )
 print(f"Phase check OK: num_rounds={rounds}, multi_turn.enable={bool(mt)}")
+# A judge dataset needs a judge server (JUDGE=1), and a judge server is wasted
+# without one: a mismatch would crash at step 1 or burn a GPU.
+import os
+judge, want = ds.get("judge"), os.environ.get("JUDGE", "0") == "1"
+if bool(judge) != want:
+    sys.exit(f"ERROR: dataset {ds_name}.yaml {'has' if judge else 'has no'} a judge block "
+             f"but JUDGE={os.environ.get('JUDGE', '0')}. Judge datasets need JUDGE=1, others JUDGE=0.")
+if judge:
+    print(f"Judge OK: {judge['model']} scoring={judge.get('scoring', 'yesno')} thinking={judge.get('thinking', False)}")
 # game.per_batch holds only if the trainer reads one dataset block per batch.
 per_batch = ds["game"].get("per_batch")
 data = tr.get("data", {})
@@ -201,12 +213,23 @@ if per_batch and (data.get("train_batch_size") != sum(per_batch)
     )
 PYEOF
 
+# Judge server model = the dataset's judge.model (training/judge.py asks the
+# server for exactly that name).
+JUDGE="${JUDGE:-0}"
+JUDGE_MODEL=""
+if [ "${JUDGE}" = "1" ]; then
+    case "${GPUS}" in mig*) echo "ERROR: JUDGE=1 needs full GPUs, not ${GPUS}" >&2; exit 1 ;; esac
+    JUDGE_MODEL="$("${FIR_HOST_PYTHON}" -c "import sys, yaml; print(yaml.safe_load(open(sys.argv[1]))['judge']['model'])" \
+        "${REPO_ROOT}/configs/datasets/${DATASET_CONFIG}.yaml")"
+fi
+
 if [ -n "${DRY_RUN:-}" ]; then
     echo "DRY_RUN resolution:"
     echo "  cluster: ${MORALGYM_CLUSTER}"
     echo "  config:  configs/training/${CONFIG_NAME}.yaml"
     echo "  gpus:    ${GRES} (${CPUS} cores, ${MEM})"
     echo "  run:     ${RUN_NAME}"
+    [ "${JUDGE}" = "1" ] && echo "  judge:   ${JUDGE_MODEL} on 1 extra GPU (heterogeneous job: ${FIR_SBATCH_GPU_ARGS})"
     echo "  dataset: configs/datasets/${DATASET_CONFIG}.yaml (seed ${DATASET_SEED})"
     echo "  ckpts:   ${MORALGYM_CKPT_ROOT}/${RUN_NAME}"
     echo "  seed:    ${SEED:-unset (verl defaults: data.seed null, data_loader_seed 42, vllm seed 0)}"
@@ -264,6 +287,7 @@ MODELEOF
 echo "  model:   ${MODEL_ID:-<unresolved: no staging>}"
 export MODEL_ID
 export REPO_ROOT CONFIG_NAME RUN_NAME EXTRA_ARGS OUTPUT_DIR
+export JUDGE JUDGE_MODEL
 export MORALGYM_DIR SDPO_DIR MORALGYM_CKPT_ROOT MORALGYM_STORE_ROOT="${MORALGYM_STORE_ROOT:-}"
 export MORALGYM_RUN_NAME="${RUN_NAME}" MORALGYM_GROUP="${DATASET_CONFIG}" MORALGYM_DATASET_DIR="${DATASET_DIR}"
 
@@ -276,6 +300,14 @@ echo ""
 # One task owns the allocation: verl spawns its own Ray workers across the
 # GPUs. No --partition on Fir (routed by GPUs and walltime); the GPU type
 # must be named.
+# JUDGE=1: a second job component (one GPU) for the judge server; Slurm starts
+# both components together, so no GPU waits idle for the other.
+JUDGE_COMPONENT=()
+if [ "${JUDGE}" = "1" ]; then
+    # shellcheck disable=SC2206
+    JUDGE_COMPONENT=(: --account="${ACCOUNT}" --time="${TIME}" --nodes=1 --ntasks=1 ${FIR_SBATCH_GPU_ARGS})
+fi
+
 sbatch \
     --job-name="mg-verl" \
     --account="${ACCOUNT}" \
@@ -288,4 +320,5 @@ sbatch \
     --output="${OUTPUT_DIR}/%j_${RUN_NAME}.log" \
     --error="${OUTPUT_DIR}/%j_${RUN_NAME}.err" \
     --export=ALL \
+    "${JUDGE_COMPONENT[@]}" \
     "${REPO_ROOT}/scripts/slurm/alliance/train_job.sh"

@@ -18,7 +18,7 @@ from moralgym_verl.training import judge as J
 from moralgym_verl.training.dataset import make_sample
 from moralgym_verl.training.reward_fn import compute_score
 
-DATASET = "configs/datasets/grpo_pd_judge-principle_tft.yaml"
+DATASET = "configs/datasets/grpo_pd_judge-yesno_tft.yaml"
 JUDGE_BLOCK = {"model": "Qwen/Qwen3-8B", "moral_value": "deontological"}
 
 
@@ -221,3 +221,24 @@ def test_no_endpoint_raises(monkeypatch):
     _, state = _sample()
     with pytest.raises(J.JudgeUnavailable, match="no judge endpoint"):
         J.judge_scores(J.JudgeConfig.from_dict(JUDGE_BLOCK), [state], ["r"])
+
+
+# ── Per-step diagnostics ─────────────────────────────────────────────────────
+
+def test_group_diagnostics_measure_the_signal():
+    def r(score, action):
+        return {"score": score, "judge_score": score, "parse_fail_rate": 0.0,
+                "cooperation_rate": float(action == "C"), "defection_rate": float(action == "D")}
+    # Group a: all 0.1 (flat); group b: 0.9 / 0.1 (signal).
+    results = [r(0.1, "D"), r(0.1, "D"), r(0.9, "C"), r(0.1, "D")]
+    out = J.group_diagnostics(results, ["a", "a", "b", "b"])
+    import statistics
+    mean = lambda k: statistics.mean(o[k] for o in out)
+    assert mean("judge_flat_group_rate") == 0.5          # one of two groups
+    assert out[0]["judge_group_std"] == 0.0
+    assert out[2]["judge_group_std"] == pytest.approx(statistics.stdev([0.9, 0.1]))
+    assert mean("judge_score_coop") == pytest.approx(0.9)
+    assert mean("judge_score_defect") == pytest.approx(0.1)
+    # No cooperative rollout this step: NaN, not a fake number.
+    out = J.group_diagnostics([r(0.1, "D")], ["a"])
+    assert math.isnan(out[0]["judge_score_coop"])

@@ -7,6 +7,7 @@
 #   REPO_ROOT CONFIG_NAME RUN_NAME EXTRA_ARGS OUTPUT_DIR
 #   MORALGYM_DIR SDPO_DIR MORALGYM_CKPT_ROOT MORALGYM_STORE_ROOT
 #   MORALGYM_RUN_NAME MORALGYM_GROUP MORALGYM_DATASET_DIR WANDB_API_KEY
+#   JUDGE JUDGE_MODEL (JUDGE=1: heterogeneous job, judge on component 1)
 # fir_env.sh is sourced again HERE so FIR_CONTAINER_EXEC binds this job's
 # $SLURM_TMPDIR, and the container command never crosses sbatch quoting.
 # Mirrors the --wrap of scripts/slurm/train_verl.sh (Clariden): version
@@ -25,6 +26,27 @@ echo "job=${SLURM_JOB_ID} cluster=${MORALGYM_CLUSTER} $(bash "${REPO_ROOT}/scrip
 
 bash "${REPO_ROOT}/scripts/slurm/mem_sampler.sh" 10 > "${MEM_LOG}" 2>&1 &
 MEM_PID=$!
+
+# Judge (JUDGE=1, LLM-judge reward, training/judge.py): train_verl.sh submitted
+# a heterogeneous job, component 0 = training, component 1 = one GPU for the
+# judge. Start the vLLM judge there now, so it loads while the training
+# weights are staged below; training waits for it before starting. Started
+# BEFORE staging on purpose: staging sets APPTAINERENV_HF_HOME=/tmp/hf for the
+# training container, which does not exist on the judge node. The judge
+# container gets no $SLURM_TMPDIR bind (that path belongs to this node).
+SRUN_TRAIN=(srun)
+if [ "${JUDGE:-0}" = "1" ]; then
+    JUDGE_NODE="$(scontrol show hostnames "${SLURM_JOB_NODELIST_HET_GROUP_1:?JUDGE=1 needs a heterogeneous job}" | head -1)"
+    JUDGE_PORT=$(( 20000 + SLURM_JOB_ID % 20000 ))
+    JUDGE_LOG="${OUTPUT_DIR}/${SLURM_JOB_ID}_${RUN_NAME}.judge.log"
+    srun --het-group=1 apptainer exec --nv --pwd "${HOME}" "${FIR_SIF}" \
+        bash "${REPO_ROOT}/scripts/slurm/alliance/judge_vllm.sh" "${JUDGE_MODEL}" "${JUDGE_PORT}" \
+        > "${JUDGE_LOG}" 2>&1 &
+    JUDGE_SRUN=$!
+    export MORALGYM_JUDGE_URL="http://${JUDGE_NODE}:${JUDGE_PORT}/v1"
+    SRUN_TRAIN=(srun --het-group=0)
+    echo "[judge] ${JUDGE_MODEL} on ${JUDGE_NODE}:${JUDGE_PORT} (log ${JUDGE_LOG})"
+fi
 
 # Model weights onto node-local NVMe. Eight processes (4 FSDP workers +
 # 4 vLLM engines) read the full checkpoint at start-up; from Lustre that
@@ -90,9 +112,21 @@ fi
 echo "--- ${CMD_FILE} ---"; cat "${CMD_FILE}"; echo "---"
 nvidia-smi --query-gpu=index,name,driver_version,memory.total --format=csv
 
+if [ "${JUDGE:-0}" = "1" ]; then
+    for i in $(seq 1 120); do
+        curl -sf "http://${JUDGE_NODE}:${JUDGE_PORT}/health" >/dev/null && break
+        kill -0 "${JUDGE_SRUN}" 2>/dev/null || { echo "[judge] server died, see ${JUDGE_LOG}" >&2; exit 1; }
+        sleep 5
+    done
+    curl -sf "http://${JUDGE_NODE}:${JUDGE_PORT}/health" >/dev/null \
+        || { echo "[judge] not up after 10 min, see ${JUDGE_LOG}" >&2; exit 1; }
+    echo "[judge] up: ${MORALGYM_JUDGE_URL}"
+fi
+
 # shellcheck disable=SC2086
-srun ${FIR_CONTAINER_EXEC} bash "${CMD_FILE}"
+"${SRUN_TRAIN[@]}" ${FIR_CONTAINER_EXEC} bash "${CMD_FILE}"
 RC=$?
+[ "${JUDGE:-0}" = "1" ] && kill "${JUDGE_SRUN}" 2>/dev/null
 
 kill "${MEM_PID}" 2>/dev/null
 echo "[mem] peak: $(tail -1 "${MEM_LOG}")"

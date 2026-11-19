@@ -1,0 +1,7 @@
+# GRPO with an LLM judge on the principle, variant yesno — Qwen3-8B.
+# Trainer: _qwen3_8b_grpo_pd_judge (= the paper's GRPO v2 + the batched
+# judge reward manager); judge settings: configs/datasets/grpo_pd_judge-yesno_tft.yaml.
+#   JUDGE=1 SEED=1 bash scripts/slurm/alliance/train_verl.sh qwen3_8b_grpo_pd_judge-yesno_tft_200
+defaults:
+  - _qwen3_8b_grpo_pd_judge
+  - _self_

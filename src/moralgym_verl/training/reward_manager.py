@@ -75,6 +75,7 @@ class MoralGymRewardManager(AbstractRewardManager):
         lengths: list[int] = []
         gts: list[str] = []
         turn_scores_all: list[Any] = []
+        uids: list[Any] = []
 
         for i in range(len(data)):
             data_item = data[i]
@@ -112,14 +113,16 @@ class MoralGymRewardManager(AbstractRewardManager):
             lengths.append(int(valid_response_length))
             gts.append(ground_truth)
             turn_scores_all.append(turn_scores)
+            uids.append(data_item.non_tensor_batch.get("uid", i))
 
         # Judge arms (dataset `judge:` block): one batched call to the judge
         # replaces the game score with the judge's score. Single-round only.
         if states and "judge" in states[0]:
             if any(t is not None and len(t) > 0 for t in turn_scores_all):
                 raise ValueError("judge reward is implemented for single-round data only")
-            from moralgym_verl.training.judge import apply_judge
+            from moralgym_verl.training.judge import apply_judge, group_diagnostics
             scores = apply_judge(scores, states, responses)
+            scores = group_diagnostics(scores, uids)
 
         for i, score in enumerate(scores):
             valid_response_length = lengths[i]

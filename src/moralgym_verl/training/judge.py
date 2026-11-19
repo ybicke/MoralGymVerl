@@ -356,3 +356,49 @@ def apply_judge(
             res["judge_approves_exploitation_rate"] = 0.0
         out.append(res)
     return out
+
+
+# ── Per-step diagnostics: is there a training signal? ────────────────────────
+
+# A group (the 16 rollouts of one prompt) whose rewards differ by less than
+# this gives GRPO no direction; dividing by its tiny std only amplifies noise.
+FLAT_STD = 0.02
+
+
+def group_diagnostics(results: list[dict[str, Any]], uids: list[Any]) -> list[dict[str, Any]]:
+    """Add per-sample values whose batch means (logged as game/<key> by SDPO
+    patch 0001) answer "does the judge give GRPO a signal at this step?":
+
+      judge_group_std        mean std of the reward within a group
+      judge_flat_group_rate  share of groups with std < FLAT_STD (groups have
+                             equal size, so the sample mean is the group share)
+      judge_score_coop       mean judge score of cooperative rollouts this
+      judge_score_defect     step (and of defecting ones); the same value on
+                             every sample, so the batch mean is that value;
+                             NaN when the step has no such rollout
+
+    `uids` are verl's group ids (non_tensor_batch["uid"]); in validation each
+    prompt is usually sampled once, so groups there are trivially flat.
+    """
+    import statistics
+
+    groups: dict[Any, list[float]] = {}
+    for r, u in zip(results, uids):
+        groups.setdefault(u, []).append(r["score"])
+    std = {u: (statistics.stdev(v) if len(v) > 1 else 0.0) for u, v in groups.items()}
+
+    def cond_mean(action_key: str) -> float:
+        xs = [r["judge_score"] for r in results
+              if r[action_key] == 1.0 and r["parse_fail_rate"] == 0.0]
+        return sum(xs) / len(xs) if xs else float("nan")
+
+    coop, defect = cond_mean("cooperation_rate"), cond_mean("defection_rate")
+    out = []
+    for r, u in zip(results, uids):
+        r = dict(r)
+        r["judge_group_std"] = std[u]
+        r["judge_flat_group_rate"] = float(std[u] < FLAT_STD)
+        r["judge_score_coop"] = coop
+        r["judge_score_defect"] = defect
+        out.append(r)
+    return out
