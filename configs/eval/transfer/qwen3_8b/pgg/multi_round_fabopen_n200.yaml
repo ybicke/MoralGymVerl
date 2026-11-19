@@ -8,9 +8,9 @@
 # multi_round_fabopen_incontext_n200. 200 episodes put a cell's rate within about +-6
 # points, against +-12 to 20 at the 20 to 24 episodes of the earlier groups.
 #
-#   ~/venvs/moralgym/bin/python scripts/slurm/fir/submit_sweep.py \
+#   ~/venvs/moralgym/bin/python scripts/slurm/alliance/submit_sweep.py \
 #       configs/eval/transfer/qwen3_8b/pgg/multi_round_fabopen_n200.yaml --no-pack --dry-run
-#   ~/venvs/moralgym/bin/python scripts/slurm/fir/submit_sweep.py \
+#   ~/venvs/moralgym/bin/python scripts/slurm/alliance/submit_sweep.py \
 #       configs/eval/transfer/qwen3_8b/pgg/multi_round_fabopen_incontext_n200.yaml --no-pack --dry-run
 
 num_episodes: 200          # per co-player group; x3 x5 rounds = 3000 decisions/cell

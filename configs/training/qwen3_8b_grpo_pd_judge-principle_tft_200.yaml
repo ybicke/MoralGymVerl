@@ -9,7 +9,7 @@
 # manager) scores the whole batch with one concurrent call to the judge.
 #
 # Needs a running judge server; submit with
-#   JUDGE=1 SEED=1 bash scripts/slurm/fir/train_verl.sh qwen3_8b_grpo_pd_judge-principle_tft_200
+#   JUDGE=1 SEED=1 bash scripts/slurm/alliance/train_verl.sh qwen3_8b_grpo_pd_judge-principle_tft_200
 # =============================================================================
 defaults:
   - qwen3_8b_grpo_pd_deon_tft_200_v2

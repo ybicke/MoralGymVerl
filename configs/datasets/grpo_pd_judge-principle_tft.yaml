@@ -35,7 +35,7 @@ teacher:
 
 judge:
   # Frozen base model with the principle, served by
-  # scripts/slurm/fir/judge_server.sh; address from MORALGYM_JUDGE_URL.
+  # scripts/slurm/alliance/judge_server.sh; address from MORALGYM_JUDGE_URL.
   model: Qwen/Qwen3-8B
   moral_value: deontological   # the same text as teacher.moral_value
   # yesno | scale; thinking on/off. Set from the offline comparison

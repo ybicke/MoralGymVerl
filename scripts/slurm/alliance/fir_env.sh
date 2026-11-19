@@ -1,9 +1,9 @@
-# Environment for the Alliance (Apptainer) launchers in scripts/slurm/fir/,
+# Environment for the Alliance (Apptainer) launchers in scripts/slurm/alliance/,
 # which serve Fir and Rorqual (same 4x H100 nodes, same Slurm setup).
-# Usage (sourced): . scripts/slurm/fir/fir_env.sh <repo_root>
+# Usage (sourced): . scripts/slurm/alliance/fir_env.sh <repo_root>
 #   1. scripts/slurm/cluster.env via the shared cluster_env.sh (account,
 #      checkpoint root, HF_HOME, ...; unchanged from the Clariden setup)
-#   2. scripts/slurm/fir/<cluster>.env (node constants), every key exported.
+#   2. scripts/slurm/alliance/<cluster>.env (node constants), every key exported.
 #      Cluster = MORALGYM_CLUSTER, else the Alliance-set CC_CLUSTER (set on
 #      login and compute nodes), else fir.
 #   (steps 3-4 below)
@@ -15,7 +15,7 @@ _fir_root="${1:?fir_env.sh needs the repo root}"
 . "${_fir_root}/scripts/slurm/cluster_env.sh" "${_fir_root}"
 export HF_HOME="${HF_HOME:-${SCRATCH}/.cache/huggingface}"
 export MORALGYM_CLUSTER="${MORALGYM_CLUSTER:-${CC_CLUSTER:-fir}}"
-_fir_envfile="${_fir_root}/scripts/slurm/fir/${MORALGYM_CLUSTER}.env"
+_fir_envfile="${_fir_root}/scripts/slurm/alliance/${MORALGYM_CLUSTER}.env"
 if [ ! -f "${_fir_envfile}" ]; then
     echo "ERROR: no settings for cluster '${MORALGYM_CLUSTER}' (${_fir_envfile})" >&2
     return 1 2>/dev/null || exit 1

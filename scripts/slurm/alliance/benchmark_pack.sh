@@ -5,13 +5,13 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
 #SBATCH --time=03:00:00
-# GPUs, memory and cores per cell: scripts/slurm/fir/submit_benchmarks.py
+# GPUs, memory and cores per cell: scripts/slurm/alliance/submit_benchmarks.py
 # puts them on the sbatch command line (fir.env FIR_SBATCH_NODE_ARGS).
 
 # =============================================================================
 # FIR VARIANT of scripts/slurm/benchmark_pack.sh (Clariden original left untouched).
 # Differences: Apptainer instead of EDF (FIR_CONTAINER_EXEC), Fir resource
-# flags from scripts/slurm/fir/fir.env, host python from the venv. Keep the
+# flags from scripts/slurm/alliance/fir.env, host python from the venv. Keep the
 # rest in step with the original when it changes.
 # =============================================================================
 # Packed benchmark launcher: up to 4 checkpoints on one node, one per GPU,
@@ -20,7 +20,7 @@
 # payload with resolved run-dir names).
 #
 # Usage (normally via scripts/slurm/submit_benchmarks.py):
-#   sbatch <fir resource flags> scripts/slurm/fir/benchmark_pack.sh <batch.json>
+#   sbatch <fir resource flags> scripts/slurm/alliance/benchmark_pack.sh <batch.json>
 
 set -uo pipefail
 
@@ -29,7 +29,7 @@ if [ ! -f "${PROJECT_ROOT}/pyproject.toml" ]; then
     echo "ERROR: sbatch must be run from the MoralGymVerl repo root." >&2
     exit 1
 fi
-. "${PROJECT_ROOT}/scripts/slurm/fir/fir_env.sh" "${PROJECT_ROOT}"
+. "${PROJECT_ROOT}/scripts/slurm/alliance/fir_env.sh" "${PROJECT_ROOT}"
 export STORE_BASE="${MORALGYM_STORE_ROOT:-}"
 SDPO_DIR="${SDPO_DIR:-${HOME}/SDPO}"
 

@@ -26,7 +26,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-. "${REPO_ROOT}/scripts/slurm/fir/fir_env.sh" "${REPO_ROOT}"
+. "${REPO_ROOT}/scripts/slurm/alliance/fir_env.sh" "${REPO_ROOT}"
 SDPO_DIR="${SDPO_DIR:-${HOME}/SDPO}"
 SCRATCH="${SCRATCH:?SCRATCH must be set}"
 
@@ -93,9 +93,9 @@ mkdir -p "${MORALGYM_CKPT_ROOT:-${SCRATCH}/moralgym_verl_runs}" \
 echo ""
 echo "=== Setup complete ==="
 echo ""
-echo "Next steps (scripts/slurm/fir/README.md):"
+echo "Next steps (scripts/slurm/alliance/README.md):"
 echo "  1. Model weights (jobs run with HF_HUB_OFFLINE=1; cache HF_HOME=${HF_HOME}):"
 echo "     HF_HOME=${HF_HOME} ${FIR_VENV}/bin/hf download Qwen/Qwen3-8B"
 echo "  2. Resolve a run, then smoke it (5 steps, 4 GPUs, short walltime):"
-echo "     DRY_RUN=1 bash scripts/slurm/fir/train_verl.sh qwen3_8b_grpo_pd_deon_tft_200 qwen3_8b_grpo_pd_deon_tft_smoke"
-echo "     TIME=01:00:00 bash scripts/slurm/fir/train_verl.sh qwen3_8b_grpo_pd_deon_tft_200 qwen3_8b_grpo_pd_deon_tft_smoke trainer.total_training_steps=5"
+echo "     DRY_RUN=1 bash scripts/slurm/alliance/train_verl.sh qwen3_8b_grpo_pd_deon_tft_200 qwen3_8b_grpo_pd_deon_tft_smoke"
+echo "     TIME=01:00:00 bash scripts/slurm/alliance/train_verl.sh qwen3_8b_grpo_pd_deon_tft_200 qwen3_8b_grpo_pd_deon_tft_smoke trainer.total_training_steps=5"

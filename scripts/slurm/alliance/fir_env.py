@@ -1,8 +1,8 @@
-"""Python twin of fir_env.sh for scripts/slurm/fir/submit_*.py.
+"""Python twin of fir_env.sh for scripts/slurm/alliance/submit_*.py.
 
 load_fir_env(): scripts/slurm/cluster.env (KEY=VALUE, no override of
 variables already set; SLURM_ACCOUNT -> SBATCH_ACCOUNT, as the Clariden
-submit scripts do) then scripts/slurm/fir/<cluster>.env into os.environ,
+submit scripts do) then scripts/slurm/alliance/<cluster>.env into os.environ,
 cluster = MORALGYM_CLUSTER, else CC_CLUSTER, else fir (as fir_env.sh).
 sbatch_resource_args(kind): Fir resource flags for a "node" (whole node)
 or "gpu" (one cell) job, spliced between "sbatch" and the launcher.

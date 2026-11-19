@@ -3,7 +3,7 @@
 # per co-player group. Same protocol as multi_round_fabopen_n200, which holds its
 # references: base, the prompted model's twin group, and the PD-only seed 1.
 #
-#   ~/venvs/moralgym/bin/python scripts/slurm/fir/submit_sweep.py \
+#   ~/venvs/moralgym/bin/python scripts/slurm/alliance/submit_sweep.py \
 #       configs/eval/transfer/qwen3_8b/pgg/multi_round_fabopen_sdpo_pdshch_seed1_n200.yaml --no-pack --dry-run
 
 num_episodes: 200          # per co-player group; x3 x5 rounds = 3000 decisions/cell

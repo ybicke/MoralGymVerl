@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """FIR VARIANT of scripts/slurm/submit_benchmarks.py (the Clariden original
-is untouched): submits scripts/slurm/fir/benchmark_pack.sh with Fir
-resource flags (scripts/slurm/fir/fir.env). Keep in step with the original.
+is untouched): submits scripts/slurm/alliance/benchmark_pack.sh with Fir
+resource flags (scripts/slurm/alliance/fir.env). Keep in step with the original.
 
 Submit a benchmark sweep: one cell per checkpoint, packed 4 per node.
 
 Usage (login node, from the repo root, with the venv python):
-    ~/venvs/moralgym/bin/python scripts/slurm/fir/submit_benchmarks.py \
+    ~/venvs/moralgym/bin/python scripts/slurm/alliance/submit_benchmarks.py \
         configs/eval/benchmarks/<model>/<family>/<experiment>.yaml [more...]
     ... --dry-run     # print the expansion without submitting
 
@@ -38,7 +38,7 @@ from moralgym_verl.eval.benchmarks import (                  # noqa: E402
     pack_batches, run_dir_stem,
 )
 
-PACK_LAUNCHER = "scripts/slurm/fir/benchmark_pack.sh"   # the Fir launcher
+PACK_LAUNCHER = "scripts/slurm/alliance/benchmark_pack.sh"   # the Fir launcher
 from moralgym_verl.eval.config import git_provenance          # noqa: E402
 from moralgym_verl.eval.sweep import PACK_SIZE                # noqa: E402
 
@@ -118,7 +118,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    # scripts/slurm/cluster.env + scripts/slurm/fir/fir.env into the
+    # scripts/slurm/cluster.env + scripts/slurm/alliance/fir.env into the
     # environment (fir_env.py); the launchers re-read both inside the job.
     load_fir_env()
     main()

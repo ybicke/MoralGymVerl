@@ -5,14 +5,14 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
 #SBATCH --time=05:00:00
-# GPUs, memory and cores per cell: scripts/slurm/fir/submit_sweep.py puts
+# GPUs, memory and cores per cell: scripts/slurm/alliance/submit_sweep.py puts
 # them on the sbatch command line (fir.env FIR_SBATCH_NODE_ARGS, 12 cores
 # per cell). Hand submits: sbatch --gpus-per-node=h100:4 --mem=1000G --cpus-per-task=12 ...
 
 # =============================================================================
 # FIR VARIANT of scripts/slurm/eval_pack.sh (Clariden original left untouched).
 # Differences: Apptainer instead of EDF (FIR_CONTAINER_EXEC), Fir resource
-# flags from scripts/slurm/fir/fir.env, host python from the venv. Keep the
+# flags from scripts/slurm/alliance/fir.env, host python from the venv. Keep the
 # rest in step with the original when it changes.
 # =============================================================================
 # PACKED eval launcher — up to 4 eval cells concurrently on one node.
@@ -53,7 +53,7 @@ if [ ! -f "${PROJECT_ROOT}/pyproject.toml" ]; then
     echo "ERROR: sbatch must be run from the MoralGymVerl repo root." >&2
     exit 1
 fi
-. "${PROJECT_ROOT}/scripts/slurm/fir/fir_env.sh" "${PROJECT_ROOT}"
+. "${PROJECT_ROOT}/scripts/slurm/alliance/fir_env.sh" "${PROJECT_ROOT}"
 # Optional long-term copy of eval cells (scripts/slurm/cluster.env).
 export STORE_BASE="${MORALGYM_STORE_ROOT:-}"
 SDPO_DIR="${SDPO_DIR:-${HOME}/SDPO}"

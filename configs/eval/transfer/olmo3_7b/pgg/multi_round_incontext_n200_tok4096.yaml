@@ -8,7 +8,7 @@
 # measures what those answers decide. Every other setting is unchanged, so
 # the main table keeps the 2048-token cells that match Qwen3-8B.
 #
-#   ~/venvs/moralgym/bin/python scripts/slurm/fir/submit_sweep.py \
+#   ~/venvs/moralgym/bin/python scripts/slurm/alliance/submit_sweep.py \
 #       configs/eval/transfer/olmo3_7b/pgg/multi_round_incontext_n200_tok4096.yaml --no-pack --dry-run
 
 num_episodes: 200          # per co-player group; x3 x5 rounds = 3000 decisions/cell

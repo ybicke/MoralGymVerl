@@ -1,7 +1,7 @@
 # @package _global_
 # =============================================================================
-# Fir-only overrides. scripts/slurm/fir/train_job.sh appends this file to
-# every run with `+cluster=fir`, which places it AFTER the run config: any
+# Fir-only overrides. scripts/slurm/alliance/train_job.sh appends this file to
+# every run with `+cluster=<cluster>` (MORALGYM_CLUSTER), which places it AFTER the run config: any
 # key here beats _base_clariden.yaml AND the run config. Keep it to settings
 # that are true for every run on Fir's H100 nodes; per-run tuning stays in
 # the run configs.

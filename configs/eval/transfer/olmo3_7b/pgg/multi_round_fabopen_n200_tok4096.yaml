@@ -3,7 +3,7 @@
 # multi_round_n200_tok4096 for the reason. With the fabricated opening
 # fewer answers are cut off at 2048 tokens (SDPO 21 of 600 first rounds).
 #
-#   ~/venvs/moralgym/bin/python scripts/slurm/fir/submit_sweep.py \
+#   ~/venvs/moralgym/bin/python scripts/slurm/alliance/submit_sweep.py \
 #       configs/eval/transfer/olmo3_7b/pgg/multi_round_fabopen_n200_tok4096.yaml --no-pack --dry-run
 
 num_episodes: 200          # per co-player group; x3 x5 rounds = 3000 decisions/cell

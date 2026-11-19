@@ -35,7 +35,7 @@ that does not close </think> within max_think_tokens counts as invalid.
 Serve the judge WITHOUT a vLLM reasoning parser, so the <think> tokens stay
 in the returned log-probs.
 
-Serving: a vLLM OpenAI-compatible server (scripts/slurm/fir/judge_server.sh),
+Serving: a vLLM OpenAI-compatible server (scripts/slurm/alliance/judge_server.sh),
 reached over HTTP. Standard library only, so this file and its tests run
 without torch.
 

@@ -8,7 +8,7 @@
 #
 # SDPO and moralgym_verl are NOT installed into the image: the SIF is
 # read-only, so both come in at job start through PYTHONPATH from the
-# bind-mounted checkouts (scripts/slurm/fir/train_job.sh, eval_pack.sh).
+# bind-mounted checkouts (scripts/slurm/alliance/train_job.sh, eval_pack.sh).
 Bootstrap: docker
 From: nvcr.io/nvidia/vllm:25.12.post1-py3
 
@@ -34,4 +34,4 @@ From: nvcr.io/nvidia/vllm:25.12.post1-py3
 
 %help
     MoralGymVerl training/eval runtime for Fir. Run through the launchers in
-    scripts/slurm/fir/ (fir_env.sh adds --nv and the bind mounts).
+    scripts/slurm/alliance/ (fir_env.sh adds --nv and the bind mounts).

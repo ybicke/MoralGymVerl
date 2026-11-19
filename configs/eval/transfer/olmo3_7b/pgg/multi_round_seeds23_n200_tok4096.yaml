@@ -2,7 +2,7 @@
 # opening, 200 episodes per co-player group, 4096 new tokens per answer.
 # Same settings as multi_round_n200_tok4096, which holds base and seed 1.
 #
-#   ~/venvs/moralgym/bin/python scripts/slurm/fir/submit_sweep.py \
+#   ~/venvs/moralgym/bin/python scripts/slurm/alliance/submit_sweep.py \
 #       configs/eval/transfer/olmo3_7b/pgg/multi_round_seeds23_n200_tok4096.yaml --no-pack --dry-run
 
 num_episodes: 200          # per co-player group; x3 x5 rounds = 3000 decisions/cell

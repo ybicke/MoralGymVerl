@@ -10,10 +10,10 @@ directory plus `Apptainer.fir.def`, `scripts/setup/setup_fir.sh` and
 | | Clariden | Fir |
 |---|---|---|
 | setup | `bash scripts/setup/setup_verl.sh` | `sbatch --account=def-zhijing scripts/setup/setup_fir.sh` |
-| train | `bash scripts/slurm/train_verl.sh <run>` | `bash scripts/slurm/fir/train_verl.sh <run>` (`GPUS=1..4` or `mig1|mig2|mig3` for one MIG slice, default 4; `ACCOUNT=` overrides cluster.env) |
-| eval sweep | `python3.11 scripts/slurm/submit_sweep.py <spec>` | `~/venvs/moralgym/bin/python scripts/slurm/fir/submit_sweep.py <spec>` |
-| benchmarks | `python3.11 scripts/slurm/submit_benchmarks.py <spec>` | `~/venvs/moralgym/bin/python scripts/slurm/fir/submit_benchmarks.py <spec>` |
-| single cell | `sbatch scripts/slurm/eval_teacher_signal.sh ...` | `sbatch --gpus-per-node=h100:1 --cpus-per-task=12 --mem=120G scripts/slurm/fir/eval_teacher_signal.sh ...` |
+| train | `bash scripts/slurm/train_verl.sh <run>` | `bash scripts/slurm/alliance/train_verl.sh <run>` (`GPUS=1..4` or `mig1|mig2|mig3` for one MIG slice, default 4; `ACCOUNT=` overrides cluster.env) |
+| eval sweep | `python3.11 scripts/slurm/submit_sweep.py <spec>` | `~/venvs/moralgym/bin/python scripts/slurm/alliance/submit_sweep.py <spec>` |
+| benchmarks | `python3.11 scripts/slurm/submit_benchmarks.py <spec>` | `~/venvs/moralgym/bin/python scripts/slurm/alliance/submit_benchmarks.py <spec>` |
+| single cell | `sbatch scripts/slurm/eval_teacher_signal.sh ...` | `sbatch --gpus-per-node=h100:1 --cpus-per-task=12 --mem=120G scripts/slurm/alliance/eval_teacher_signal.sh ...` |
 | container | podman → enroot sqsh → EDF, `srun --environment=` | Apptainer SIF, `srun apptainer exec --nv ...` |
 | host python | `/usr/bin/python3.11` | `~/venvs/moralgym/bin/python` (+ `module load arrow` for pyarrow) |
 
@@ -27,7 +27,7 @@ launcher changes, port the change here.
 
 The same launchers run on Rorqual (Calcul Québec): same 4x H100 nodes, same
 Slurm setup and MIG slices. `fir_env.sh` / `fir_env.py` load
-`scripts/slurm/fir/<cluster>.env`, with the cluster taken from
+`scripts/slurm/alliance/<cluster>.env`, with the cluster taken from
 `MORALGYM_CLUSTER`, else the Alliance-set `CC_CLUSTER` (so it is automatic
 on either cluster), else `fir`. `rorqual.env` differs in node size: 64
 cores and 500 GB RAM per node, so 16 cores and 120 GB per GPU. Accounts
@@ -41,7 +41,7 @@ accepted on Rorqual (checked with `sbatch --test-only`).
   for hours. Verified recipe (job 66094915: 2 steps, checkpoint, 8 min on a 3g.40gb slice):
 
   ```bash
-  MODEL_ID=Qwen/Qwen3-4B GPUS=mig3 TIME=00:30:00 bash scripts/slurm/fir/train_verl.sh \
+  MODEL_ID=Qwen/Qwen3-4B GPUS=mig3 TIME=00:30:00 bash scripts/slurm/alliance/train_verl.sh \
       qwen3_4b_grpo_pd_deon_tft_150 qwen3_4b_grpo_pd_deon_tft_smoke \
       actor_rollout_ref.model.path=Qwen/Qwen3-4B '++data.apply_chat_template_kwargs.enable_thinking=false' \
       trainer.total_training_steps=2 trainer.save_freq=2 'trainer.logger=[console]'
@@ -102,8 +102,8 @@ accepted on Rorqual (checked with `sbatch --test-only`).
 cp scripts/slurm/cluster.env.example scripts/slurm/cluster.env   # SLURM_ACCOUNT=rrg-zhijing, HF_HOME on $SCRATCH
 sbatch --account=def-zhijing scripts/setup/setup_fir.sh          # SDPO, venv, SIF (~1 h)
 HF_HOME=$SCRATCH/.cache/huggingface ~/venvs/moralgym/bin/hf download Qwen/Qwen3-8B
-DRY_RUN=1 bash scripts/slurm/fir/train_verl.sh qwen3_8b_grpo_pd_deon_tft_200 qwen3_8b_grpo_pd_deon_tft_smoke
-TIME=01:00:00 bash scripts/slurm/fir/train_verl.sh qwen3_8b_grpo_pd_deon_tft_200 qwen3_8b_grpo_pd_deon_tft_smoke trainer.total_training_steps=5
+DRY_RUN=1 bash scripts/slurm/alliance/train_verl.sh qwen3_8b_grpo_pd_deon_tft_200 qwen3_8b_grpo_pd_deon_tft_smoke
+TIME=01:00:00 bash scripts/slurm/alliance/train_verl.sh qwen3_8b_grpo_pd_deon_tft_200 qwen3_8b_grpo_pd_deon_tft_smoke trainer.total_training_steps=5
 ```
 
 Logs land in `~/logs_verl/training/<job>_<run>.{log,err,mem,cmd.sh}`; the

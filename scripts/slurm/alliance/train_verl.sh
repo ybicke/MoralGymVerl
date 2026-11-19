@@ -2,13 +2,13 @@
 # =============================================================================
 # FIR VARIANT of scripts/slurm/train_verl.sh (Clariden original left untouched).
 # Differences: Apptainer instead of EDF (FIR_CONTAINER_EXEC), Fir resource
-# flags from scripts/slurm/fir/fir.env, host python from the venv. Keep the
+# flags from scripts/slurm/alliance/fir.env, host python from the venv. Keep the
 # rest in step with the original when it changes.
 # =============================================================================
 # Submit a MoralGymVerl GRPO or SDPO training job on Fir.
 #
 # Usage:
-#   bash scripts/slurm/fir/train_verl.sh <config_name> [run_name] [verl overrides...]
+#   bash scripts/slurm/alliance/train_verl.sh <config_name> [run_name] [verl overrides...]
 #
 # Naming contract (docs/naming.md): configs/training/<RUN_NAME>.yaml is one
 # file per run, named with the canonical grammar
@@ -36,7 +36,7 @@
 # Three execution contexts — every path below depends on which one it is in:
 #   1-4  login node, submit time   venv python, no GPUs
 #   5-6  login node                exports for the batch script
-#   7    compute node              scripts/slurm/fir/train_job.sh: training
+#   7    compute node              scripts/slurm/alliance/train_job.sh: training
 #                                  INSIDE the Apptainer container, stage-out
 #                                  outside it
 # =============================================================================
@@ -97,8 +97,8 @@ fi
 # ── 2. Cluster settings ──────────────────────────────────────────────────────
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 # Account, checkpoint and store roots, source checkouts: scripts/slurm/cluster.env;
-# Fir constants (venv python, SIF, resource flags): scripts/slurm/fir/fir.env.
-. "${REPO_ROOT}/scripts/slurm/fir/fir_env.sh" "${REPO_ROOT}"
+# Fir constants (venv python, SIF, resource flags): scripts/slurm/alliance/fir.env.
+. "${REPO_ROOT}/scripts/slurm/alliance/fir_env.sh" "${REPO_ROOT}"
 # ACCOUNT=<name> in the env overrides cluster.env for one submit, e.g. a
 # smoke under the lightly used def-zhijing (fair-share decides queue
 # position on Fir; the RAC account carries the group's whole usage).
@@ -231,7 +231,7 @@ OUTPUT_DIR="${HOME}/logs_verl/training"
 mkdir -p "${OUTPUT_DIR}"
 
 # ── 6. What the batch script needs ─────────────────────────────────────────
-# scripts/slurm/fir/train_job.sh runs on the compute node: it re-sources
+# scripts/slurm/alliance/train_job.sh runs on the compute node: it re-sources
 # fir_env.sh there, writes the in-container command to
 # ${OUTPUT_DIR}/<job>_<run>.cmd.sh, samples host memory, and stages out.
 # It reads everything from the environment, hence export + --export=ALL.
@@ -288,4 +288,4 @@ sbatch \
     --output="${OUTPUT_DIR}/%j_${RUN_NAME}.log" \
     --error="${OUTPUT_DIR}/%j_${RUN_NAME}.err" \
     --export=ALL \
-    "${REPO_ROOT}/scripts/slurm/fir/train_job.sh"
+    "${REPO_ROOT}/scripts/slurm/alliance/train_job.sh"

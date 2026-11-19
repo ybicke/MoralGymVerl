@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """FIR VARIANT of scripts/slurm/submit_sweep.py (the Clariden original is
 untouched): same expansion, packing and manifests, but it submits the Fir
-launchers in scripts/slurm/fir/ with Fir resource flags on the sbatch
-command line (scripts/slurm/fir/fir.env). Keep in step with the original.
+launchers in scripts/slurm/alliance/ with Fir resource flags on the sbatch
+command line (scripts/slurm/alliance/fir.env). Keep in step with the original.
 
 Submit an eval sweep: the declared grid, packed 4 cells per node.
 
 Usage (login node, from the repo root, with the venv python):
-    ~/venvs/moralgym/bin/python scripts/slurm/fir/submit_sweep.py \
+    ~/venvs/moralgym/bin/python scripts/slurm/alliance/submit_sweep.py \
         configs/eval/<teacher_signal|post_training|transfer>/<subject>/<family>/<experiment>.yaml
     ... --dry-run     # print the expansion without submitting
     ... specA.yaml specB.yaml   # several specs: their cells share nodes
@@ -50,8 +50,8 @@ from moralgym_verl.eval.sweep import (                        # noqa: E402
 )
 
 # The Fir launchers (sweep.py's PACK_LAUNCHER / LAUNCHER name the Clariden ones).
-PACK_LAUNCHER = "scripts/slurm/fir/eval_pack.sh"
-LAUNCHER = "scripts/slurm/fir/eval_teacher_signal.sh"
+PACK_LAUNCHER = "scripts/slurm/alliance/eval_pack.sh"
+LAUNCHER = "scripts/slurm/alliance/eval_teacher_signal.sh"
 
 
 def main() -> None:
@@ -207,7 +207,7 @@ def _write_manifest(spec, records, group_dir, packed: bool,
 
 
 if __name__ == "__main__":
-    # scripts/slurm/cluster.env + scripts/slurm/fir/fir.env into the
+    # scripts/slurm/cluster.env + scripts/slurm/alliance/fir.env into the
     # environment (fir_env.py); the launchers re-read both inside the job.
     load_fir_env()
     main()

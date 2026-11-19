@@ -6,13 +6,13 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --time=03:00:00
 # GPU and memory on the sbatch command line (fir.env FIR_SBATCH_GPU_ARGS;
-# scripts/slurm/fir/submit_sweep.py adds them). Hand submits:
-#   sbatch --gpus-per-node=h100:1 --cpus-per-task=12 --mem=120G scripts/slurm/fir/eval_teacher_signal.sh ...
+# scripts/slurm/alliance/submit_sweep.py adds them). Hand submits:
+#   sbatch --gpus-per-node=h100:1 --cpus-per-task=12 --mem=120G scripts/slurm/alliance/eval_teacher_signal.sh ...
 
 # =============================================================================
 # FIR VARIANT of scripts/slurm/eval_teacher_signal.sh (Clariden original left untouched).
 # Differences: Apptainer instead of EDF (FIR_CONTAINER_EXEC), Fir resource
-# flags from scripts/slurm/fir/fir.env, host python from the venv. Keep the
+# flags from scripts/slurm/alliance/fir.env, host python from the venv. Keep the
 # rest in step with the original when it changes.
 # =============================================================================
 # =============================================================================
@@ -23,8 +23,8 @@
 # HF-transformers inference, 1 GPU, no Ray/vLLM.
 #
 # Usage (from the MoralGymVerl repo root):
-#   sbatch <gpu flags> scripts/slurm/fir/eval_teacher_signal.sh <game> <moral_value> [num_episodes]
-#   sbatch <gpu flags> scripts/slurm/fir/eval_teacher_signal.sh prisoners_dilemma deon_no_exploit
+#   sbatch <gpu flags> scripts/slurm/alliance/eval_teacher_signal.sh <game> <moral_value> [num_episodes]
+#   sbatch <gpu flags> scripts/slurm/alliance/eval_teacher_signal.sh prisoners_dilemma deon_no_exploit
 #
 # single_round sweep (single fabricated-history round, per-state policy):
 #   for mv in none no_exploit_forgive deon_no_exploit consequentialist; do
@@ -55,7 +55,7 @@ if [ ! -f "${PROJECT_ROOT}/pyproject.toml" ]; then
     echo "ERROR: sbatch must be run from the MoralGymVerl repo root." >&2
     exit 1
 fi
-. "${PROJECT_ROOT}/scripts/slurm/fir/fir_env.sh" "${PROJECT_ROOT}"
+. "${PROJECT_ROOT}/scripts/slurm/alliance/fir_env.sh" "${PROJECT_ROOT}"
 # Optional long-term copy of eval cells (scripts/slurm/cluster.env).
 export STORE_BASE="${MORALGYM_STORE_ROOT:-}"
 # The SIF sets no PYTHONPATH (the Clariden EDF does): both checkouts from
