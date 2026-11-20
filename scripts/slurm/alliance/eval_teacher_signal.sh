@@ -20,7 +20,9 @@
 #
 # Evaluates BASE gemma-2-9b-it with a moral value wrapped around the game
 # prompt via the SDPO reprompt_template (see eval/teacher_context.py).
-# HF-transformers inference, 1 GPU, no Ray/vLLM.
+# Behavioral rollouts use vLLM on 1 GPU (default backend in eval/behavioral.py;
+# a checkpoint's LoRA adapter is served unmerged), no Ray. The probes (A, B)
+# use HF transformers.
 #
 # Usage (from the MoralGymVerl repo root):
 #   sbatch <gpu flags> scripts/slurm/alliance/eval_teacher_signal.sh <game> <moral_value> [num_episodes]
