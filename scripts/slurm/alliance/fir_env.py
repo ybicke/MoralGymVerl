@@ -57,7 +57,12 @@ def load_fir_env() -> None:
 def sbatch_resource_args(kind: str) -> List[str]:
     """Resource flags for one sbatch. TIME=<walltime> in the environment
     overrides the launcher's #SBATCH --time for this submit (as in
-    train_verl.sh): a request of 3 h or less queues in the shortest tier."""
+    train_verl.sh): a request of 3 h or less queues in the shortest tier.
+    GPU_ARGS=<flags> replaces FIR_SBATCH_GPU_ARGS for this submit, e.g. a MIG
+    slice for an 8B evaluation (the cluster file itself always wins over the
+    environment, so FIR_SBATCH_GPU_ARGS cannot be overridden directly):
+      GPU_ARGS="--gpus=nvidia_h100_80gb_hbm3_3g.40gb:1 --cpus-per-task=8 --mem=48G"
+    """
     env = os.environ
     time = [f"--time={env['TIME']}"] if env.get("TIME") else []
     if kind == "node":
@@ -65,5 +70,5 @@ def sbatch_resource_args(kind: str) -> List[str]:
                 f"--mem={env['FIR_NODE_MEM']}",
                 f"--cpus-per-task={env['FIR_PACK_CPUS_PER_CELL']}", *time]
     if kind == "gpu":
-        return [*env["FIR_SBATCH_GPU_ARGS"].split(), *time]
+        return [*(env.get("GPU_ARGS") or env["FIR_SBATCH_GPU_ARGS"]).split(), *time]
     raise ValueError(kind)
