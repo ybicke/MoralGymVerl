@@ -1,8 +1,8 @@
 # PGG transfer of qwen3_8b_grpo_pd_judge-think_tft_200_seed1 (GRPO with an LLM judge on
 # the principle, thinking judge): the PD-trained checkpoints play the
-# 4-player public-goods game with no moral text in the prompt. Protocol and
-# steps as in single_round_grpo_v2_seed1 and single_round_sdpo_seed1, its
-# seed-1 comparison rows; reference rows: teacher_signal/qwen3_8b/pgg/
+# 4-player public-goods game with no moral text in the prompt. Protocol as
+# in single_round_grpo_v2_seed1 and single_round_sdpo_seed1, its seed-1
+# comparison rows; reference rows: teacher_signal/qwen3_8b/pgg/
 # single_turn_v3 (none, deontological).
 #
 #   ~/venvs/moralgym/bin/python scripts/slurm/alliance/submit_sweep.py \
@@ -16,9 +16,10 @@ axes:
   moral_value: [none]
   protocol: [single_round]
   checkpoint:
-    - qwen3_8b_grpo_pd_judge-think_tft_200_seed1/global_step_50
+    # Step 200 is the paper checkpoint; step 100 is one earlier look (the
+    # policy has reached reciprocity, norm vocabulary still rising). Steps 50
+    # and 150 exist on disk and can be added for the full ladder.
     - qwen3_8b_grpo_pd_judge-think_tft_200_seed1/global_step_100
-    - qwen3_8b_grpo_pd_judge-think_tft_200_seed1/global_step_150
     - qwen3_8b_grpo_pd_judge-think_tft_200_seed1/global_step_200
 
 env:
