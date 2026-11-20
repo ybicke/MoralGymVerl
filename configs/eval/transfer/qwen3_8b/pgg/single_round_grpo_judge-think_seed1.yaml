@@ -16,10 +16,8 @@ axes:
   moral_value: [none]
   protocol: [single_round]
   checkpoint:
-    # Step 200 is the paper checkpoint; step 100 is one earlier look (the
-    # policy has reached reciprocity, norm vocabulary still rising). Steps 50
-    # and 150 exist on disk and can be added for the full ladder.
-    - qwen3_8b_grpo_pd_judge-think_tft_200_seed1/global_step_100
+    # Step 200 is the paper checkpoint. Steps 50, 100 and 150 exist on disk
+    # and can be added for the ladder.
     - qwen3_8b_grpo_pd_judge-think_tft_200_seed1/global_step_200
 
 env:
