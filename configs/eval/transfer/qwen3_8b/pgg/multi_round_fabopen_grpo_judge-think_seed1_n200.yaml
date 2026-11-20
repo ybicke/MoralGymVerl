@@ -1,0 +1,23 @@
+# Live play in the public-goods game of qwen3_8b_grpo_pd_judge-think_tft_200_seed1
+# (GRPO with an LLM judge on the principle, thinking judge), step 200, with
+# a fabricated opening. Protocol of multi_round_fabopen_n200, which holds
+# its comparison rows: round 1 follows a fabricated previous round, the
+# state every training prompt carries; 25 episodes per fabricated state.
+#
+#   ~/venvs/moralgym/bin/python scripts/slurm/alliance/submit_sweep.py \
+#       configs/eval/transfer/qwen3_8b/pgg/multi_round_fabopen_grpo_judge-think_seed1_n200.yaml --no-pack --dry-run
+
+num_episodes: 200          # per co-player group; x3 x5 rounds = 3000 decisions/cell
+
+axes:
+  game: [public_goods]
+  representation: [decision_full]
+  moral_value: [none]
+  protocol: [multi_round]
+  checkpoint:
+    - qwen3_8b_grpo_pd_judge-think_tft_200_seed1/global_step_200
+
+env:
+  RUN_PROBES: "off"
+  GAME_DESCRIPTION: "off"
+extra_args: ["--temperature", "0.7", "--game-design", "hist"]
