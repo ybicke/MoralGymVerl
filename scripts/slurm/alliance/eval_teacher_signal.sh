@@ -5,21 +5,25 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --time=03:00:00
-# GPU and memory on the sbatch command line (fir.env FIR_SBATCH_GPU_ARGS;
+# GPU and memory on the sbatch command line (FIR_SBATCH_GPU_ARGS in the
+# cluster's settings file, scripts/slurm/alliance/<cluster>.env;
 # scripts/slurm/alliance/submit_sweep.py adds them). Hand submits:
 #   sbatch --gpus-per-node=h100:1 --cpus-per-task=12 --mem=120G scripts/slurm/alliance/eval_teacher_signal.sh ...
 
 # =============================================================================
-# FIR VARIANT of scripts/slurm/eval_teacher_signal.sh (Clariden original left untouched).
-# Differences: Apptainer instead of EDF (FIR_CONTAINER_EXEC), Fir resource
-# flags from scripts/slurm/alliance/fir.env, host python from the venv. Keep the
-# rest in step with the original when it changes.
+# ALLIANCE VARIANT (Fir and Rorqual) of scripts/slurm/eval_teacher_signal.sh
+# (Clariden original left untouched). Differences: Apptainer instead of EDF
+# (FIR_CONTAINER_EXEC), resource flags from the cluster's settings file
+# scripts/slurm/alliance/<cluster>.env (fir.env, rorqual.env), host python
+# from the venv. Keep the rest in step with the original when it changes.
 # =============================================================================
 # =============================================================================
 # Session 1 — Teacher-signal eval (one game x moral-value cell)
 #
-# Evaluates BASE gemma-2-9b-it with a moral value wrapped around the game
-# prompt via the SDPO reprompt_template (see eval/teacher_context.py).
+# Evaluates the model of the harness config (policy.model_name, or MODEL),
+# untrained or with a trained checkpoint's LoRA adapter (CHECKPOINT). A
+# moral value other than `none` is wrapped around the game prompt via the
+# SDPO reprompt_template (see eval/teacher_context.py).
 # Behavioral rollouts use vLLM on 1 GPU (default backend in eval/behavioral.py;
 # a checkpoint's LoRA adapter is served unmerged), no Ray. The probes (A, B)
 # use HF transformers.
