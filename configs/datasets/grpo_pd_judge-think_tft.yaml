@@ -42,6 +42,11 @@ judge:
   scoring: yesno
   thinking: true
   max_think_tokens: 8192
+  # All 256 rollouts of a step in flight at once (default 64): the 15-step run
+  # (job 27239147) used only ~55 concurrent requests and 16% of the judge's KV
+  # cache, and vLLM gets faster per request with larger batches. Changes speed,
+  # not scores (same requests, same sampling settings).
+  max_concurrency: 256
 
 prompt:
   game_design: hist
