@@ -1,0 +1,22 @@
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[t]
+\centering
+\caption{Live episodes: cold open (round 1 has no history), one conversation per episode, moves simultaneous. P(C) per round over that opponent's episodes (20 per cell, binomial s.e. $\leq$11 points/round). pooled = all decisions. Round 1 is the untrained opening state; later rounds condition on the episode's own history.}
+\label{tab:mr-per-round}
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrrrr}
+\toprule
+Policy & r1 & r2 & r3 & r4 & r5 & pooled \\
+\midrule
+\multicolumn{7}{l}{\emph{vs `full_contributor`}} \\
+GRPO judge-think s200 & 8 & 7 & 6 & 8 & 6 & \textbf{7} \\
+\addlinespace
+\multicolumn{7}{l}{\emph{vs `free_rider`}} \\
+GRPO judge-think s200 & 12 & 6 & 3 & 6 & 2 & \textbf{6} \\
+\addlinespace
+\multicolumn{7}{l}{\emph{vs `noisy_conditional`}} \\
+GRPO judge-think s200 & 9 & 6 & 5 & 6 & 6 & \textbf{7} \\
+\bottomrule
+\end{tabular}
+\end{table}
