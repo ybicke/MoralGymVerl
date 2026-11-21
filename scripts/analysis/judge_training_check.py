@@ -17,6 +17,13 @@ window of training steps, before any transfer evaluation:
            6 consecutive words of the principle, and the rank correlation of
            the judge score with length and with recitation among cooperative
            responses (so the action does not drive it)
+  reasons  which way the exploitation language points: SELF (the agent is or
+           could be exploited, a self-protective, strategic reason) against
+           OTHER (the agent would exploit the other player, or must not: the
+           principle's direction); share using "good faith", the principle's
+           own test; and MISREAD, the share claiming the agent is being
+           exploited in the state where it defected on a cooperator, which
+           misreads the history. Regex measures, a lower bound for paraphrase.
 
 Input: <run dir>/rollouts/<step>.jsonl as written during training (one record
 per rollout: input, output, gts, score, judge_score, the action flags, and
@@ -26,11 +33,14 @@ Usage:
     python scripts/analysis/judge_training_check.py \\
         $SCRATCH/moralgym_verl_runs/qwen3_8b_grpo_pd_judge-think_tft_200_seed1/rollouts
     python scripts/analysis/judge_training_check.py <rollouts dir> --window 20 --json out.json
+    python scripts/analysis/judge_training_check.py <rollouts dir> --window 20 \\
+        --md eval_results/post_training/<run>/classic/training_rollouts/analysis/results_training_rollouts.md
 """
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import statistics
 import sys
 from collections import defaultdict
@@ -43,6 +53,21 @@ FLAT_STD = 0.02  # as moralgym_verl.training.judge.FLAT_STD
 STATES = [("C", "C"), ("C", "D"), ("D", "C"), ("D", "D")]  # (own, other) last move
 CELLS = [("reciprocate", "C", "C"), ("exploit", "C", "D"),
          ("forgive", "D", "C"), ("retaliate", "D", "D")]  # (name, other's last move, action)
+
+# Direction of exploitation language (the opponent is "A"/"agent A" in the PD prompt).
+SELF = re.compile(
+    r"(?:being|been|get|getting|be|avoid|risk of|prevent)\s+(?:\w+\s+){0,2}?"
+    r"(?:exploited|taken advantage of|betrayed)"
+    r"|exploited by|exploit(?:s|ing)? (?:you|me|us)\b|take advantage of (?:you|me)\b"
+    r"|(?:a|they|agent a) (?:\w+\s+){0,2}?(?:is|are|was|were|may be|might be|could be)? ?"
+    r"exploiting (?:you|your)|protect (?:yourself|myself)", re.I)
+OTHER = re.compile(
+    r"exploit(?:s|ing|ation of)? (?:agent a|a\b|them|the other|their|other players|others|"
+    r"the group|cooperat)"
+    r"|tak(?:e|ing) advantage of (?:agent a|a\b|them|the other|their|others)"
+    r"|(?:not|never|wrong to|avoid|refrain from|instead of) (?:\w+\s+){0,2}?"
+    r"(?:exploit|take advantage|taking advantage|betray)", re.I)
+GOOD_FAITH = re.compile(r"good faith", re.I)
 
 
 def load_step(path: Path) -> list[dict]:
@@ -130,6 +155,12 @@ def summarize(rows: list[dict]) -> dict:
     out["normative"] = mean([float(normative_hit(r["text"])) for r in rows])
     out["recites"] = mean([float(principle_overlap(r["text"], grams)) for r in rows]) if grams else float("nan")
 
+    out["self"] = mean([float(bool(SELF.search(r["text"]))) for r in rows])
+    out["other"] = mean([float(bool(OTHER.search(r["text"]))) for r in rows])
+    out["good_faith"] = mean([float(bool(GOOD_FAITH.search(r["text"]))) for r in rows])
+    out["misread"] = mean([float(bool(SELF.search(r["text"]))) for r in rows
+                           if r["own"] == "D" and r["other"] == "C"])
+
     coop = [r for r in legal if r["action"] == "C"]
     out["rho_length"] = spearman([float(len(words(r["text"]))) for r in coop],
                                  [r["judge"] for r in coop])
@@ -145,8 +176,40 @@ COLUMNS = [
     ("flat_groups", "flat%", 100), ("one_action_groups", "1act%", 100),
     ("words", "words", 1), ("normative", "norm%", 100), ("recites", "recit%", 100),
     ("rho_length", "rho_len", 1), ("rho_normative", "rho_nrm", 1),
+    ("self", "self%", 100), ("other", "other%", 100), ("good_faith", "gfaith%", 100),
+    ("misread", "misrd%", 100),
     ("parse_fail", "fail%", 100), ("judge_invalid", "jinv%", 100),
 ]
+
+MD_TABLES = [
+    ("Table J1 — policy: P(C) (%) by fabricated previous round (own, other)",
+     ["pC_CC", "pC_CD", "pC_DC", "pC_DD"]),
+    ("Table J2 — judge: mean score by case (other's last move, action)",
+     ["judge_reciprocate", "judge_exploit", "judge_forgive", "judge_retaliate"]),
+    ("Table J3 — signal and failures (% of groups or rollouts)",
+     ["flat_groups", "one_action_groups", "parse_fail", "judge_invalid"]),
+    ("Table J4 — trace language (% of rollouts; words = mean words per response)",
+     ["words", "normative", "recites", "rho_length", "rho_normative"]),
+    ("Table J5 — direction of the exploitation language (% of rollouts)",
+     ["self", "other", "good_faith", "misread"]),
+]
+
+MD_LEGEND = """\
+**Measures.** States are (the agent's, the other player's) move in the
+fabricated previous round; the opponent is tit-for-tat. Judge cases:
+reciprocate = C after the other's C, exploit = D after C, forgive = C after
+D, retaliate = D after D. flat = 16-rollout groups with reward std < 0.02 (no
+GRPO advantage); 1act = groups with a single action. normative = at least one
+of the 12 reviewed stems (measures.NORMATIVE_VOCAB); recit = 6 consecutive
+words of the principle verbatim; rho = Spearman correlation of the judge score
+with length or with normative vocabulary among cooperative rollouts.
+self = the trace says the agent is or could be exploited (a self-protective,
+strategic reason); other = it says the agent would exploit the other player,
+or must not (the principle's direction); gfaith = uses "good faith", the
+principle's own test; misrd = self among rollouts in state (D, C), where the
+agent itself defected on a cooperator, i.e. a misread history. Regex measures:
+they miss paraphrase and can misfire on negations, so read them as
+approximate shares, not labels."""
 
 
 def fmt(key: str, value: float, scale: int) -> str:
@@ -162,6 +225,7 @@ def main() -> None:
     ap.add_argument("rollouts", type=Path, help="<run dir>/rollouts with <step>.jsonl files")
     ap.add_argument("--window", type=int, default=10, help="steps pooled per row (default 10)")
     ap.add_argument("--json", type=Path, help="also write the rows to this file")
+    ap.add_argument("--md", type=Path, help="also write a results document (Markdown)")
     args = ap.parse_args()
 
     steps = sorted(int(p.stem) for p in args.rollouts.glob("*.jsonl") if p.stem.isdigit())
@@ -186,6 +250,37 @@ def main() -> None:
     if args.json:
         args.json.write_text(json.dumps(result, indent=1))
         print(f"wrote {args.json}")
+    if args.md:
+        write_md(args.md, args.rollouts, steps, args.window, result)
+        print(f"wrote {args.md}")
+
+
+def write_md(path: Path, rollouts: Path, steps: list[int], window: int, result: list[dict]) -> None:
+    labels = {k: label for k, label, _ in COLUMNS}
+    scales = {k: scale for k, _, scale in COLUMNS}
+    run = rollouts.resolve().parent.name
+    lines = [
+        f"# Training rollouts: {run}",
+        "",
+        f"Generated by `scripts/analysis/judge_training_check.py` from `{rollouts}` "
+        f"({len(steps)} steps, {steps[0]}..{steps[-1]}, pooled in windows of {window} steps; "
+        f"{result[0]['n']} rollouts per full window). Training game: single-round PD "
+        "against tit-for-tat with a fabricated previous round; the reward is the "
+        "judge's score, the game payoff is only logged. Hand-written reading goes in "
+        "analysis_*.md beside this file.",
+        "",
+    ]
+    for title, keys in MD_TABLES:
+        lines += [f"### {title}", "",
+                  "| steps | " + " | ".join(labels[k] for k in keys) + " |",
+                  "|---|" + "---|" * len(keys)]
+        for row in result:
+            cells = [fmt(k, row[k], scales[k]).strip() for k in keys]
+            lines.append(f"| {row['steps'][0]}-{row['steps'][-1]} | " + " | ".join(cells) + " |")
+        lines.append("")
+    lines += [MD_LEGEND, ""]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines))
 
 
 if __name__ == "__main__":
