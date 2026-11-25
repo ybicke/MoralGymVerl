@@ -1,0 +1,45 @@
+# Moral vs strategic text with defined terms, public-goods game:
+# untrained Qwen3-8B with the text in its prompt, single round. Does stating
+# the principle and then defining its terms remove the inverted
+# justifications ("cooperating would exploit them", a defector "acting in
+# good faith") found in about half of the PD defections under
+# 'deontological', and how does a self-interested strategic text behave in
+# the same situations? Texts: the 2026-11-25 block in
+# src/moralgym_verl/game/moral_values.py.
+#
+#   deon_def                current principle + definitions
+#   strategic_def           self-interested strategic text + definitions
+#   deon_def_axelrod        \ the same two, with cooperate / exploit defined
+#   strategic_def_axelrod   / in the plain game-theoretic form (Axelrod 1984)
+#
+# Header in every cell: "Principle to follow:" (--feedback-label principle).
+# Reference: the 'deontological' cell of single_turn_v3
+# (same protocol, header "Moral value to follow:").
+# Follow-ups kept in moral_values.py, not screened here: deon_refined_def,
+# deon_def_conduct.
+#
+# Run this one first: the harder test (the cooperative action has to be
+# found in the table, and groups are mixed), directly comparable with the
+# v3/v4 wording screens. 4 cells, one packed node.
+#
+#   ~/venvs/moralgym/bin/python scripts/slurm/alliance/submit_sweep.py \
+#       configs/eval/teacher_signal/qwen3_8b/pgg/single_turn_moral_vs_strategic.yaml --dry-run
+
+num_episodes: 400          # 50 per fabricated state
+
+axes:
+  game: [public_goods]
+  representation: [decision_full]
+  moral_value:
+    - deon_def
+    - strategic_def
+    - deon_def_axelrod
+    - strategic_def_axelrod
+  protocol: [single_round]
+
+env:
+  RUN_PROBES: "off"
+  RUN_PROBE_B_EPISODE: "off"
+  GAME_DESCRIPTION: "off"
+
+extra_args: ["--temperature", "0.7", "--feedback-label", "principle"]

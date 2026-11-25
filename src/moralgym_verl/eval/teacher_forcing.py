@@ -22,7 +22,9 @@ from moralgym_verl.eval.config import (
 )
 from moralgym_verl.eval.generation import render_chat_inputs
 from moralgym_verl.eval.model_loading import load_model_for_eval
-from moralgym_verl.eval.teacher_context import load_reprompt_template, wrap_prompt
+from moralgym_verl.eval.teacher_context import (
+    load_reprompt_template, resolve_feedback_template, wrap_prompt,
+)
 from moralgym_verl.game.classic_games import FIXED_PAYOFFS
 from moralgym_verl.game.moral_values import get_moral_value
 
@@ -247,7 +249,7 @@ def probe_setup(args, opponent: str = "tit_for_tat"):
             "yaml the reprompt_template is read from) — required by the probes"
         )
     template = load_reprompt_template(template_source)
-    feedback_template = teacher_cfg.get("feedback_template")
+    feedback_template = resolve_feedback_template(teacher_cfg)
 
     def wrapper(prompt: str) -> str:
         return wrap_prompt(prompt, template, moral_text, feedback_template)

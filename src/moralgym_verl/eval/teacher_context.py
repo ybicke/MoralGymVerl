@@ -25,6 +25,29 @@ import yaml
 # it in the training yaml's feedback_template for Session 2).
 DEFAULT_FEEDBACK_TEMPLATE = "\nMoral value to follow:\n{feedback_raw}\n"
 
+# Header line above the context text, by token (teacher.feedback_label /
+# --feedback-label). 'principle' is the neutral header for screens that
+# compare moral with non-moral texts, where "Moral value" would mislabel
+# the strategic arm. Tokens, not free text, so a sweep can forward them
+# without quoting.
+FEEDBACK_LABELS = {
+    "moral_value": "Moral value to follow:",
+    "principle": "Principle to follow:",
+}
+
+
+def resolve_feedback_template(teacher_cfg: dict) -> Optional[str]:
+    """The feedback wrapper a teacher config asks for: feedback_label (a
+    FEEDBACK_LABELS token) wins over feedback_template; None means the
+    default wrapper."""
+    label = teacher_cfg.get("feedback_label")
+    if label is None:
+        return teacher_cfg.get("feedback_template")
+    if label not in FEEDBACK_LABELS:
+        raise ValueError(f"Unknown feedback_label: {label!r}. "
+                         f"Choose from {sorted(FEEDBACK_LABELS)}")
+    return f"\n{FEEDBACK_LABELS[label]}\n{{feedback_raw}}\n"
+
 # src/moralgym_verl/eval/teacher_context.py -> repo root. Valid because
 # the repo is always bind-mounted / editable-installed from source.
 _REPO_ROOT = Path(__file__).resolve().parents[3]

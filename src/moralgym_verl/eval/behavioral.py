@@ -45,7 +45,10 @@ from moralgym_verl.eval.generation import (
 from moralgym_verl.eval.metrics import aggregate_rollout_metrics, per_round_breakdown
 from moralgym_verl.eval.scoring import iter_decisions
 from moralgym_verl.eval.model_loading import load_model_for_eval, load_vllm_for_eval
-from moralgym_verl.eval.teacher_context import load_reprompt_template, wrap_prompt
+from moralgym_verl.eval.teacher_context import (
+    FEEDBACK_LABELS, load_reprompt_template, resolve_feedback_template,
+    wrap_prompt,
+)
 from moralgym_verl.game.moral_values import MORAL_VALUE_REGISTRY, get_moral_value
 from moralgym_verl.game.classic_games import FIXED_PAYOFFS
 from moralgym_verl.game.environment import EpisodeConfig
@@ -79,6 +82,7 @@ CFG_OVERRIDES = [
     ("eval_role", "evaluation", "role"),
     ("eval_payoffs", "evaluation", "payoffs"),
     ("moral_value", "teacher", "moral_value"),
+    ("feedback_label", "teacher", "feedback_label"),
 ]
 
 
@@ -158,7 +162,7 @@ def build_prompt_wrapper(cfg: Dict):
             wrap_prompt,
             reprompt_template=template,
             moral_value_text=moral_value_text,
-            feedback_template=teacher_cfg.get("feedback_template"),
+            feedback_template=resolve_feedback_template(teacher_cfg),
         )
         logger.info("Teacher context: moral_value=%s, template from %s",
                     moral_value_name, template_source)
@@ -696,6 +700,13 @@ def build_parser() -> argparse.ArgumentParser:
                              "signal eval). 'none' = plain student prompt. "
                              f"Names: {sorted(MORAL_VALUE_REGISTRY)}; combine "
                              "2-3 with '+', e.g. deon_no_exploit+consequentialist.")
+    parser.add_argument("--feedback-label", type=str, default=None,
+                        choices=sorted(FEEDBACK_LABELS),
+                        help="Header line above the moral-value text in the "
+                             "prompt: 'moral_value' = \"Moral value to "
+                             "follow:\" (as in the config), 'principle' = "
+                             "\"Principle to follow:\" (neutral; for screens "
+                             "with non-moral texts).")
     parser.add_argument("--save-raw-responses", action="store_true",
                         help="Save every (prompt, raw model output) pair to a "
                              "sibling JSONL file (<output>.responses.jsonl). "
@@ -766,6 +777,7 @@ def build_metadata(
         "protocol": args.protocol or "custom",
         "moral_value": moral_value,
         "teacher_template_source": cfg.get("teacher", {}).get("template_source"),
+        "feedback_label": cfg.get("teacher", {}).get("feedback_label"),
         "model_type": "base" if checkpoint is None else "finetuned",
         "checkpoint": args.checkpoint,
         "base_model": cfg["policy"]["model_name"],

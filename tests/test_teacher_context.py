@@ -5,6 +5,7 @@ the container — no GPU, torch, or transformers needed.
 """
 
 import pathlib
+import re
 
 import pytest
 
@@ -151,6 +152,39 @@ def test_custom_feedback_template():
     wrapped = wrap_prompt("GAME", template, "be nice",
                           feedback_template="\nMoral value to follow:\n{feedback_raw}\n")
     assert "Moral value to follow:\nbe nice" in wrapped
+
+
+def test_feedback_label_sets_neutral_header():
+    from moralgym_verl.eval.teacher_context import resolve_feedback_template
+    template = load_reprompt_template(str(SDPO_YAML))
+    cfg_template = "\nMoral value to follow:\n{feedback_raw}\n"
+    # No label: the config's own template, unchanged.
+    assert resolve_feedback_template(
+        {"feedback_template": cfg_template}) == cfg_template
+    # 'principle' wins over the config's template.
+    neutral = resolve_feedback_template(
+        {"feedback_template": cfg_template, "feedback_label": "principle"})
+    wrapped = wrap_prompt("GAME", template, "be nice", feedback_template=neutral)
+    assert "Principle to follow:\nbe nice" in wrapped
+    assert "Moral value" not in wrapped
+    with pytest.raises(ValueError):
+        resolve_feedback_template({"feedback_label": "nope"})
+
+
+def test_definition_arms_put_principle_first_and_stay_label_agnostic():
+    deon = get_moral_value("deontological")
+    moral = get_moral_value("deon_def")
+    # The screened principle verbatim, then its definitions.
+    assert moral.startswith(deon + "\n\nDefinitions:\n")
+    assert get_moral_value("deon_def_conduct").startswith(deon)
+    # The strategic arm carries no moral vocabulary.
+    strategic = get_moral_value("strategic_def")
+    for word in ("good faith", "trust", "wrong", "moral"):
+        assert word not in strategic.lower()
+    for name in ("deon_def", "deon_refined_def", "strategic_def",
+                 "deon_def_conduct", "deon_def_axelrod",
+                 "strategic_def_axelrod"):
+        assert not re.search(r"action\d|\bpoints\b", get_moral_value(name))
 
 
 # ---------------------------------------------- conversation mode helper
