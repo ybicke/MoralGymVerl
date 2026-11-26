@@ -19,7 +19,7 @@ over seeds is kept as macros. Where the episodes of a cell do not vary (a rate o
 the standard error would be 0, so the cell gets a Wilson interval on
 its episode count instead. Intervals are clipped to [0, 1].
 
-  numbers_<prefix>.tex   \\<prefix>SR<Row>{Mean,Std,Min,Max,Lo,Hi}      single round
+  numbers_<prefix>.tex   \\<prefix>SR<Row>{Mean,Std,Min,Max,Lo,Hi,Pm}   single round
                          \\<prefix>MR<Row><Opp>{Mean,Std,Min,Max,Lo,Hi} multi round
                          \\<prefix>MR<Row>RoundOne{...}            round 1, pooled
                          \\<prefix>...<Row>Vs<Ref>{Diff,Lo,Hi}     row mean minus
@@ -179,12 +179,14 @@ def stats(samples: List[Sample]) -> Dict[str, int]:
     vals = [s.est for s in samples]
     if len(samples) == 1:          # fixed model: interval over episodes
         lo, hi = samples[0].lo, samples[0].hi
+        half = Z * samples[0].se   # Wilson case: se is its half-width / Z
     else:                          # trained: Student-t over the seed rates
         t = student_t.ppf(0.5 + LEVEL / 200, len(vals) - 1)
         half = t * stdev(vals) / math.sqrt(len(vals))
         lo, hi = clip(mean(vals) - half, mean(vals) + half)
     return {"Mean": pct(mean(vals)), "Std": pct(stdev(vals) if len(vals) > 1 else 0.0),
-            "Min": pct(min(vals)), "Max": pct(max(vals)), "Lo": pct(lo), "Hi": pct(hi)}
+            "Min": pct(min(vals)), "Max": pct(max(vals)), "Lo": pct(lo), "Hi": pct(hi),
+            "Pm": pct(half)}       # half-width before clipping to [0, 1]
 
 
 def versus(samples: List[Sample], ref: List[Sample]) -> Dict[str, int]:
@@ -202,10 +204,10 @@ def versus(samples: List[Sample], ref: List[Sample]) -> Dict[str, int]:
 
 
 def cell(samples: List[Sample]) -> str:
-    """Table entry: rate [95% interval]; over episodes for a single cell,
-    over seeds (Student t) for a trained row."""
+    """Table entry: rate +- half-width of the 95% interval; over episodes
+    for a single cell, over seeds (Student t) for a trained row."""
     st = stats(samples)
-    return f"{st['Mean']}{{\\scriptsize\\,[{st['Lo']},{st['Hi']}]}}"
+    return f"{st['Mean']}{{\\scriptsize\\,$\\pm${st['Pm']}}}"
 
 
 def main() -> None:
@@ -296,10 +298,10 @@ def main() -> None:
     intervals.write_text(json.dumps(report, indent=1) + "\n")
 
     live = f" ({a.live_play})" if a.live_play else ""
-    seeds = (rf"trained rows the mean over {n} training seeds with the "
-             rf"{LEVEL}\% Student-$t$ interval over seeds, which includes the "
-             rf"variation between training runs" if n > 1
-             else "as do the trained rows (one seed)")
+    seeds = (rf"for trained rows the Student-$t$ interval of the mean over "
+             rf"{n} training seeds, which includes the variation between "
+             rf"training runs" if n > 1
+             else "as for the trained rows (one seed)")
     short = {"full_contributor": "Full", "free_rider": "Free", "noisy_conditional": "Noisy"}
     heads = " & ".join(short.get(o, o) for o in opps)
     tab = [
@@ -321,9 +323,9 @@ def main() -> None:
             rf"{mr_rounds} rounds{live} pools all rounds of {mr_eps} episodes against "
             rf"a full contributor, free rider or noisy conditional co-player. "
             rf"Only Prompted has the principle in the prompt; an unparsable "
-            rf"answer counts as not contributing. Brackets give "
-            rf"{LEVEL}\% confidence intervals: Base and Prompted the rate with "
-            rf"its interval over episodes (each episode one unit), {seeds}.}}",
+            rf"answer counts as not contributing. $\pm$ is the half-width of "
+            rf"the {LEVEL}\% confidence interval: for Base and Prompted over "
+            rf"episodes (each episode one unit), {seeds}.}}",
             rf"\label{{tab:{a.table.replace('_', '-')}}}", r"\end{table}"]
     (gen / "tables" / f"{a.table}.tex").write_text("\n".join(tab) + "\n")
     print(f"wrote {gen}/numbers_{p}.tex ({len(macros)} macros), "
