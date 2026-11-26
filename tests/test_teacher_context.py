@@ -177,13 +177,16 @@ def test_definition_arms_put_principle_first_and_stay_label_agnostic():
     # The screened principle verbatim, then its definitions.
     assert moral.startswith(deon + "\n\nDefinitions:\n")
     assert get_moral_value("deon_def_conduct").startswith(deon)
+    # The apply arm is the Axelrod moral arm verbatim plus one block.
+    assert get_moral_value("deon_def_axelrod_apply").startswith(
+        get_moral_value("deon_def_axelrod") + "\n\nApplying this:\n")
     # The strategic arm carries no moral vocabulary.
     strategic = get_moral_value("strategic_def")
     for word in ("good faith", "trust", "wrong", "moral"):
         assert word not in strategic.lower()
     for name in ("deon_def", "deon_refined_def", "strategic_def",
                  "deon_def_conduct", "deon_def_axelrod",
-                 "strategic_def_axelrod"):
+                 "strategic_def_axelrod", "deon_def_axelrod_apply"):
         assert not re.search(r"action\d|\bpoints\b", get_moral_value(name))
 
 

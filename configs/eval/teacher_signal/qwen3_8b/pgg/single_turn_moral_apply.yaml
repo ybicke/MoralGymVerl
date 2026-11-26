@@ -1,0 +1,29 @@
+# Follow-up to single_turn_moral_vs_strategic.yaml: the Axelrod moral arm
+# plus an "Applying this:" block of three lines (find the defecting option;
+# defecting while some cooperate exploits them even if others defect;
+# defectors are not in good faith and cooperating never exploits). Aimed at
+# the errors left in deon_def_axelrod: 57 defections against cooperators,
+# most with keeping called "cooperative" or "exploiting no one".
+# Reference cells: deon_def_axelrod (67% cooperation) and the
+# 'deontological' cell of single_turn_v3 (51%). Same protocol and header.
+#
+# Rorqual: one unpacked job.
+#   SBATCH_TIMELIMIT=00:25:00 ~/venvs/moralgym/bin/python \
+#       scripts/slurm/alliance/submit_sweep.py \
+#       configs/eval/teacher_signal/qwen3_8b/pgg/single_turn_moral_apply.yaml --no-pack
+
+num_episodes: 400          # 50 per fabricated state
+
+axes:
+  game: [public_goods]
+  representation: [decision_full]
+  moral_value:
+    - deon_def_axelrod_apply
+  protocol: [single_round]
+
+env:
+  RUN_PROBES: "off"
+  RUN_PROBE_B_EPISODE: "off"
+  GAME_DESCRIPTION: "off"
+
+extra_args: ["--temperature", "0.7", "--feedback-label", "principle"]
